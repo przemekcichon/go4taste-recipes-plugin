@@ -11,8 +11,11 @@ class Go4Taste_Recipes_Plugin {
     private const MODE_EXISTING_CPT = 'existing_cpt';
     private const MODE_RECIPES_CPT  = 'recipes_cpt';
 
-    private const RECIPES_POST_TYPE = 'recipe';
-    private const INGREDIENT_TAXONOMY = 'recipe_ingredient';
+    private const RECIPES_POST_TYPE   = 'recipe';
+    private const INGREDIENT_TAXONOMY  = 'recipe_ingredient';
+    private const MEAL_TYPE_TAXONOMY   = 'recipe_meal_type';
+    private const PREP_TIME_TAXONOMY   = 'recipe_prep_time_range';
+    private const FEATURE_TAXONOMY     = 'recipe_feature';
     private const RECIPE_BLOCK_NAMES = array(
         'go4taste-recipes/hero',
         'go4taste-recipes/ingredients',
@@ -29,6 +32,7 @@ class Go4Taste_Recipes_Plugin {
     public function __construct() {
         add_action( 'init', array( $this, 'register_recipe_post_type_if_needed' ) );
         add_action( 'init', array( $this, 'register_ingredient_taxonomy' ) );
+        add_action( 'init', array( $this, 'register_flat_taxonomies' ) );
         add_action( 'init', array( $this, 'register_recipe_blocks' ) );
         add_action( 'acf/init', array( $this, 'register_acf_fields' ) );
         add_action( 'save_post', array( $this, 'sync_recipe_meta_from_blocks' ), 20, 3 );
@@ -152,6 +156,67 @@ class Go4Taste_Recipes_Plugin {
                 'rewrite'           => array( 'slug' => 'skladniki' ),
             )
         );
+    }
+
+    public function register_flat_taxonomies(): void {
+        $strategy  = $this->resolve_source_strategy();
+        $post_type = $strategy['post_type'];
+
+        $taxonomies = array(
+            self::MEAL_TYPE_TAXONOMY => array(
+                'labels' => array(
+                    'name'          => __( 'Typy dania', 'go4taste-recipes-plugin' ),
+                    'singular_name' => __( 'Typ dania', 'go4taste-recipes-plugin' ),
+                    'all_items'     => __( 'Wszystkie typy dań', 'go4taste-recipes-plugin' ),
+                    'edit_item'     => __( 'Edytuj typ dania', 'go4taste-recipes-plugin' ),
+                    'add_new_item'  => __( 'Dodaj typ dania', 'go4taste-recipes-plugin' ),
+                ),
+                'rewrite' => array( 'slug' => 'typ-dania' ),
+            ),
+            self::PREP_TIME_TAXONOMY => array(
+                'labels' => array(
+                    'name'          => __( 'Czas przygotowania', 'go4taste-recipes-plugin' ),
+                    'singular_name' => __( 'Czas przygotowania', 'go4taste-recipes-plugin' ),
+                    'all_items'     => __( 'Wszystkie zakresy czasów', 'go4taste-recipes-plugin' ),
+                    'edit_item'     => __( 'Edytuj zakres czasu', 'go4taste-recipes-plugin' ),
+                    'add_new_item'  => __( 'Dodaj zakres czasu', 'go4taste-recipes-plugin' ),
+                ),
+                'rewrite' => array( 'slug' => 'czas-przygotowania' ),
+            ),
+            self::FEATURE_TAXONOMY => array(
+                'labels' => array(
+                    'name'          => __( 'Cechy', 'go4taste-recipes-plugin' ),
+                    'singular_name' => __( 'Cecha', 'go4taste-recipes-plugin' ),
+                    'all_items'     => __( 'Wszystkie cechy', 'go4taste-recipes-plugin' ),
+                    'edit_item'     => __( 'Edytuj cechę', 'go4taste-recipes-plugin' ),
+                    'add_new_item'  => __( 'Dodaj cechę', 'go4taste-recipes-plugin' ),
+                ),
+                'rewrite' => array( 'slug' => 'cechy' ),
+            ),
+        );
+
+        foreach ( $taxonomies as $taxonomy_key => $args ) {
+            if ( taxonomy_exists( $taxonomy_key ) ) {
+                register_taxonomy_for_object_type( $taxonomy_key, $post_type );
+                continue;
+            }
+
+            register_taxonomy(
+                $taxonomy_key,
+                array( $post_type ),
+                array_merge(
+                    $args,
+                    array(
+                        'public'            => true,
+                        'hierarchical'      => false,
+                        'show_ui'           => true,
+                        'show_admin_column' => true,
+                        'show_in_rest'      => true,
+                        'query_var'         => true,
+                    )
+                )
+            );
+        }
     }
 
     public function register_recipe_blocks(): void {
