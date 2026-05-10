@@ -246,9 +246,7 @@ class Go4Taste_Recipes_Plugin {
             'recipe_difficulty'            => (string) ( $block_data['difficulty'] ?? '' ),
             'recipe_servings_value'        => $block_data['servings_value'] ?? null,
             'recipe_servings_unit'         => (string) ( $block_data['servings_unit'] ?? '' ),
-            'recipe_ingredients'           => ( ! empty( $block_data['ingredients'] ) && is_array( $block_data['ingredients'] ) ) ? $block_data['ingredients'] : array(),
             'recipe_ingredients_photo_url' => (string) ( $block_data['ingredients_photo_url'] ?? '' ),
-            'recipe_steps'                 => ( ! empty( $block_data['steps'] ) && is_array( $block_data['steps'] ) ) ? $block_data['steps'] : array(),
             'recipe_tips'                  => (string) ( $block_data['tips'] ?? '' ),
             'recipe_source_label'          => (string) ( $block_data['source_label'] ?? '' ),
             'recipe_source_url'            => (string) ( $block_data['source_url'] ?? '' ),
@@ -257,6 +255,12 @@ class Go4Taste_Recipes_Plugin {
         foreach ( $payload as $meta_key => $value ) {
             update_post_meta( $post_id, $meta_key, $value );
         }
+
+        $ingredients = ( ! empty( $block_data['ingredients'] ) && is_array( $block_data['ingredients'] ) ) ? $block_data['ingredients'] : array();
+        $steps       = ( ! empty( $block_data['steps'] ) && is_array( $block_data['steps'] ) ) ? $block_data['steps'] : array();
+
+        $this->sync_ingredients_repeater_meta( $post_id, $ingredients );
+        $this->sync_steps_repeater_meta( $post_id, $steps );
     }
 
     public function register_settings(): void {
@@ -823,6 +827,20 @@ class Go4Taste_Recipes_Plugin {
         $ingredients_raw = $this->acf_field( 'recipe_ingredients', $post_id, array() );
         $steps_raw       = $this->acf_field( 'recipe_steps', $post_id, array() );
 
+        $ingredients = array();
+        if ( is_array( $ingredients_raw ) ) {
+            $ingredients = $this->normalize_ingredients_list( $ingredients_raw );
+        } elseif ( is_numeric( $ingredients_raw ) ) {
+            $ingredients = $this->load_ingredients_repeater_meta( $post_id, (int) $ingredients_raw );
+        }
+
+        $steps = array();
+        if ( is_array( $steps_raw ) ) {
+            $steps = $this->normalize_steps_list( $steps_raw );
+        } elseif ( is_numeric( $steps_raw ) ) {
+            $steps = $this->load_steps_repeater_meta( $post_id, (int) $steps_raw );
+        }
+
         return array(
             'lead'                  => (string) $this->acf_field( 'recipe_lead', $post_id, '' ),
             'difficulty'            => (string) $this->acf_field( 'recipe_difficulty', $post_id, '' ),
@@ -831,13 +849,133 @@ class Go4Taste_Recipes_Plugin {
             'time_prep'             => (string) $this->acf_field( 'recipe_time_prep', $post_id, '' ),
             'time_cook'             => (string) $this->acf_field( 'recipe_time_cook', $post_id, '' ),
             'time_total'            => (string) $this->acf_field( 'recipe_time_total', $post_id, '' ),
-            'ingredients'           => is_array( $ingredients_raw ) ? $this->normalize_ingredients_list( $ingredients_raw ) : array(),
+            'ingredients'           => $ingredients,
             'ingredients_photo_url' => (string) $this->acf_field( 'recipe_ingredients_photo_url', $post_id, '' ),
-            'steps'                 => is_array( $steps_raw ) ? $this->normalize_steps_list( $steps_raw ) : array(),
+            'steps'                 => $steps,
             'tips'                  => (string) $this->acf_field( 'recipe_tips', $post_id, '' ),
             'source_label'          => (string) $this->acf_field( 'recipe_source_label', $post_id, '' ),
             'source_url'            => (string) $this->acf_field( 'recipe_source_url', $post_id, '' ),
         );
+    }
+
+    /**
+     * @param array<int,array{name:string,amount:float|null,unit:string}> $ingredients
+     */
+    private function sync_ingredients_repeater_meta( int $post_id, array $ingredients ): void {
+        $old_count = (int) get_post_meta( $post_id, 'recipe_ingredients', true );
+        $new_count = count( $ingredients );
+
+        for ( $i = 0; $i < max( $old_count, $new_count ); $i++ ) {
+            delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $i ) );
+        }
+
+        foreach ( $ingredients as $index => $row ) {
+            update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $index ), (string) ( $row['name'] ?? '' ) );
+            update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $index ), $row['amount'] ?? '' );
+            update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $index ), (string) ( $row['unit'] ?? '' ) );
+        }
+
+        update_post_meta( $post_id, 'recipe_ingredients', $new_count );
+    }
+
+    /**
+     * @param array<int,array{title:string,description:string,tip:string,images:array<int,string>}> $steps
+     */
+    private function sync_steps_repeater_meta( int $post_id, array $steps ): void {
+        $old_count = (int) get_post_meta( $post_id, 'recipe_steps', true );
+        $new_count = count( $steps );
+
+        for ( $i = 0; $i < max( $old_count, $new_count ); $i++ ) {
+            delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_heading', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_description', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_tip', $i ) );
+
+            $old_images_count = (int) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_images', $i ), true );
+            for ( $j = 0; $j < $old_images_count; $j++ ) {
+                delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_images_%d_url', $i, $j ) );
+            }
+            delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_images', $i ) );
+        }
+
+        foreach ( $steps as $index => $row ) {
+            update_post_meta( $post_id, sprintf( 'recipe_steps_%d_heading', $index ), (string) ( $row['title'] ?? '' ) );
+            update_post_meta( $post_id, sprintf( 'recipe_steps_%d_description', $index ), (string) ( $row['description'] ?? '' ) );
+            update_post_meta( $post_id, sprintf( 'recipe_steps_%d_tip', $index ), (string) ( $row['tip'] ?? '' ) );
+
+            $images = isset( $row['images'] ) && is_array( $row['images'] ) ? array_values( $row['images'] ) : array();
+            foreach ( $images as $image_index => $image_url ) {
+                update_post_meta( $post_id, sprintf( 'recipe_steps_%d_images_%d_url', $index, $image_index ), (string) $image_url );
+            }
+            update_post_meta( $post_id, sprintf( 'recipe_steps_%d_images', $index ), count( $images ) );
+        }
+
+        update_post_meta( $post_id, 'recipe_steps', $new_count );
+    }
+
+    /**
+     * @return array<int,array{name:string,amount:float|null,unit:string}>
+     */
+    private function load_ingredients_repeater_meta( int $post_id, int $count ): array {
+        $rows = array();
+
+        for ( $i = 0; $i < $count; $i++ ) {
+            $name = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $i ), true ) );
+            if ( '' === $name ) {
+                continue;
+            }
+
+            $amount_raw = get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $i ), true );
+            $amount     = ( '' !== (string) $amount_raw && is_numeric( (string) $amount_raw ) ) ? (float) $amount_raw : null;
+
+            $rows[] = array(
+                'name'   => $name,
+                'amount' => $amount,
+                'unit'   => trim( (string) get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $i ), true ) ),
+            );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int,array{title:string,description:string,tip:string,images:array<int,string>}>
+     */
+    private function load_steps_repeater_meta( int $post_id, int $count ): array {
+        $rows = array();
+
+        for ( $i = 0; $i < $count; $i++ ) {
+            $title       = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_heading', $i ), true ) );
+            $description = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_description', $i ), true ) );
+            $tip         = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_tip', $i ), true ) );
+
+            if ( '' === $description ) {
+                continue;
+            }
+
+            if ( '' === $title ) {
+                $title = sprintf( 'Krok %d', $i + 1 );
+            }
+
+            $images      = array();
+            $images_count = (int) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_images', $i ), true );
+            for ( $j = 0; $j < $images_count; $j++ ) {
+                $url = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_images_%d_url', $i, $j ), true ) );
+                if ( '' !== $url ) {
+                    $images[] = $url;
+                }
+            }
+
+            $rows[] = array(
+                'title'       => $title,
+                'description' => $description,
+                'tip'         => $tip,
+                'images'      => $images,
+            );
+        }
+
+        return $rows;
     }
 
     /**
