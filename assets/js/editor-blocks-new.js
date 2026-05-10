@@ -319,22 +319,39 @@
                 )
                 ,
                 rows.map(function (row, index) {
+                    var ingredientInputId = "go4taste-ingredient-name-" + index;
+                    var ingredientHelpId = "go4taste-ingredient-help-" + index;
                     return el(
                         "div",
                         { key: "row-" + index, className: "go4taste-recipes-row" },
-                        el(TextControl, {
-                            label: __("Nazwa", "go4taste-recipes-plugin"),
-                            value: row.name || "",
-                            onChange: function (value) {
-                                var matched = findTermByName(value);
-                                updateIngredientRow(index, {
-                                    name: value,
-                                    ingredient_term_id: matched ? String(matched.id) : ""
-                                });
-                            },
-                            help: __("Podpowiedzi pochodza z taksonomii skladnik. Zostaw nazwe, aby utworzyc nowy skladnik.", "go4taste-recipes-plugin"),
-                            list: datalistId
-                        }),
+                        el("div", { className: "components-base-control" },
+                            el("label", {
+                                className: "components-base-control__label",
+                                htmlFor: ingredientInputId
+                            }, __("Nazwa", "go4taste-recipes-plugin")),
+                            el("div", { className: "components-base-control__field" },
+                                el("input", {
+                                    id: ingredientInputId,
+                                    className: "components-text-control__input",
+                                    type: "text",
+                                    value: row.name || "",
+                                    list: datalistId,
+                                    onChange: function (event) {
+                                        var value = event && event.target ? event.target.value : "";
+                                        var matched = findTermByName(value);
+                                        updateIngredientRow(index, {
+                                            name: value,
+                                            ingredient_term_id: matched ? String(matched.id) : ""
+                                        });
+                                    },
+                                    "aria-describedby": ingredientHelpId
+                                })
+                            ),
+                            el("p", {
+                                id: ingredientHelpId,
+                                className: "components-base-control__help"
+                            }, __("Podpowiedzi pochodza z taksonomii skladnik. Zostaw nazwe, aby utworzyc nowy skladnik.", "go4taste-recipes-plugin"))
+                        ),
                         el(TextControl, {
                             label: __("Ilość", "go4taste-recipes-plugin"),
                             value: row.amount || "",
