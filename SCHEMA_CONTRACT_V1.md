@@ -115,6 +115,20 @@ $recipe = [
 - **Post assignment:** terms synchronized from ingredients repeater rows on post save
 - **Import behavior:** importer may provide either `ingredient_term_id` or `name`; missing terms are auto-created from `name`
 
+### Additional Recipe Taxonomies
+
+Three additional flat taxonomies are registered for recipe classification and filtering:
+
+- **recipe_meal_type** — Typ dania (śniadanie, danie główne, napój), slug `/typ-dania/`
+- **recipe_prep_time_range** — Zakres czasu przygotowania (do 15 min, 16-30 min, itd.), slug `/czas-przygotowania/`
+- **recipe_feature** — Cechy przepisu (Bez glutenu, Dania z orzechami, itd.), slug `/cechy/`
+
+**Common properties:**
+- **Type:** flat taxonomy (`hierarchical = false`)
+- **REST exposure:** `show_in_rest = true`, `show_admin_column = true`
+- **Post assignment:** manual via admin UI or programmatic via `wp_set_object_terms`
+- **Use case:** filtering, categorization, and WPGraphQL queries
+
 ---
 
 ## Context Filters Contract

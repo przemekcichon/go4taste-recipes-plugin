@@ -172,6 +172,7 @@
             var setAttrs = props.setAttributes;
             var blockProps = useBlockProps({ className: "go4taste-recipes-block go4taste-recipes-block--ingredients" });
             var rows = Array.isArray(attrs.itemsList) ? attrs.itemsList : [];
+            var blockId = props.clientId || "default";
             var _useState = useState([]), ingredientTerms = _useState[0], setIngredientTerms = _useState[1];
             var _useState2 = useState(false), isLoadingTerms = _useState2[0], setIsLoadingTerms = _useState2[1];
             var _useState3 = useState(""), termsError = _useState3[0], setTermsError = _useState3[1];
@@ -267,7 +268,7 @@
                     });
             }
 
-            var datalistId = "go4taste-recipe-ingredient-terms";
+            var datalistId = "go4taste-recipe-ingredient-terms-" + blockId;
 
             return el(
                 "section",
@@ -341,7 +342,7 @@
                                         var matched = findTermByName(value);
                                         updateIngredientRow(index, {
                                             name: value,
-                                            ingredient_term_id: matched ? String(matched.id) : ""
+                                            ingredient_term_id: matched ? String(matched.id) : null
                                         });
                                     },
                                     "aria-describedby": ingredientHelpId

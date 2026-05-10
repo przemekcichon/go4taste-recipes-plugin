@@ -320,32 +320,41 @@ class Go4Taste_Recipes_Plugin {
      * Keep structured recipe fields in ACF/meta keys without changing block editor UI.
      */
     public function sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $update ): void {
+        static $running = false;
+        if ( $running ) {
+            return;
+        }
+        $running = true;
+
         if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+            $running = false;
             return;
         }
 
         $strategy = $this->resolve_source_strategy();
         if ( $post->post_type !== $strategy['post_type'] ) {
+            $running = false;
             return;
         }
 
         $block_data = $this->get_recipe_blocks_data( $post );
         if ( empty( $block_data['_has_recipe_blocks'] ) ) {
             $this->sync_ingredient_taxonomy_from_existing_meta( $post_id );
+            $running = false;
             return;
         }
 
         $payload = array(
-            'recipe_time_prep'             => (string) ( $block_data['time_prep'] ?? '' ),
-            'recipe_time_cook'             => (string) ( $block_data['time_cook'] ?? '' ),
-            'recipe_time_total'            => (string) ( $block_data['time_total'] ?? '' ),
-            'recipe_difficulty'            => (string) ( $block_data['difficulty'] ?? '' ),
+            'recipe_time_prep'             => sanitize_text_field( (string) ( $block_data['time_prep'] ?? '' ) ),
+            'recipe_time_cook'             => sanitize_text_field( (string) ( $block_data['time_cook'] ?? '' ) ),
+            'recipe_time_total'            => sanitize_text_field( (string) ( $block_data['time_total'] ?? '' ) ),
+            'recipe_difficulty'            => sanitize_text_field( (string) ( $block_data['difficulty'] ?? '' ) ),
             'recipe_servings_value'        => $block_data['servings_value'] ?? null,
-            'recipe_servings_unit'         => (string) ( $block_data['servings_unit'] ?? '' ),
-            'recipe_ingredients_photo_url' => (string) ( $block_data['ingredients_photo_url'] ?? '' ),
-            'recipe_tips'                  => (string) ( $block_data['tips'] ?? '' ),
-            'recipe_source_label'          => (string) ( $block_data['source_label'] ?? '' ),
-            'recipe_source_url'            => (string) ( $block_data['source_url'] ?? '' ),
+            'recipe_servings_unit'         => sanitize_text_field( (string) ( $block_data['servings_unit'] ?? '' ) ),
+            'recipe_ingredients_photo_url' => esc_url_raw( (string) ( $block_data['ingredients_photo_url'] ?? '' ) ),
+            'recipe_tips'                  => wp_kses_post( (string) ( $block_data['tips'] ?? '' ) ),
+            'recipe_source_label'          => sanitize_text_field( (string) ( $block_data['source_label'] ?? '' ) ),
+            'recipe_source_url'            => esc_url_raw( (string) ( $block_data['source_url'] ?? '' ) ),
         );
 
         foreach ( $payload as $meta_key => $value ) {
@@ -357,6 +366,8 @@ class Go4Taste_Recipes_Plugin {
 
         $this->sync_ingredients_repeater_meta( $post_id, $ingredients );
         $this->sync_steps_repeater_meta( $post_id, $steps );
+
+        $running = false;
     }
 
     private function sync_ingredient_taxonomy_from_existing_meta( int $post_id ): void {
