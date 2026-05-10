@@ -1,0 +1,225 @@
+/* GO4TASTE Recipes Block Editor Styling */
+
+:root {
+  --g4t-color-primary: #111111;
+  --g4t-color-text: #111111;
+  --g4t-color-border: #d2d2d2;
+  --g4t-color-bg-light: #f6f6f6;
+  --g4t-color-accent: #111111;
+  --g4t-space-xs: 4px;
+  --g4t-space-sm: 8px;
+  --g4t-space-md: 16px;
+  --g4t-space-lg: 24px;
+  --g4t-space-xl: 32px;
+  --g4t-radius: 8px;
+}
+
+/* Recipe Block Container */
+.go4taste-recipes-block {
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  padding: var(--g4t-space-xl);
+}
+
+/* Block Header with Icon */
+.go4taste-block-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: var(--g4t-space-lg);
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--g4t-color-border);
+}
+
+.go4taste-block-icon {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #5a5a5a;
+  border: 1px solid #cdcdcd;
+  background: #f3f3f3;
+  border-radius: 999px;
+  min-width: 28px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.go4taste-block-header h3 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--g4t-color-text);
+  letter-spacing: -0.01em;
+}
+
+.description {
+  margin: 0 0 var(--g4t-space-lg) 0;
+  font-size: 1.04rem;
+  color: #4b4b4b;
+  line-height: 1.6;
+}
+
+.go4taste-recipes-block .components-base-control__label,
+.go4taste-photo-upload label {
+  font-size: 1.02rem !important;
+  font-weight: 700 !important;
+  color: #111111 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  font-variant: normal !important;
+}
+
+.go4taste-recipes-block .components-base-control__help {
+  font-size: 0.9rem;
+  color: #5e5e5e;
+}
+
+/* Photo Upload Section */
+.go4taste-photo-upload {
+  background: var(--g4t-color-bg-light);
+  padding: var(--g4t-space-lg);
+  border-radius: var(--g4t-radius);
+  margin-bottom: var(--g4t-space-lg);
+  border: 2px dashed var(--g4t-color-border);
+  transition: all 0.3s ease;
+}
+
+.go4taste-photo-upload:hover {
+  border-color: #8a8a8a;
+  background: #fafafa;
+}
+
+.go4taste-photo-upload .components-button {
+  min-height: 46px;
+  padding: var(--g4t-space-sm) var(--g4t-space-lg) !important;
+  font-size: 0.98rem;
+  font-weight: 600;
+  border-radius: 8px !important;
+}
+
+.go4taste-photo-preview {
+  margin-top: var(--g4t-space-md);
+}
+
+.go4taste-photo-preview img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--g4t-radius);
+  display: block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* Row Controls */
+.go4taste-recipes-row {
+  background: var(--g4t-color-bg-light);
+  padding: var(--g4t-space-lg);
+  border-radius: 10px;
+  margin-bottom: var(--g4t-space-md);
+  border-left: 3px solid #222222;
+  display: grid;
+  gap: 14px;
+}
+
+.go4taste-recipes-row .components-text-control__input,
+.go4taste-recipes-row .components-textarea-control__input {
+  border: 1px solid var(--g4t-color-border) !important;
+  border-radius: 8px !important;
+  padding: 11px 13px !important;
+  font-size: 1rem;
+  min-height: 44px;
+  color: #151515;
+  background: #ffffff;
+  transition: all 0.3s ease;
+}
+
+.go4taste-recipes-row .components-text-control__input:focus,
+.go4taste-recipes-row .components-textarea-control__input:focus {
+  border-color: #111111 !important;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.go4taste-recipes-row .components-button {
+  justify-self: start;
+}
+
+/* Standalone fields (outside .go4taste-recipes-row) in hero, tips, source blocks */
+.go4taste-recipes-block > .components-base-control,
+.go4taste-recipes-block > div > .components-base-control {
+  background: var(--g4t-color-bg-light);
+  border-radius: 10px;
+}
+
+.go4taste-recipes-block .components-text-control__input,
+.go4taste-recipes-block .components-textarea-control__input {
+  border: 1px solid var(--g4t-color-border) !important;
+  border-radius: 8px !important;
+  padding: 11px 13px !important;
+  font-size: 1rem;
+  min-height: 44px;
+  color: #151515;
+  background: #ffffff;
+  transition: all 0.3s ease;
+}
+
+.go4taste-recipes-block .components-text-control__input:focus,
+.go4taste-recipes-block .components-textarea-control__input:focus {
+  border-color: #111111 !important;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1);
+}
+
+.go4taste-recipes-block .components-button.is-secondary,
+.go4taste-recipes-block .components-button.is-tertiary {
+  border-color: #c8c8c8 !important;
+  color: #1f1f1f !important;
+  background: #fafafa !important;
+}
+
+.go4taste-recipes-block .components-button.is-secondary:hover,
+.go4taste-recipes-block .components-button.is-tertiary:hover {
+  border-color: #8f8f8f !important;
+  background: #f1f1f1 !important;
+}
+
+/* Add Row Button */
+.go4taste-recipes-row + .components-button {
+  margin-top: var(--g4t-space-md);
+  background: #111111 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  min-height: 44px;
+  padding: 0 16px !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .go4taste-recipes-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Step image upload */
+.go4taste-step-image {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.go4taste-step-image-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.go4taste-step-image-preview img {
+  width: 80px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
