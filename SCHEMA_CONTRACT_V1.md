@@ -50,9 +50,10 @@ $recipe = [
     
     'ingredients' => [               // Array of normalized ingredient objects
         [
-            'name'   => (string),     // ingredient name
-            'amount' => (float|null), // numeric amount, nullable
-            'unit'   => (string),     // unit of measurement — empty string OK
+            'ingredient_term_id' => (int|null), // taxonomy term ID from flat taxonomy `recipe_ingredient`
+            'name'               => (string),    // ingredient name (fallback/import label)
+            'amount'             => (float|null),// numeric amount, nullable
+            'unit'               => (string),    // unit of measurement — empty string OK
         ],
         // ... more ingredients
     ],
@@ -96,11 +97,23 @@ $recipe = [
 ### Data Normalization
 
 - **Ingredients:** Empty items removed; `amount` coerced to float or null
+- **Ingredients taxonomy binding:** Each ingredient row maps to flat taxonomy `recipe_ingredient`.
+    - If `ingredient_term_id` exists, it is used as canonical reference.
+    - If only `name` exists, plugin resolves existing term by name/slug or creates missing term.
+    - Synchronization stores both repeater row data and post term assignment.
 - **Steps:** Extracted from repeater; empty items removed; order preserved
 - **Times:** Human-readable strings (e.g., "15 minutes", "1 hour") — NOT parsed
-- **Ingredients repeater:** Fields are `name`, `amount`, `unit` (lowercase)
+- **Ingredients repeater:** Fields are `ingredient_term_id`, `name`, `amount`, `unit` (lowercase)
 - **Steps repeater:** Field is `text` (lowercase)
 - **Ads products:** Stored as array of product ID strings in repeater called `recipe_ads_products`
+
+### Ingredient Taxonomy Contract
+
+- **Taxonomy key:** `recipe_ingredient`
+- **Type:** flat taxonomy (`hierarchical = false`)
+- **REST exposure:** `show_in_rest = true`
+- **Post assignment:** terms synchronized from ingredients repeater rows on post save
+- **Import behavior:** importer may provide either `ingredient_term_id` or `name`; missing terms are auto-created from `name`
 
 ---
 

@@ -2,14 +2,19 @@
     "use strict";
 
     var el = element.createElement;
+    var useState = element.useState;
+    var useEffect = element.useEffect;
     var registerBlockType = blocks.registerBlockType;
     var useBlockProps = blockEditor.useBlockProps;
     var MediaUpload = blockEditor.MediaUpload;
     var MediaUploadCheck = blockEditor.MediaUploadCheck;
     var TextControl = components.TextControl;
     var TextareaControl = components.TextareaControl;
+    var Notice = components.Notice;
+    var Spinner = components.Spinner;
     var Button = components.Button;
     var __ = i18n.__;
+    var apiFetch = window.wp && window.wp.apiFetch ? window.wp.apiFetch : null;
 
     function createRowControls(rows, onChange, fields, addLabel) {
         var controls = [];
@@ -157,7 +162,7 @@
         attributes: {
             itemsList: {
                 type: "array",
-                default: [{ name: "", amount: "", unit: "" }]
+                default: [{ ingredient_term_id: "", name: "", amount: "", unit: "" }]
             },
             items: { type: "string", default: "" },
             photoUrl: { type: "string", default: "" }
@@ -167,6 +172,102 @@
             var setAttrs = props.setAttributes;
             var blockProps = useBlockProps({ className: "go4taste-recipes-block go4taste-recipes-block--ingredients" });
             var rows = Array.isArray(attrs.itemsList) ? attrs.itemsList : [];
+            var _useState = useState([]), ingredientTerms = _useState[0], setIngredientTerms = _useState[1];
+            var _useState2 = useState(false), isLoadingTerms = _useState2[0], setIsLoadingTerms = _useState2[1];
+            var _useState3 = useState(""), termsError = _useState3[0], setTermsError = _useState3[1];
+
+            function refreshIngredientTerms() {
+                if (!apiFetch) {
+                    return;
+                }
+
+                setIsLoadingTerms(true);
+                setTermsError("");
+
+                apiFetch({ path: "/wp/v2/recipe_ingredient?per_page=100&orderby=name&order=asc" })
+                    .then(function (terms) {
+                        setIngredientTerms(Array.isArray(terms) ? terms : []);
+                    })
+                    .catch(function () {
+                        setTermsError(__("Nie udalo sie pobrac listy skladnikow.", "go4taste-recipes-plugin"));
+                    })
+                    .finally(function () {
+                        setIsLoadingTerms(false);
+                    });
+            }
+
+            useEffect(function () {
+                refreshIngredientTerms();
+            }, []);
+
+            function updateIngredientRow(index, patch) {
+                var next = rows.slice();
+                var row = Object.assign({}, next[index] || {});
+                next[index] = Object.assign(row, patch);
+                setAttrs({ itemsList: next });
+            }
+
+            function normalizeName(value) {
+                return String(value || "").trim().toLowerCase();
+            }
+
+            function findTermByName(name) {
+                var normalized = normalizeName(name);
+                if (!normalized) {
+                    return null;
+                }
+
+                for (var i = 0; i < ingredientTerms.length; i++) {
+                    var term = ingredientTerms[i];
+                    if (!term || typeof term.name !== "string") {
+                        continue;
+                    }
+                    if (normalizeName(term.name) === normalized) {
+                        return term;
+                    }
+                }
+
+                return null;
+            }
+
+            function createIngredientTerm(index) {
+                if (!apiFetch) {
+                    return;
+                }
+
+                var row = rows[index] || {};
+                var name = String(row.name || "").trim();
+                if (!name) {
+                    return;
+                }
+
+                var existing = findTermByName(name);
+                if (existing) {
+                    updateIngredientRow(index, { ingredient_term_id: String(existing.id), name: existing.name });
+                    return;
+                }
+
+                setTermsError("");
+                apiFetch({
+                    path: "/wp/v2/recipe_ingredient",
+                    method: "POST",
+                    data: { name: name }
+                })
+                    .then(function (created) {
+                        if (created && created.id) {
+                            updateIngredientRow(index, {
+                                ingredient_term_id: String(created.id),
+                                name: created.name || name
+                            });
+                            refreshIngredientTerms();
+                        }
+                    })
+                    .catch(function () {
+                        setTermsError(__("Nie udalo sie utworzyc skladnika. Sprawdz uprawnienia i REST API.", "go4taste-recipes-plugin"));
+                    });
+            }
+
+            var datalistId = "go4taste-recipe-ingredient-terms";
 
             return el(
                 "section",
@@ -207,16 +308,76 @@
                     )
                 ),
                 el("h4", { style: { marginTop: "24px", marginBottom: "16px" } }, __("Lista składników", "go4taste-recipes-plugin")),
-                createRowControls(
-                    rows,
-                    function (nextRows) { setAttrs({ itemsList: nextRows }); },
-                    [
-                        { key: "name", label: __("Nazwa", "go4taste-recipes-plugin") },
-                        { key: "amount", label: __("Ilość", "go4taste-recipes-plugin") },
-                        { key: "unit", label: __("Jednostka", "go4taste-recipes-plugin") }
-                    ],
-                    __("+ Dodaj składnik", "go4taste-recipes-plugin")
+                isLoadingTerms && el(Spinner, null),
+                termsError && el(Notice, { status: "warning", isDismissible: false }, termsError),
+                el(
+                    "datalist",
+                    { id: datalistId },
+                    ingredientTerms.map(function (term) {
+                        return el("option", { key: "term-opt-" + term.id, value: term.name });
+                    })
                 )
+                ,
+                rows.map(function (row, index) {
+                    return el(
+                        "div",
+                        { key: "row-" + index, className: "go4taste-recipes-row" },
+                        el(TextControl, {
+                            label: __("Nazwa", "go4taste-recipes-plugin"),
+                            value: row.name || "",
+                            onChange: function (value) {
+                                var matched = findTermByName(value);
+                                updateIngredientRow(index, {
+                                    name: value,
+                                    ingredient_term_id: matched ? String(matched.id) : ""
+                                });
+                            },
+                            help: __("Podpowiedzi pochodza z taksonomii skladnik. Zostaw nazwe, aby utworzyc nowy skladnik.", "go4taste-recipes-plugin"),
+                            list: datalistId
+                        }),
+                        el(TextControl, {
+                            label: __("Ilość", "go4taste-recipes-plugin"),
+                            value: row.amount || "",
+                            onChange: function (value) {
+                                updateIngredientRow(index, { amount: value });
+                            }
+                        }),
+                        el(TextControl, {
+                            label: __("Jednostka", "go4taste-recipes-plugin"),
+                            value: row.unit || "",
+                            onChange: function (value) {
+                                updateIngredientRow(index, { unit: value });
+                            }
+                        }),
+                        el(
+                            "div",
+                            { style: { display: "flex", gap: "8px", marginTop: "8px" } },
+                            el(Button, {
+                                variant: "secondary",
+                                onClick: function () {
+                                    createIngredientTerm(index);
+                                }
+                            }, __("Utwórz brakujący składnik", "go4taste-recipes-plugin")),
+                            el(Button, {
+                                isDestructive: true,
+                                variant: "secondary",
+                                onClick: function () {
+                                    var next = rows.slice();
+                                    next.splice(index, 1);
+                                    setAttrs({ itemsList: next });
+                                }
+                            }, __("Usuń", "go4taste-recipes-plugin"))
+                        )
+                    );
+                }),
+                el(Button, {
+                    variant: "primary",
+                    onClick: function () {
+                        var next = rows.slice();
+                        next.push({ ingredient_term_id: "", name: "", amount: "", unit: "" });
+                        setAttrs({ itemsList: next });
+                    }
+                }, __("+ Dodaj składnik", "go4taste-recipes-plugin"))
             );
         },
         save: function () {

@@ -12,6 +12,7 @@ class Go4Taste_Recipes_Plugin {
     private const MODE_RECIPES_CPT  = 'recipes_cpt';
 
     private const RECIPES_POST_TYPE = 'recipe';
+    private const INGREDIENT_TAXONOMY = 'recipe_ingredient';
     private const RECIPE_BLOCK_NAMES = array(
         'go4taste-recipes/hero',
         'go4taste-recipes/ingredients',
@@ -27,6 +28,7 @@ class Go4Taste_Recipes_Plugin {
 
     public function __construct() {
         add_action( 'init', array( $this, 'register_recipe_post_type_if_needed' ) );
+        add_action( 'init', array( $this, 'register_ingredient_taxonomy' ) );
         add_action( 'init', array( $this, 'register_recipe_blocks' ) );
         add_action( 'acf/init', array( $this, 'register_acf_fields' ) );
         add_action( 'save_post', array( $this, 'sync_recipe_meta_from_blocks' ), 20, 3 );
@@ -124,6 +126,34 @@ class Go4Taste_Recipes_Plugin {
         );
     }
 
+    public function register_ingredient_taxonomy(): void {
+        $strategy  = $this->resolve_source_strategy();
+        $post_type = $strategy['post_type'];
+
+        if ( taxonomy_exists( self::INGREDIENT_TAXONOMY ) ) {
+            register_taxonomy_for_object_type( self::INGREDIENT_TAXONOMY, $post_type );
+            return;
+        }
+
+        register_taxonomy(
+            self::INGREDIENT_TAXONOMY,
+            array( $post_type ),
+            array(
+                'labels' => array(
+                    'name'          => __( 'Ingredients', 'go4taste-recipes-plugin' ),
+                    'singular_name' => __( 'Ingredient', 'go4taste-recipes-plugin' ),
+                ),
+                'public'            => true,
+                'hierarchical'      => false,
+                'show_ui'           => true,
+                'show_admin_column' => false,
+                'show_in_rest'      => true,
+                'query_var'         => true,
+                'rewrite'           => array( 'slug' => 'skladniki' ),
+            )
+        );
+    }
+
     public function register_recipe_blocks(): void {
         if ( ! function_exists( 'register_block_type' ) ) {
             return;
@@ -154,7 +184,7 @@ class Go4Taste_Recipes_Plugin {
         wp_register_script(
             'go4taste-recipes-editor-blocks',
             GO4TASTE_RECIPES_PLUGIN_URL . 'assets/js/editor-blocks-new.js',
-            array( 'wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-i18n', 'wp-hooks' ),
+            array( 'wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-i18n', 'wp-hooks', 'wp-api-fetch' ),
             (string) filemtime( $script_path ),
             true
         );
@@ -236,6 +266,7 @@ class Go4Taste_Recipes_Plugin {
 
         $block_data = $this->get_recipe_blocks_data( $post );
         if ( empty( $block_data['_has_recipe_blocks'] ) ) {
+            $this->sync_ingredient_taxonomy_from_existing_meta( $post_id );
             return;
         }
 
@@ -261,6 +292,20 @@ class Go4Taste_Recipes_Plugin {
 
         $this->sync_ingredients_repeater_meta( $post_id, $ingredients );
         $this->sync_steps_repeater_meta( $post_id, $steps );
+    }
+
+    private function sync_ingredient_taxonomy_from_existing_meta( int $post_id ): void {
+        $count = (int) get_post_meta( $post_id, 'recipe_ingredients', true );
+
+        if ( $count <= 0 ) {
+            if ( taxonomy_exists( self::INGREDIENT_TAXONOMY ) ) {
+                wp_set_object_terms( $post_id, array(), self::INGREDIENT_TAXONOMY, false );
+            }
+            return;
+        }
+
+        $rows = $this->load_ingredients_repeater_meta( $post_id, $count );
+        $this->sync_ingredients_repeater_meta( $post_id, $rows );
     }
 
     public function register_settings(): void {
@@ -859,25 +904,79 @@ class Go4Taste_Recipes_Plugin {
     }
 
     /**
-     * @param array<int,array{name:string,amount:float|null,unit:string}> $ingredients
+     * @param array<int,array<string,mixed>> $ingredients
      */
     private function sync_ingredients_repeater_meta( int $post_id, array $ingredients ): void {
         $old_count = (int) get_post_meta( $post_id, 'recipe_ingredients', true );
         $new_count = count( $ingredients );
+        $term_ids  = array();
 
         for ( $i = 0; $i < max( $old_count, $new_count ); $i++ ) {
             delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $i ) );
             delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $i ) );
             delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_term_id', $i ) );
         }
 
         foreach ( $ingredients as $index => $row ) {
-            update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $index ), (string) ( $row['name'] ?? '' ) );
+            $name = (string) ( $row['name'] ?? '' );
+            update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $index ), $name );
             update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $index ), $row['amount'] ?? '' );
             update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $index ), (string) ( $row['unit'] ?? '' ) );
+
+            $term_id = null;
+            if ( isset( $row['ingredient_term_id'] ) && is_numeric( (string) $row['ingredient_term_id'] ) ) {
+                $term_id = (int) $row['ingredient_term_id'];
+            }
+
+            if ( null === $term_id ) {
+                $term_id = $this->ensure_ingredient_term( $name );
+            }
+
+            if ( null !== $term_id ) {
+                update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_term_id', $index ), $term_id );
+                $term_ids[] = $term_id;
+            }
         }
 
         update_post_meta( $post_id, 'recipe_ingredients', $new_count );
+
+        if ( taxonomy_exists( self::INGREDIENT_TAXONOMY ) ) {
+            wp_set_object_terms( $post_id, array_values( array_unique( $term_ids ) ), self::INGREDIENT_TAXONOMY, false );
+        }
+    }
+
+    private function ensure_ingredient_term( string $ingredient_name ): ?int {
+        $ingredient_name = trim( wp_strip_all_tags( $ingredient_name ) );
+        if ( '' === $ingredient_name ) {
+            return null;
+        }
+
+        $term = get_term_by( 'name', $ingredient_name, self::INGREDIENT_TAXONOMY );
+        if ( $term instanceof WP_Term ) {
+            return (int) $term->term_id;
+        }
+
+        $slug = sanitize_title( $ingredient_name );
+        $term_exists = term_exists( $slug, self::INGREDIENT_TAXONOMY );
+        if ( is_array( $term_exists ) && isset( $term_exists['term_id'] ) ) {
+            return (int) $term_exists['term_id'];
+        }
+        if ( is_int( $term_exists ) ) {
+            return $term_exists;
+        }
+
+        $created = wp_insert_term(
+            $ingredient_name,
+            self::INGREDIENT_TAXONOMY,
+            array( 'slug' => $slug )
+        );
+
+        if ( is_wp_error( $created ) || ! isset( $created['term_id'] ) ) {
+            return null;
+        }
+
+        return (int) $created['term_id'];
     }
 
     /**
@@ -915,7 +1014,7 @@ class Go4Taste_Recipes_Plugin {
     }
 
     /**
-     * @return array<int,array{name:string,amount:float|null,unit:string}>
+     * @return array<int,array{ingredient_term_id:int|null,name:string,amount:float|null,unit:string}>
      */
     private function load_ingredients_repeater_meta( int $post_id, int $count ): array {
         $rows = array();
@@ -928,11 +1027,14 @@ class Go4Taste_Recipes_Plugin {
 
             $amount_raw = get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $i ), true );
             $amount     = ( '' !== (string) $amount_raw && is_numeric( (string) $amount_raw ) ) ? (float) $amount_raw : null;
+            $term_raw   = get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_term_id', $i ), true );
+            $term_id    = ( '' !== (string) $term_raw && is_numeric( (string) $term_raw ) ) ? (int) $term_raw : null;
 
             $rows[] = array(
-                'name'   => $name,
-                'amount' => $amount,
-                'unit'   => trim( (string) get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $i ), true ) ),
+                'ingredient_term_id' => $term_id,
+                'name'               => $name,
+                'amount'             => $amount,
+                'unit'               => trim( (string) get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $i ), true ) ),
             );
         }
 
@@ -1035,7 +1137,7 @@ class Go4Taste_Recipes_Plugin {
 
     /**
      * @param array<int,mixed> $items
-     * @return array<int,array{name:string,amount:float|null,unit:string}>
+     * @return array<int,array{ingredient_term_id:int|null,name:string,amount:float|null,unit:string}>
      */
     private function normalize_ingredients_list( array $items ): array {
         $normalized = array();
@@ -1055,10 +1157,19 @@ class Go4Taste_Recipes_Plugin {
                 $amount = (float) $row['amount'];
             }
 
+            $ingredient_term_id = null;
+            if ( isset( $row['ingredient_term_id'] ) && '' !== trim( (string) $row['ingredient_term_id'] ) && is_numeric( (string) $row['ingredient_term_id'] ) ) {
+                $ingredient_term_id = (int) $row['ingredient_term_id'];
+            }
+            if ( null === $ingredient_term_id && isset( $row['term_id'] ) && '' !== trim( (string) $row['term_id'] ) && is_numeric( (string) $row['term_id'] ) ) {
+                $ingredient_term_id = (int) $row['term_id'];
+            }
+
             $normalized[] = array(
-                'name'   => $name,
-                'amount' => $amount,
-                'unit'   => isset( $row['unit'] ) ? trim( (string) $row['unit'] ) : '',
+                'ingredient_term_id' => $ingredient_term_id,
+                'name'               => $name,
+                'amount'             => $amount,
+                'unit'               => isset( $row['unit'] ) ? trim( (string) $row['unit'] ) : '',
             );
         }
 
