@@ -741,7 +741,14 @@ class Go4Taste_Recipes_Plugin {
             }
         }
 
-        if ( self::MODE_POST === $strategy['mode'] && ( is_category() || is_tag() || is_date() ) ) {
+        $recipe_taxonomies = array(
+            self::MEAL_TYPE_TAXONOMY,
+            self::PREP_TIME_TAXONOMY,
+            self::FEATURE_TAXONOMY,
+            self::INGREDIENT_TAXONOMY,
+        );
+
+        if ( self::MODE_POST === $strategy['mode'] && ( is_category() || is_tag() || is_date() || is_tax( $recipe_taxonomies ) ) ) {
             return true;
         }
 
