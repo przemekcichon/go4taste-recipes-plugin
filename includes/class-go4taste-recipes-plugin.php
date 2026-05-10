@@ -29,6 +29,7 @@ class Go4Taste_Recipes_Plugin {
         add_action( 'init', array( $this, 'register_recipe_post_type_if_needed' ) );
         add_action( 'init', array( $this, 'register_recipe_blocks' ) );
         add_action( 'acf/init', array( $this, 'register_acf_fields' ) );
+        add_action( 'save_post', array( $this, 'sync_recipe_meta_from_blocks' ), 20, 3 );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_menu', array( $this, 'register_options_page' ) );
         add_action( 'admin_notices', array( $this, 'render_dependency_notices' ) );
@@ -185,163 +186,6 @@ class Go4Taste_Recipes_Plugin {
 
         acf_add_local_field_group(
             array(
-                'key'    => 'group_go4taste_recipe_data',
-                'title'  => 'GO4TASTE Recipe Data',
-                'fields' => array(
-                    array(
-                        'key'   => 'field_recipe_time_prep',
-                        'label' => 'Time: Preparation',
-                        'name'  => 'recipe_time_prep',
-                        'type'  => 'text',
-                    ),
-                    array(
-                        'key'   => 'field_recipe_time_cook',
-                        'label' => 'Time: Cooking',
-                        'name'  => 'recipe_time_cook',
-                        'type'  => 'text',
-                    ),
-                    array(
-                        'key'   => 'field_recipe_time_total',
-                        'label' => 'Time: Total',
-                        'name'  => 'recipe_time_total',
-                        'type'  => 'text',
-                    ),
-                    array(
-                        'key'   => 'field_recipe_difficulty',
-                        'label' => 'Difficulty',
-                        'name'  => 'recipe_difficulty',
-                        'type'  => 'text',
-                    ),
-                    array(
-                        'key'   => 'field_recipe_servings_value',
-                        'label' => 'Servings Value',
-                        'name'  => 'recipe_servings_value',
-                        'type'  => 'number',
-                        'step'  => '0.1',
-                    ),
-                    array(
-                        'key'   => 'field_recipe_servings_unit',
-                        'label' => 'Servings Unit',
-                        'name'  => 'recipe_servings_unit',
-                        'type'  => 'text',
-                    ),
-                    array(
-                        'key'          => 'field_recipe_ingredients',
-                        'label'        => 'Ingredients',
-                        'name'         => 'recipe_ingredients',
-                        'type'         => 'repeater',
-                        'layout'       => 'table',
-                        'button_label' => 'Add ingredient',
-                        'sub_fields'   => array(
-                            array(
-                                'key'   => 'field_recipe_ingredients_name',
-                                'label' => 'Name',
-                                'name'  => 'name',
-                                'type'  => 'text',
-                            ),
-                            array(
-                                'key'   => 'field_recipe_ingredients_amount',
-                                'label' => 'Amount',
-                                'name'  => 'amount',
-                                'type'  => 'number',
-                                'step'  => '0.1',
-                            ),
-                            array(
-                                'key'   => 'field_recipe_ingredients_unit',
-                                'label' => 'Unit',
-                                'name'  => 'unit',
-                                'type'  => 'text',
-                            ),
-                        ),
-                    ),
-                    array(
-                        'key'   => 'field_recipe_ingredients_photo_url',
-                        'label' => 'Ingredients Photo URL',
-                        'name'  => 'recipe_ingredients_photo_url',
-                        'type'  => 'url',
-                    ),
-                    array(
-                        'key'          => 'field_recipe_steps',
-                        'label'        => 'Steps',
-                        'name'         => 'recipe_steps',
-                        'type'         => 'repeater',
-                        'layout'       => 'block',
-                        'button_label' => 'Add step',
-                        'sub_fields'   => array(
-                            array(
-                                'key'   => 'field_recipe_steps_heading',
-                                'label' => 'Heading',
-                                'name'  => 'heading',
-                                'type'  => 'text',
-                            ),
-                            array(
-                                'key'   => 'field_recipe_steps_description',
-                                'label' => 'Description',
-                                'name'  => 'description',
-                                'type'  => 'textarea',
-                                'rows'  => 4,
-                            ),
-                            array(
-                                'key'   => 'field_recipe_steps_tip',
-                                'label' => 'Tip',
-                                'name'  => 'tip',
-                                'type'  => 'textarea',
-                                'rows'  => 2,
-                            ),
-                            array(
-                                'key'          => 'field_recipe_steps_images',
-                                'label'        => 'Images',
-                                'name'         => 'images',
-                                'type'         => 'repeater',
-                                'layout'       => 'table',
-                                'button_label' => 'Add image',
-                                'sub_fields'   => array(
-                                    array(
-                                        'key'   => 'field_recipe_steps_image_url',
-                                        'label' => 'Image URL',
-                                        'name'  => 'url',
-                                        'type'  => 'url',
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
-                    array(
-                        'key'   => 'field_recipe_tips',
-                        'label' => 'Tips',
-                        'name'  => 'recipe_tips',
-                        'type'  => 'textarea',
-                        'rows'  => 4,
-                    ),
-                    array(
-                        'key'   => 'field_recipe_source_label',
-                        'label' => 'Source Label',
-                        'name'  => 'recipe_source_label',
-                        'type'  => 'text',
-                    ),
-                    array(
-                        'key'   => 'field_recipe_source_url',
-                        'label' => 'Source URL',
-                        'name'  => 'recipe_source_url',
-                        'type'  => 'url',
-                    ),
-                ),
-                'location' => array(
-                    array(
-                        array(
-                            'param'    => 'post_type',
-                            'operator' => '==',
-                            'value'    => $strategy['post_type'],
-                        ),
-                    ),
-                ),
-                'position' => 'normal',
-                'style'    => 'default',
-            )
-        );
-
-        acf_add_local_field_group(
-            array(
                 'key'    => 'group_go4taste_recipe_ads',
                 'title'  => 'GO4TASTE Recipe Ads',
                 'fields' => array(
@@ -375,6 +219,44 @@ class Go4Taste_Recipes_Plugin {
                 'style'    => 'default',
             )
         );
+    }
+
+    /**
+     * Keep structured recipe fields in ACF/meta keys without changing block editor UI.
+     */
+    public function sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $update ): void {
+        if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+            return;
+        }
+
+        $strategy = $this->resolve_source_strategy();
+        if ( $post->post_type !== $strategy['post_type'] ) {
+            return;
+        }
+
+        $block_data = $this->get_recipe_blocks_data( $post );
+        if ( empty( $block_data['_has_recipe_blocks'] ) ) {
+            return;
+        }
+
+        $payload = array(
+            'recipe_time_prep'             => (string) ( $block_data['time_prep'] ?? '' ),
+            'recipe_time_cook'             => (string) ( $block_data['time_cook'] ?? '' ),
+            'recipe_time_total'            => (string) ( $block_data['time_total'] ?? '' ),
+            'recipe_difficulty'            => (string) ( $block_data['difficulty'] ?? '' ),
+            'recipe_servings_value'        => $block_data['servings_value'] ?? null,
+            'recipe_servings_unit'         => (string) ( $block_data['servings_unit'] ?? '' ),
+            'recipe_ingredients'           => ( ! empty( $block_data['ingredients'] ) && is_array( $block_data['ingredients'] ) ) ? $block_data['ingredients'] : array(),
+            'recipe_ingredients_photo_url' => (string) ( $block_data['ingredients_photo_url'] ?? '' ),
+            'recipe_steps'                 => ( ! empty( $block_data['steps'] ) && is_array( $block_data['steps'] ) ) ? $block_data['steps'] : array(),
+            'recipe_tips'                  => (string) ( $block_data['tips'] ?? '' ),
+            'recipe_source_label'          => (string) ( $block_data['source_label'] ?? '' ),
+            'recipe_source_url'            => (string) ( $block_data['source_url'] ?? '' ),
+        );
+
+        foreach ( $payload as $meta_key => $value ) {
+            update_post_meta( $post_id, $meta_key, $value );
+        }
     }
 
     public function register_settings(): void {
