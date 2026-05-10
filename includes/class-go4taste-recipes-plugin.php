@@ -185,6 +185,163 @@ class Go4Taste_Recipes_Plugin {
 
         acf_add_local_field_group(
             array(
+                'key'    => 'group_go4taste_recipe_data',
+                'title'  => 'GO4TASTE Recipe Data',
+                'fields' => array(
+                    array(
+                        'key'   => 'field_recipe_time_prep',
+                        'label' => 'Time: Preparation',
+                        'name'  => 'recipe_time_prep',
+                        'type'  => 'text',
+                    ),
+                    array(
+                        'key'   => 'field_recipe_time_cook',
+                        'label' => 'Time: Cooking',
+                        'name'  => 'recipe_time_cook',
+                        'type'  => 'text',
+                    ),
+                    array(
+                        'key'   => 'field_recipe_time_total',
+                        'label' => 'Time: Total',
+                        'name'  => 'recipe_time_total',
+                        'type'  => 'text',
+                    ),
+                    array(
+                        'key'   => 'field_recipe_difficulty',
+                        'label' => 'Difficulty',
+                        'name'  => 'recipe_difficulty',
+                        'type'  => 'text',
+                    ),
+                    array(
+                        'key'   => 'field_recipe_servings_value',
+                        'label' => 'Servings Value',
+                        'name'  => 'recipe_servings_value',
+                        'type'  => 'number',
+                        'step'  => '0.1',
+                    ),
+                    array(
+                        'key'   => 'field_recipe_servings_unit',
+                        'label' => 'Servings Unit',
+                        'name'  => 'recipe_servings_unit',
+                        'type'  => 'text',
+                    ),
+                    array(
+                        'key'          => 'field_recipe_ingredients',
+                        'label'        => 'Ingredients',
+                        'name'         => 'recipe_ingredients',
+                        'type'         => 'repeater',
+                        'layout'       => 'table',
+                        'button_label' => 'Add ingredient',
+                        'sub_fields'   => array(
+                            array(
+                                'key'   => 'field_recipe_ingredients_name',
+                                'label' => 'Name',
+                                'name'  => 'name',
+                                'type'  => 'text',
+                            ),
+                            array(
+                                'key'   => 'field_recipe_ingredients_amount',
+                                'label' => 'Amount',
+                                'name'  => 'amount',
+                                'type'  => 'number',
+                                'step'  => '0.1',
+                            ),
+                            array(
+                                'key'   => 'field_recipe_ingredients_unit',
+                                'label' => 'Unit',
+                                'name'  => 'unit',
+                                'type'  => 'text',
+                            ),
+                        ),
+                    ),
+                    array(
+                        'key'   => 'field_recipe_ingredients_photo_url',
+                        'label' => 'Ingredients Photo URL',
+                        'name'  => 'recipe_ingredients_photo_url',
+                        'type'  => 'url',
+                    ),
+                    array(
+                        'key'          => 'field_recipe_steps',
+                        'label'        => 'Steps',
+                        'name'         => 'recipe_steps',
+                        'type'         => 'repeater',
+                        'layout'       => 'block',
+                        'button_label' => 'Add step',
+                        'sub_fields'   => array(
+                            array(
+                                'key'   => 'field_recipe_steps_heading',
+                                'label' => 'Heading',
+                                'name'  => 'heading',
+                                'type'  => 'text',
+                            ),
+                            array(
+                                'key'   => 'field_recipe_steps_description',
+                                'label' => 'Description',
+                                'name'  => 'description',
+                                'type'  => 'textarea',
+                                'rows'  => 4,
+                            ),
+                            array(
+                                'key'   => 'field_recipe_steps_tip',
+                                'label' => 'Tip',
+                                'name'  => 'tip',
+                                'type'  => 'textarea',
+                                'rows'  => 2,
+                            ),
+                            array(
+                                'key'          => 'field_recipe_steps_images',
+                                'label'        => 'Images',
+                                'name'         => 'images',
+                                'type'         => 'repeater',
+                                'layout'       => 'table',
+                                'button_label' => 'Add image',
+                                'sub_fields'   => array(
+                                    array(
+                                        'key'   => 'field_recipe_steps_image_url',
+                                        'label' => 'Image URL',
+                                        'name'  => 'url',
+                                        'type'  => 'url',
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                    array(
+                        'key'   => 'field_recipe_tips',
+                        'label' => 'Tips',
+                        'name'  => 'recipe_tips',
+                        'type'  => 'textarea',
+                        'rows'  => 4,
+                    ),
+                    array(
+                        'key'   => 'field_recipe_source_label',
+                        'label' => 'Source Label',
+                        'name'  => 'recipe_source_label',
+                        'type'  => 'text',
+                    ),
+                    array(
+                        'key'   => 'field_recipe_source_url',
+                        'label' => 'Source URL',
+                        'name'  => 'recipe_source_url',
+                        'type'  => 'url',
+                    ),
+                ),
+                'location' => array(
+                    array(
+                        array(
+                            'param'    => 'post_type',
+                            'operator' => '==',
+                            'value'    => $strategy['post_type'],
+                        ),
+                    ),
+                ),
+                'position' => 'normal',
+                'style'    => 'default',
+            )
+        );
+
+        acf_add_local_field_group(
+            array(
                 'key'    => 'group_go4taste_recipe_ads',
                 'title'  => 'GO4TASTE Recipe Ads',
                 'fields' => array(
@@ -591,6 +748,8 @@ class Go4Taste_Recipes_Plugin {
     private function build_single_recipe_view_model( WP_Post $post ): array {
         $post_id = (int) $post->ID;
         $block_data = $this->get_recipe_blocks_data( $post );
+        $acf_data   = $this->get_recipe_acf_data( $post_id );
+        $data       = $this->merge_recipe_data( $block_data, $acf_data );
 
         $created_timestamp  = (int) get_post_time( 'U', false, $post_id );
         $modified_timestamp = (int) get_post_modified_time( 'U', false, $post_id );
@@ -603,12 +762,12 @@ class Go4Taste_Recipes_Plugin {
             $date_value = wp_date( 'j F Y', $modified_timestamp );
         }
 
-        $servings_value = $block_data['servings_value'] ?? null;
+        $servings_value = $data['servings_value'] ?? null;
         if ( null !== $servings_value && '' !== $servings_value ) {
             $servings_value = is_numeric( (string) $servings_value ) ? (float) $servings_value : null;
         }
 
-        $normalized_ingredients = ( ! empty( $block_data['ingredients'] ) && is_array( $block_data['ingredients'] ) ) ? $block_data['ingredients'] : array();
+        $normalized_ingredients = ( ! empty( $data['ingredients'] ) && is_array( $data['ingredients'] ) ) ? $data['ingredients'] : array();
 
         $ads_products_raw = $this->acf_field( 'recipe_ads_products', $post_id, array() );
         $ads_product_ids  = array();
@@ -629,30 +788,30 @@ class Go4Taste_Recipes_Plugin {
             'id'    => $post_id,
             'hero'  => array(
                 'title'   => get_the_title( $post_id ),
-                'excerpt' => (string) ( $block_data['lead'] ?? '' ),
+                'excerpt' => (string) ( $data['lead'] ?? '' ),
                 'image'   => get_the_post_thumbnail_url( $post_id, 'full' ),
             ),
             'times' => array(
-                'prep'  => (string) ( $block_data['time_prep'] ?? '' ),
-                'cook'  => (string) ( $block_data['time_cook'] ?? '' ),
-                'total' => (string) ( $block_data['time_total'] ?? '' ),
+                'prep'  => (string) ( $data['time_prep'] ?? '' ),
+                'cook'  => (string) ( $data['time_cook'] ?? '' ),
+                'total' => (string) ( $data['time_total'] ?? '' ),
             ),
-            'difficulty' => (string) ( $block_data['difficulty'] ?? '' ),
+            'difficulty' => (string) ( $data['difficulty'] ?? '' ),
             'servings'   => array(
                 'value' => $servings_value,
-                'unit'  => (string) ( $block_data['servings_unit'] ?? '' ),
+                'unit'  => (string) ( $data['servings_unit'] ?? '' ),
             ),
             'date' => array(
                 'label' => $date_label,
                 'value' => $date_value,
             ),
             'ingredients' => $normalized_ingredients,
-            'ingredients_photo_url' => (string) ( $block_data['ingredients_photo_url'] ?? '' ),
-            'steps'       => ( ! empty( $block_data['steps'] ) && is_array( $block_data['steps'] ) ) ? $block_data['steps'] : array(),
-            'tips'        => (string) ( $block_data['tips'] ?? '' ),
+            'ingredients_photo_url' => (string) ( $data['ingredients_photo_url'] ?? '' ),
+            'steps'       => ( ! empty( $data['steps'] ) && is_array( $data['steps'] ) ) ? $data['steps'] : array(),
+            'tips'        => (string) ( $data['tips'] ?? '' ),
             'source'      => array(
-                'label' => (string) ( $block_data['source_label'] ?? '' ),
-                'url'   => (string) ( $block_data['source_url'] ?? '' ),
+                'label' => (string) ( $data['source_label'] ?? '' ),
+                'url'   => (string) ( $data['source_url'] ?? '' ),
             ),
             'ads'         => array(
                 'bottom_product_ids' => $ads_product_ids,
@@ -769,6 +928,63 @@ class Go4Taste_Recipes_Plugin {
                 $result['_has_recipe_blocks'] = true;
                 $result['source_label'] = isset( $attrs['sourceLabel'] ) ? (string) $attrs['sourceLabel'] : $result['source_label'];
                 $result['source_url']   = isset( $attrs['sourceUrl'] ) ? (string) $attrs['sourceUrl'] : $result['source_url'];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    private function get_recipe_acf_data( int $post_id ): array {
+        $ingredients_raw = $this->acf_field( 'recipe_ingredients', $post_id, array() );
+        $steps_raw       = $this->acf_field( 'recipe_steps', $post_id, array() );
+
+        return array(
+            'lead'                  => (string) $this->acf_field( 'recipe_lead', $post_id, '' ),
+            'difficulty'            => (string) $this->acf_field( 'recipe_difficulty', $post_id, '' ),
+            'servings_value'        => $this->acf_field( 'recipe_servings_value', $post_id, null ),
+            'servings_unit'         => (string) $this->acf_field( 'recipe_servings_unit', $post_id, '' ),
+            'time_prep'             => (string) $this->acf_field( 'recipe_time_prep', $post_id, '' ),
+            'time_cook'             => (string) $this->acf_field( 'recipe_time_cook', $post_id, '' ),
+            'time_total'            => (string) $this->acf_field( 'recipe_time_total', $post_id, '' ),
+            'ingredients'           => is_array( $ingredients_raw ) ? $this->normalize_ingredients_list( $ingredients_raw ) : array(),
+            'ingredients_photo_url' => (string) $this->acf_field( 'recipe_ingredients_photo_url', $post_id, '' ),
+            'steps'                 => is_array( $steps_raw ) ? $this->normalize_steps_list( $steps_raw ) : array(),
+            'tips'                  => (string) $this->acf_field( 'recipe_tips', $post_id, '' ),
+            'source_label'          => (string) $this->acf_field( 'recipe_source_label', $post_id, '' ),
+            'source_url'            => (string) $this->acf_field( 'recipe_source_url', $post_id, '' ),
+        );
+    }
+
+    /**
+     * @param array<string,mixed> $primary
+     * @param array<string,mixed> $fallback
+     * @return array<string,mixed>
+     */
+    private function merge_recipe_data( array $primary, array $fallback ): array {
+        $result = $primary;
+        $keys   = array(
+            'lead',
+            'difficulty',
+            'servings_value',
+            'servings_unit',
+            'time_prep',
+            'time_cook',
+            'time_total',
+            'ingredients',
+            'ingredients_photo_url',
+            'steps',
+            'tips',
+            'source_label',
+            'source_url',
+        );
+
+        foreach ( $keys as $key ) {
+            $value = $result[ $key ] ?? null;
+            if ( ! $this->has_value( $value ) && isset( $fallback[ $key ] ) ) {
+                $result[ $key ] = $fallback[ $key ];
             }
         }
 
