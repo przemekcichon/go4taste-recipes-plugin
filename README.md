@@ -46,3 +46,26 @@ Tag: vX.Y.Z
 ## Rollback
 - Roll back to previous tag: `git checkout <previous-tag>`
 ```
+
+## Release Notes
+
+### go4taste-recipes-plugin v1.0.0
+
+Release date: 2026-05-10
+Tag: v1.0.0
+
+#### Summary
+- First public repository baseline for the plugin.
+
+#### Added
+- Initial plugin codebase import (`assets/`, `includes/`, main plugin bootstrap).
+- Schema contract documentation in `SCHEMA_CONTRACT_V1.md`.
+- Repository defaults for line ending normalization via `.gitattributes`.
+- Operational documentation in `README.md` with release checklist and template.
+
+#### Deployment Notes
+- Plugin path: `wp-content/plugins/go4taste-recipes-plugin/`
+- Smoke test: editor blocks, single recipe page, archive page.
+
+#### Rollback
+- Roll back to pre-release baseline by checking out commit `867ae1f`.
