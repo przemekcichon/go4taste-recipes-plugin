@@ -11,7 +11,11 @@ class Go4Taste_Recipes_Plugin {
     private const MODE_EXISTING_CPT = 'existing_cpt';
     private const MODE_RECIPES_CPT  = 'recipes_cpt';
 
-    private const RECIPES_POST_TYPE = 'recipe';
+    private const RECIPES_POST_TYPE   = 'recipe';
+    private const INGREDIENT_TAXONOMY  = 'recipe_ingredient';
+    private const MEAL_TYPE_TAXONOMY   = 'recipe_meal_type';
+    private const PREP_TIME_TAXONOMY   = 'recipe_prep_time_range';
+    private const FEATURE_TAXONOMY     = 'recipe_feature';
     private const RECIPE_BLOCK_NAMES = array(
         'go4taste-recipes/hero',
         'go4taste-recipes/ingredients',
@@ -27,8 +31,11 @@ class Go4Taste_Recipes_Plugin {
 
     public function __construct() {
         add_action( 'init', array( $this, 'register_recipe_post_type_if_needed' ) );
+        add_action( 'init', array( $this, 'register_ingredient_taxonomy' ) );
+        add_action( 'init', array( $this, 'register_flat_taxonomies' ) );
         add_action( 'init', array( $this, 'register_recipe_blocks' ) );
         add_action( 'acf/init', array( $this, 'register_acf_fields' ) );
+        add_action( 'save_post', array( $this, 'sync_recipe_meta_from_blocks' ), 20, 3 );
         add_action( 'admin_init', array( $this, 'register_settings' ) );
         add_action( 'admin_menu', array( $this, 'register_options_page' ) );
         add_action( 'admin_notices', array( $this, 'render_dependency_notices' ) );
@@ -123,6 +130,95 @@ class Go4Taste_Recipes_Plugin {
         );
     }
 
+    public function register_ingredient_taxonomy(): void {
+        $strategy  = $this->resolve_source_strategy();
+        $post_type = $strategy['post_type'];
+
+        if ( taxonomy_exists( self::INGREDIENT_TAXONOMY ) ) {
+            register_taxonomy_for_object_type( self::INGREDIENT_TAXONOMY, $post_type );
+            return;
+        }
+
+        register_taxonomy(
+            self::INGREDIENT_TAXONOMY,
+            array( $post_type ),
+            array(
+                'labels' => array(
+                    'name'          => __( 'Ingredients', 'go4taste-recipes-plugin' ),
+                    'singular_name' => __( 'Ingredient', 'go4taste-recipes-plugin' ),
+                ),
+                'public'            => true,
+                'hierarchical'      => false,
+                'show_ui'           => true,
+                'show_admin_column' => false,
+                'show_in_rest'      => true,
+                'query_var'         => true,
+                'rewrite'           => array( 'slug' => 'skladniki' ),
+            )
+        );
+    }
+
+    public function register_flat_taxonomies(): void {
+        $strategy  = $this->resolve_source_strategy();
+        $post_type = $strategy['post_type'];
+
+        $taxonomies = array(
+            self::MEAL_TYPE_TAXONOMY => array(
+                'labels' => array(
+                    'name'          => __( 'Typy dania', 'go4taste-recipes-plugin' ),
+                    'singular_name' => __( 'Typ dania', 'go4taste-recipes-plugin' ),
+                    'all_items'     => __( 'Wszystkie typy dań', 'go4taste-recipes-plugin' ),
+                    'edit_item'     => __( 'Edytuj typ dania', 'go4taste-recipes-plugin' ),
+                    'add_new_item'  => __( 'Dodaj typ dania', 'go4taste-recipes-plugin' ),
+                ),
+                'rewrite' => array( 'slug' => 'typ-dania' ),
+            ),
+            self::PREP_TIME_TAXONOMY => array(
+                'labels' => array(
+                    'name'          => __( 'Czas przygotowania', 'go4taste-recipes-plugin' ),
+                    'singular_name' => __( 'Czas przygotowania', 'go4taste-recipes-plugin' ),
+                    'all_items'     => __( 'Wszystkie zakresy czasów', 'go4taste-recipes-plugin' ),
+                    'edit_item'     => __( 'Edytuj zakres czasu', 'go4taste-recipes-plugin' ),
+                    'add_new_item'  => __( 'Dodaj zakres czasu', 'go4taste-recipes-plugin' ),
+                ),
+                'rewrite' => array( 'slug' => 'czas-przygotowania' ),
+            ),
+            self::FEATURE_TAXONOMY => array(
+                'labels' => array(
+                    'name'          => __( 'Cechy', 'go4taste-recipes-plugin' ),
+                    'singular_name' => __( 'Cecha', 'go4taste-recipes-plugin' ),
+                    'all_items'     => __( 'Wszystkie cechy', 'go4taste-recipes-plugin' ),
+                    'edit_item'     => __( 'Edytuj cechę', 'go4taste-recipes-plugin' ),
+                    'add_new_item'  => __( 'Dodaj cechę', 'go4taste-recipes-plugin' ),
+                ),
+                'rewrite' => array( 'slug' => 'cechy' ),
+            ),
+        );
+
+        foreach ( $taxonomies as $taxonomy_key => $args ) {
+            if ( taxonomy_exists( $taxonomy_key ) ) {
+                register_taxonomy_for_object_type( $taxonomy_key, $post_type );
+                continue;
+            }
+
+            register_taxonomy(
+                $taxonomy_key,
+                array( $post_type ),
+                array_merge(
+                    $args,
+                    array(
+                        'public'            => true,
+                        'hierarchical'      => false,
+                        'show_ui'           => true,
+                        'show_admin_column' => true,
+                        'show_in_rest'      => true,
+                        'query_var'         => true,
+                    )
+                )
+            );
+        }
+    }
+
     public function register_recipe_blocks(): void {
         if ( ! function_exists( 'register_block_type' ) ) {
             return;
@@ -153,7 +249,7 @@ class Go4Taste_Recipes_Plugin {
         wp_register_script(
             'go4taste-recipes-editor-blocks',
             GO4TASTE_RECIPES_PLUGIN_URL . 'assets/js/editor-blocks-new.js',
-            array( 'wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-i18n', 'wp-hooks' ),
+            array( 'wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-i18n', 'wp-hooks', 'wp-api-fetch' ),
             (string) filemtime( $script_path ),
             true
         );
@@ -218,6 +314,74 @@ class Go4Taste_Recipes_Plugin {
                 'style'    => 'default',
             )
         );
+    }
+
+    /**
+     * Keep structured recipe fields in ACF/meta keys without changing block editor UI.
+     */
+    public function sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $update ): void {
+        static $running = false;
+        if ( $running ) {
+            return;
+        }
+        $running = true;
+
+        if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+            $running = false;
+            return;
+        }
+
+        $strategy = $this->resolve_source_strategy();
+        if ( $post->post_type !== $strategy['post_type'] ) {
+            $running = false;
+            return;
+        }
+
+        $block_data = $this->get_recipe_blocks_data( $post );
+        if ( empty( $block_data['_has_recipe_blocks'] ) ) {
+            $this->sync_ingredient_taxonomy_from_existing_meta( $post_id );
+            $running = false;
+            return;
+        }
+
+        $payload = array(
+            'recipe_time_prep'             => sanitize_text_field( (string) ( $block_data['time_prep'] ?? '' ) ),
+            'recipe_time_cook'             => sanitize_text_field( (string) ( $block_data['time_cook'] ?? '' ) ),
+            'recipe_time_total'            => sanitize_text_field( (string) ( $block_data['time_total'] ?? '' ) ),
+            'recipe_difficulty'            => sanitize_text_field( (string) ( $block_data['difficulty'] ?? '' ) ),
+            'recipe_servings_value'        => $block_data['servings_value'] ?? null,
+            'recipe_servings_unit'         => sanitize_text_field( (string) ( $block_data['servings_unit'] ?? '' ) ),
+            'recipe_ingredients_photo_url' => esc_url_raw( (string) ( $block_data['ingredients_photo_url'] ?? '' ) ),
+            'recipe_tips'                  => wp_kses_post( (string) ( $block_data['tips'] ?? '' ) ),
+            'recipe_source_label'          => sanitize_text_field( (string) ( $block_data['source_label'] ?? '' ) ),
+            'recipe_source_url'            => esc_url_raw( (string) ( $block_data['source_url'] ?? '' ) ),
+        );
+
+        foreach ( $payload as $meta_key => $value ) {
+            update_post_meta( $post_id, $meta_key, $value );
+        }
+
+        $ingredients = ( ! empty( $block_data['ingredients'] ) && is_array( $block_data['ingredients'] ) ) ? $block_data['ingredients'] : array();
+        $steps       = ( ! empty( $block_data['steps'] ) && is_array( $block_data['steps'] ) ) ? $block_data['steps'] : array();
+
+        $this->sync_ingredients_repeater_meta( $post_id, $ingredients );
+        $this->sync_steps_repeater_meta( $post_id, $steps );
+
+        $running = false;
+    }
+
+    private function sync_ingredient_taxonomy_from_existing_meta( int $post_id ): void {
+        $count = (int) get_post_meta( $post_id, 'recipe_ingredients', true );
+
+        if ( $count <= 0 ) {
+            if ( taxonomy_exists( self::INGREDIENT_TAXONOMY ) ) {
+                wp_set_object_terms( $post_id, array(), self::INGREDIENT_TAXONOMY, false );
+            }
+            return;
+        }
+
+        $rows = $this->load_ingredients_repeater_meta( $post_id, $count );
+        $this->sync_ingredients_repeater_meta( $post_id, $rows );
     }
 
     public function register_settings(): void {
@@ -577,7 +741,14 @@ class Go4Taste_Recipes_Plugin {
             }
         }
 
-        if ( self::MODE_POST === $strategy['mode'] && ( is_category() || is_tag() || is_date() ) ) {
+        $recipe_taxonomies = array(
+            self::MEAL_TYPE_TAXONOMY,
+            self::PREP_TIME_TAXONOMY,
+            self::FEATURE_TAXONOMY,
+            self::INGREDIENT_TAXONOMY,
+        );
+
+        if ( self::MODE_POST === $strategy['mode'] && ( is_category() || is_tag() || is_date() || is_tax( $recipe_taxonomies ) ) ) {
             return true;
         }
 
@@ -591,6 +762,8 @@ class Go4Taste_Recipes_Plugin {
     private function build_single_recipe_view_model( WP_Post $post ): array {
         $post_id = (int) $post->ID;
         $block_data = $this->get_recipe_blocks_data( $post );
+        $acf_data   = $this->get_recipe_acf_data( $post_id );
+        $data       = $this->merge_recipe_data( $block_data, $acf_data );
 
         $created_timestamp  = (int) get_post_time( 'U', false, $post_id );
         $modified_timestamp = (int) get_post_modified_time( 'U', false, $post_id );
@@ -603,12 +776,12 @@ class Go4Taste_Recipes_Plugin {
             $date_value = wp_date( 'j F Y', $modified_timestamp );
         }
 
-        $servings_value = $block_data['servings_value'] ?? null;
+        $servings_value = $data['servings_value'] ?? null;
         if ( null !== $servings_value && '' !== $servings_value ) {
             $servings_value = is_numeric( (string) $servings_value ) ? (float) $servings_value : null;
         }
 
-        $normalized_ingredients = ( ! empty( $block_data['ingredients'] ) && is_array( $block_data['ingredients'] ) ) ? $block_data['ingredients'] : array();
+        $normalized_ingredients = ( ! empty( $data['ingredients'] ) && is_array( $data['ingredients'] ) ) ? $data['ingredients'] : array();
 
         $ads_products_raw = $this->acf_field( 'recipe_ads_products', $post_id, array() );
         $ads_product_ids  = array();
@@ -629,30 +802,30 @@ class Go4Taste_Recipes_Plugin {
             'id'    => $post_id,
             'hero'  => array(
                 'title'   => get_the_title( $post_id ),
-                'excerpt' => (string) ( $block_data['lead'] ?? '' ),
+                'excerpt' => (string) ( $data['lead'] ?? '' ),
                 'image'   => get_the_post_thumbnail_url( $post_id, 'full' ),
             ),
             'times' => array(
-                'prep'  => (string) ( $block_data['time_prep'] ?? '' ),
-                'cook'  => (string) ( $block_data['time_cook'] ?? '' ),
-                'total' => (string) ( $block_data['time_total'] ?? '' ),
+                'prep'  => (string) ( $data['time_prep'] ?? '' ),
+                'cook'  => (string) ( $data['time_cook'] ?? '' ),
+                'total' => (string) ( $data['time_total'] ?? '' ),
             ),
-            'difficulty' => (string) ( $block_data['difficulty'] ?? '' ),
+            'difficulty' => (string) ( $data['difficulty'] ?? '' ),
             'servings'   => array(
                 'value' => $servings_value,
-                'unit'  => (string) ( $block_data['servings_unit'] ?? '' ),
+                'unit'  => (string) ( $data['servings_unit'] ?? '' ),
             ),
             'date' => array(
                 'label' => $date_label,
                 'value' => $date_value,
             ),
             'ingredients' => $normalized_ingredients,
-            'ingredients_photo_url' => (string) ( $block_data['ingredients_photo_url'] ?? '' ),
-            'steps'       => ( ! empty( $block_data['steps'] ) && is_array( $block_data['steps'] ) ) ? $block_data['steps'] : array(),
-            'tips'        => (string) ( $block_data['tips'] ?? '' ),
+            'ingredients_photo_url' => (string) ( $data['ingredients_photo_url'] ?? '' ),
+            'steps'       => ( ! empty( $data['steps'] ) && is_array( $data['steps'] ) ) ? $data['steps'] : array(),
+            'tips'        => (string) ( $data['tips'] ?? '' ),
             'source'      => array(
-                'label' => (string) ( $block_data['source_label'] ?? '' ),
-                'url'   => (string) ( $block_data['source_url'] ?? '' ),
+                'label' => (string) ( $data['source_label'] ?? '' ),
+                'url'   => (string) ( $data['source_url'] ?? '' ),
             ),
             'ads'         => array(
                 'bottom_product_ids' => $ads_product_ids,
@@ -776,6 +949,254 @@ class Go4Taste_Recipes_Plugin {
     }
 
     /**
+     * @return array<string,mixed>
+     */
+    private function get_recipe_acf_data( int $post_id ): array {
+        $ingredients_raw = $this->acf_field( 'recipe_ingredients', $post_id, array() );
+        $steps_raw       = $this->acf_field( 'recipe_steps', $post_id, array() );
+
+        $ingredients = array();
+        if ( is_array( $ingredients_raw ) ) {
+            $ingredients = $this->normalize_ingredients_list( $ingredients_raw );
+        } elseif ( is_numeric( $ingredients_raw ) ) {
+            $ingredients = $this->load_ingredients_repeater_meta( $post_id, (int) $ingredients_raw );
+        }
+
+        $steps = array();
+        if ( is_array( $steps_raw ) ) {
+            $steps = $this->normalize_steps_list( $steps_raw );
+        } elseif ( is_numeric( $steps_raw ) ) {
+            $steps = $this->load_steps_repeater_meta( $post_id, (int) $steps_raw );
+        }
+
+        return array(
+            'lead'                  => (string) $this->acf_field( 'recipe_lead', $post_id, '' ),
+            'difficulty'            => (string) $this->acf_field( 'recipe_difficulty', $post_id, '' ),
+            'servings_value'        => $this->acf_field( 'recipe_servings_value', $post_id, null ),
+            'servings_unit'         => (string) $this->acf_field( 'recipe_servings_unit', $post_id, '' ),
+            'time_prep'             => (string) $this->acf_field( 'recipe_time_prep', $post_id, '' ),
+            'time_cook'             => (string) $this->acf_field( 'recipe_time_cook', $post_id, '' ),
+            'time_total'            => (string) $this->acf_field( 'recipe_time_total', $post_id, '' ),
+            'ingredients'           => $ingredients,
+            'ingredients_photo_url' => (string) $this->acf_field( 'recipe_ingredients_photo_url', $post_id, '' ),
+            'steps'                 => $steps,
+            'tips'                  => (string) $this->acf_field( 'recipe_tips', $post_id, '' ),
+            'source_label'          => (string) $this->acf_field( 'recipe_source_label', $post_id, '' ),
+            'source_url'            => (string) $this->acf_field( 'recipe_source_url', $post_id, '' ),
+        );
+    }
+
+    /**
+     * @param array<int,array<string,mixed>> $ingredients
+     */
+    private function sync_ingredients_repeater_meta( int $post_id, array $ingredients ): void {
+        $old_count = (int) get_post_meta( $post_id, 'recipe_ingredients', true );
+        $new_count = count( $ingredients );
+        $term_ids  = array();
+
+        for ( $i = 0; $i < max( $old_count, $new_count ); $i++ ) {
+            delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_term_id', $i ) );
+        }
+
+        foreach ( $ingredients as $index => $row ) {
+            $name = (string) ( $row['name'] ?? '' );
+            update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $index ), $name );
+            update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $index ), $row['amount'] ?? '' );
+            update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $index ), (string) ( $row['unit'] ?? '' ) );
+
+            $term_id = null;
+            if ( isset( $row['ingredient_term_id'] ) && is_numeric( (string) $row['ingredient_term_id'] ) ) {
+                $term_id = (int) $row['ingredient_term_id'];
+            }
+
+            if ( null === $term_id ) {
+                $term_id = $this->ensure_ingredient_term( $name );
+            }
+
+            if ( null !== $term_id ) {
+                update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_term_id', $index ), $term_id );
+                $term_ids[] = $term_id;
+            }
+        }
+
+        update_post_meta( $post_id, 'recipe_ingredients', $new_count );
+
+        if ( taxonomy_exists( self::INGREDIENT_TAXONOMY ) ) {
+            wp_set_object_terms( $post_id, array_values( array_unique( $term_ids ) ), self::INGREDIENT_TAXONOMY, false );
+        }
+    }
+
+    private function ensure_ingredient_term( string $ingredient_name ): ?int {
+        $ingredient_name = trim( wp_strip_all_tags( $ingredient_name ) );
+        if ( '' === $ingredient_name ) {
+            return null;
+        }
+
+        $term = get_term_by( 'name', $ingredient_name, self::INGREDIENT_TAXONOMY );
+        if ( $term instanceof WP_Term ) {
+            return (int) $term->term_id;
+        }
+
+        $slug = sanitize_title( $ingredient_name );
+        $term_exists = term_exists( $slug, self::INGREDIENT_TAXONOMY );
+        if ( is_array( $term_exists ) && isset( $term_exists['term_id'] ) ) {
+            return (int) $term_exists['term_id'];
+        }
+        if ( is_int( $term_exists ) ) {
+            return $term_exists;
+        }
+
+        $created = wp_insert_term(
+            $ingredient_name,
+            self::INGREDIENT_TAXONOMY,
+            array( 'slug' => $slug )
+        );
+
+        if ( is_wp_error( $created ) || ! isset( $created['term_id'] ) ) {
+            return null;
+        }
+
+        return (int) $created['term_id'];
+    }
+
+    /**
+     * @param array<int,array{title:string,description:string,tip:string,images:array<int,string>}> $steps
+     */
+    private function sync_steps_repeater_meta( int $post_id, array $steps ): void {
+        $old_count = (int) get_post_meta( $post_id, 'recipe_steps', true );
+        $new_count = count( $steps );
+
+        for ( $i = 0; $i < max( $old_count, $new_count ); $i++ ) {
+            delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_heading', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_description', $i ) );
+            delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_tip', $i ) );
+
+            $old_images_count = (int) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_images', $i ), true );
+            for ( $j = 0; $j < $old_images_count; $j++ ) {
+                delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_images_%d_url', $i, $j ) );
+            }
+            delete_post_meta( $post_id, sprintf( 'recipe_steps_%d_images', $i ) );
+        }
+
+        foreach ( $steps as $index => $row ) {
+            update_post_meta( $post_id, sprintf( 'recipe_steps_%d_heading', $index ), (string) ( $row['title'] ?? '' ) );
+            update_post_meta( $post_id, sprintf( 'recipe_steps_%d_description', $index ), (string) ( $row['description'] ?? '' ) );
+            update_post_meta( $post_id, sprintf( 'recipe_steps_%d_tip', $index ), (string) ( $row['tip'] ?? '' ) );
+
+            $images = isset( $row['images'] ) && is_array( $row['images'] ) ? array_values( $row['images'] ) : array();
+            foreach ( $images as $image_index => $image_url ) {
+                update_post_meta( $post_id, sprintf( 'recipe_steps_%d_images_%d_url', $index, $image_index ), (string) $image_url );
+            }
+            update_post_meta( $post_id, sprintf( 'recipe_steps_%d_images', $index ), count( $images ) );
+        }
+
+        update_post_meta( $post_id, 'recipe_steps', $new_count );
+    }
+
+    /**
+     * @return array<int,array{ingredient_term_id:int|null,name:string,amount:float|null,unit:string}>
+     */
+    private function load_ingredients_repeater_meta( int $post_id, int $count ): array {
+        $rows = array();
+
+        for ( $i = 0; $i < $count; $i++ ) {
+            $name = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $i ), true ) );
+            if ( '' === $name ) {
+                continue;
+            }
+
+            $amount_raw = get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $i ), true );
+            $amount     = ( '' !== (string) $amount_raw && is_numeric( (string) $amount_raw ) ) ? (float) $amount_raw : null;
+            $term_raw   = get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_term_id', $i ), true );
+            $term_id    = ( '' !== (string) $term_raw && is_numeric( (string) $term_raw ) ) ? (int) $term_raw : null;
+
+            $rows[] = array(
+                'ingredient_term_id' => $term_id,
+                'name'               => $name,
+                'amount'             => $amount,
+                'unit'               => trim( (string) get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $i ), true ) ),
+            );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return array<int,array{title:string,description:string,tip:string,images:array<int,string>}>
+     */
+    private function load_steps_repeater_meta( int $post_id, int $count ): array {
+        $rows = array();
+
+        for ( $i = 0; $i < $count; $i++ ) {
+            $title       = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_heading', $i ), true ) );
+            $description = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_description', $i ), true ) );
+            $tip         = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_tip', $i ), true ) );
+
+            if ( '' === $description ) {
+                continue;
+            }
+
+            if ( '' === $title ) {
+                $title = sprintf( 'Krok %d', $i + 1 );
+            }
+
+            $images      = array();
+            $images_count = (int) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_images', $i ), true );
+            for ( $j = 0; $j < $images_count; $j++ ) {
+                $url = trim( (string) get_post_meta( $post_id, sprintf( 'recipe_steps_%d_images_%d_url', $i, $j ), true ) );
+                if ( '' !== $url ) {
+                    $images[] = $url;
+                }
+            }
+
+            $rows[] = array(
+                'title'       => $title,
+                'description' => $description,
+                'tip'         => $tip,
+                'images'      => $images,
+            );
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param array<string,mixed> $primary
+     * @param array<string,mixed> $fallback
+     * @return array<string,mixed>
+     */
+    private function merge_recipe_data( array $primary, array $fallback ): array {
+        $result = $primary;
+        $keys   = array(
+            'lead',
+            'difficulty',
+            'servings_value',
+            'servings_unit',
+            'time_prep',
+            'time_cook',
+            'time_total',
+            'ingredients',
+            'ingredients_photo_url',
+            'steps',
+            'tips',
+            'source_label',
+            'source_url',
+        );
+
+        foreach ( $keys as $key ) {
+            $value = $result[ $key ] ?? null;
+            if ( ! $this->has_value( $value ) && isset( $fallback[ $key ] ) ) {
+                $result[ $key ] = $fallback[ $key ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * @param array<int,mixed> $blocks
      * @return array<int,mixed>
      */
@@ -799,7 +1220,7 @@ class Go4Taste_Recipes_Plugin {
 
     /**
      * @param array<int,mixed> $items
-     * @return array<int,array{name:string,amount:float|null,unit:string}>
+     * @return array<int,array{ingredient_term_id:int|null,name:string,amount:float|null,unit:string}>
      */
     private function normalize_ingredients_list( array $items ): array {
         $normalized = array();
@@ -819,10 +1240,19 @@ class Go4Taste_Recipes_Plugin {
                 $amount = (float) $row['amount'];
             }
 
+            $ingredient_term_id = null;
+            if ( isset( $row['ingredient_term_id'] ) && '' !== trim( (string) $row['ingredient_term_id'] ) && is_numeric( (string) $row['ingredient_term_id'] ) ) {
+                $ingredient_term_id = (int) $row['ingredient_term_id'];
+            }
+            if ( null === $ingredient_term_id && isset( $row['term_id'] ) && '' !== trim( (string) $row['term_id'] ) && is_numeric( (string) $row['term_id'] ) ) {
+                $ingredient_term_id = (int) $row['term_id'];
+            }
+
             $normalized[] = array(
-                'name'   => $name,
-                'amount' => $amount,
-                'unit'   => isset( $row['unit'] ) ? trim( (string) $row['unit'] ) : '',
+                'ingredient_term_id' => $ingredient_term_id,
+                'name'               => $name,
+                'amount'             => $amount,
+                'unit'               => isset( $row['unit'] ) ? trim( (string) $row['unit'] ) : '',
             );
         }
 
