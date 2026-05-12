@@ -2,20 +2,97 @@
 
 WordPress plugin for recipe content structure and editor experience used in go4taste.pl.
 
+## Features
+
+- Structured recipe data via ACF Blocks (hero, ingredients, steps, tips, source)
+- Ingredient taxonomy with auto-sync from block editor
+- Additional classification taxonomies (meal type, prep time, features)
+- Block → ACF/post_meta synchronization
+- Timber view model integration
+- Configurable source post type (post / existing CPT / dedicated recipe CPT)
+
+## Testing
+
+### Requirements
+
+- PHPUnit 9+
+- WordPress test suite
+
+### Setup
+
+```bash
+# Install WordPress test suite
+bin/install-wp-tests.sh wordpress_test root '' localhost latest
+
+# Run tests
+phpunit
+```
+
+### Running specific test suites
+
+```bash
+# Test normalizers
+phpunit tests/unit/test-normalizers.php
+
+# Test meta sync
+phpunit tests/unit/test-meta-sync.php
+
+# Test view model builder
+phpunit tests/unit/test-builder.php
+
+# Test all modules
+phpunit tests/unit
+```
+
+## Architecture
+
+```
+includes/
+├── class-go4taste-recipes-plugin.php   # Orchestrator (proxy methods only)
+├── registration/
+│   ├── post-types.php                  # CPT registration + block template
+│   ├── taxonomies.php                  # Taxonomy registration
+│   └── blocks.php                      # Block type registration
+├── acf/
+│   └── field-groups.php                # ACF field group definitions
+├── sync/
+│   └── meta-sync.php                   # Block → meta sync + taxonomy binding
+├── view-model/
+│   ├── normalizers.php                 # Data normalization helpers
+│   └── builder.php                     # View model builder + ACF fallback
+├── timber/
+│   └── context-filters.php             # Timber context filters
+└── admin/
+    └── settings-page.php               # Admin settings UI
+
+tests/
+├── bootstrap.php                       # PHPUnit bootstrap
+└── unit/
+    ├── test-normalizers.php            # Normalizers tests
+    ├── test-post-types.php             # CPT registration tests
+    ├── test-taxonomies.php             # Taxonomy tests
+    ├── test-blocks.php                 # Block registration tests
+    ├── test-meta-sync.php              # Meta sync tests
+    ├── test-builder.php                # View model builder tests
+    ├── test-context-filters.php        # Timber integration tests
+    └── test-settings-page.php          # Settings page tests
+```
+
 ## Release Checklist
 
 Before each production deployment:
 
 1. Confirm repository is clean: `git status`.
 2. Pull latest changes: `git pull --ff-only`.
-3. Smoke test critical flows in local WP:
+3. **Run test suite**: `phpunit` to verify all modules pass.
+4. Smoke test critical flows in local WP:
    - recipe editor blocks,
    - single recipe rendering,
    - archive listing rendering.
-4. Push release commit to `main`.
-5. Deploy plugin directory to `wp-content/plugins/go4taste-recipes-plugin/`.
-6. Activate or refresh plugin on target WordPress instance.
-7. Verify one recipe in wp-admin editor and one recipe page on frontend.
+5. Push release commit to `main`.
+6. Deploy plugin directory to `wp-content/plugins/go4taste-recipes-plugin/`.
+7. Activate or refresh plugin on target WordPress instance.
+8. Verify one recipe in wp-admin editor and one recipe page on frontend.
 
 ## Release Notes Template
 
