@@ -1,0 +1,32 @@
+{
+    "name": "go4taste/recipes-plugin",
+    "description": "WordPress plugin for recipe content structure with ACF Blocks",
+    "type": "wordpress-plugin",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0",
+        "wp-coding-standards/wpcs": "^3.0",
+        "phpstan/phpstan": "^1.10"
+    },
+    "autoload": {
+        "files": [
+            "includes/registration/post-types.php",
+            "includes/registration/taxonomies.php",
+            "includes/registration/blocks.php",
+            "includes/acf/field-groups.php",
+            "includes/sync/meta-sync.php",
+            "includes/view-model/normalizers.php",
+            "includes/view-model/builder.php",
+            "includes/admin/settings-page.php",
+            "includes/timber/context-filters.php"
+        ]
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test:unit": "phpunit tests/unit",
+        "phpstan": "phpstan analyse includes --level=8"
+    }
+}
