@@ -34,6 +34,7 @@ require_once __DIR__ . '/sync/meta-sync.php';
 require_once __DIR__ . '/view-model/normalizers.php';
 require_once __DIR__ . '/view-model/builder.php';
 require_once __DIR__ . '/admin/settings-page.php';
+require_once __DIR__ . '/admin/reverse-sync.php';
 require_once __DIR__ . '/timber/context-filters.php';
 
 class Go4Taste_Recipes_Plugin {
@@ -58,6 +59,7 @@ class Go4Taste_Recipes_Plugin {
         add_action( 'admin_init', array( $this, 'proxy_register_settings' ) );
         add_action( 'admin_menu', array( $this, 'proxy_register_options_page' ) );
         add_action( 'admin_notices', array( $this, 'proxy_render_dependency_notices' ) );
+        add_action( 'admin_post_g4t_reverse_sync', array( $this, 'proxy_handle_reverse_sync' ) );
 
         add_filter( 'go4taste/recipes/context/single',  array( $this, 'proxy_filter_single_context' ), 10, 2 );
         add_filter( 'go4taste/recipes/context/archive', array( $this, 'proxy_filter_archive_context' ), 10, 2 );
@@ -177,6 +179,10 @@ class Go4Taste_Recipes_Plugin {
 
     public function proxy_render_dependency_notices(): void {
         g4t_render_dependency_notices( $this );
+    }
+
+    public function proxy_handle_reverse_sync(): void {
+        g4t_handle_reverse_sync_action();
     }
 
     /**

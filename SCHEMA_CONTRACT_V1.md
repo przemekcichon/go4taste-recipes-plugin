@@ -39,6 +39,7 @@ $recipe = [
         'prep'    => (string),        // ACF field 'recipe_time_prep' — human readable (e.g., "15 min")
         'cook'    => (string),        // ACF field 'recipe_time_cook'
         'total'   => (string),        // ACF field 'recipe_time_total'
+        'soak'    => (string),        // ACF field 'recipe_time_soak' — NULLABLE, soaking time (e.g., "48 hours")
     ],
     
     'difficulty' => (string),        // ACF field 'recipe_difficulty' — e.g., "easy", "medium", "hard"
@@ -88,6 +89,7 @@ $recipe = [
 |-------|----------|---------|
 | `hero.excerpt` | ✅ YES | `""` |
 | `hero.image` | ✅ YES | `null` |
+| `times.soak` | ✅ YES | `""` |
 | `servings.value` | ✅ YES | `null` |
 | `tips` | ✅ YES | `""` |
 | `source.label` | ❌ NO | site name |
@@ -102,7 +104,7 @@ $recipe = [
     - If only `name` exists, plugin resolves existing term by name/slug or creates missing term.
     - Synchronization stores both repeater row data and post term assignment.
 - **Steps:** Extracted from repeater; empty items removed; order preserved
-- **Times:** Human-readable strings (e.g., "15 minutes", "1 hour") — NOT parsed
+- **Times:** Human-readable strings (e.g., "15 minutes", "1 hour") — NOT parsed. `soak` is NULLABLE (empty string allowed), used for ingredient soaking time (e.g., "48 hours" for chickpea soaking).
 - **Ingredients repeater:** Fields are `ingredient_term_id`, `name`, `amount`, `unit` (lowercase)
 - **Steps repeater:** Field is `text` (lowercase)
 - **Ads products:** Stored as array of product ID strings in repeater called `recipe_ads_products`
@@ -191,9 +193,68 @@ $context = [
         'title'       => (string),   // archive title (category name, taxonomy label, etc.)
         'description' => (string),   // archive description (term description)
         'post_type'   => (string),   // source post type key
+        'hero'        => [ /* taxonomy term hero data, see below */ ], // ONLY for taxonomy archives
     ],
 ];
 ```
+
+### Taxonomy Term Hero Data (Archive Context Only)
+
+For taxonomy archive pages (e.g., `/typ-dania/sniadanie/`), `$context['recipe_archive']['hero']` contains custom hero area settings from ACF term meta fields.
+
+**PHP Type:** `array<string, mixed>`  
+**ACF Fields:** Optional (if ACF not active or fields not set, returns safe defaults)  
+**Source:** `g4t_get_taxonomy_term_hero_data( WP_Term $term ): array`
+
+**Structure:**
+
+```php
+$hero = [
+    'icon'              => (array|null),    // ACF image field (array with 'url', 'alt', 'width', 'height') or null
+    'title_suffix'      => (string),        // Text to append to "Przepisy" (e.g., "na śniadanie")
+    'short_description' => (string),        // Brief intro text (textarea, nullable, can be empty string)
+    'hero_image'        => (array|null),    // ACF image field (array) or null; has default_value placeholder URL
+    'short_claim'       => (string),        // Tagline (e.g., "Dobry start dnia"), nullable, can be empty string
+    'blog_posts'        => [                // Array of related blog posts (repeater)
+        [
+            'title' => (string),            // Blog post title (required, non-empty)
+            'url'   => (string),            // Blog post URL (validatedesc_url_raw, required, non-empty)
+        ],
+        // ... more blog posts
+    ],
+];
+```
+
+**Nullability Rules:**
+
+| Field | Nullable | Default if empty |
+|-------|----------|------------------|
+| `icon` | ✅ YES | `null` |
+| `title_suffix` | ❌ NO | `""` (empty string) |
+| `short_description` | ❌ NO | `""` (empty string) |
+| `hero_image` | ✅ YES | `null` (ACF has default_value for placeholder) |
+| `short_claim` | ❌ NO | `""` (empty string) |
+| `blog_posts` | ❌ NO | `[]` (empty array) |
+
+**Data Normalization:**
+
+- **Blog posts repeater:** Invalid entries (empty title or invalid URL) are filtered out via `g4t_normalize_term_blog_posts()`
+- **Image fields:** If ACF returns non-array (e.g., false when field empty), coerced to `null`
+- **Text fields:** Empty values coerced to `""` (empty string) for consistent type
+
+**Availability:**
+
+- Only present in `$context['recipe_archive']['hero']` when `is_tax()` is true
+- For post-type archives (e.g., `/recipes/`), hero data is not populated (hero index not present)
+- If ACF not active, all fields return safe defaults (nulls and empty strings)
+
+**Taxonomies covered:**
+
+Hero data is available for all four recipe taxonomies:
+- `recipe_ingredient` (Składniki)
+- `recipe_meal_type` (Typy dania)
+- `recipe_prep_time_range` (Czas przygotowania)
+- `recipe_feature` (Cechy)
 
 ### Home Context Payload
 

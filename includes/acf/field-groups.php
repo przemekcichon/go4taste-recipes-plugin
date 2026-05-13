@@ -105,4 +105,131 @@ function g4t_register_acf_fields( Go4Taste_Recipes_Plugin $plugin ): void {
             'style'    => 'default',
         )
     );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Taxonomy term meta fields for hero area on archive pages
+    //
+    // This group applies to all four recipe taxonomies: ingredient, meal type,
+    // prep time range, and feature. Fields are used to customize the hero area
+    // on taxonomy archive pages (e.g. /typ-dania/sniadanie/).
+    //
+    // WHY one group for all taxonomies instead of four separate groups:
+    //  - All taxonomies share the same hero structure
+    //  - Reduces code duplication and maintenance burden
+    //  - Consistent UX across all taxonomy archives
+    //
+    // Field usage in theme:
+    // These fields are read via ACF's get_field( $key, 'term_' . $term_id )
+    // in the Timber context filters (includes/timber/context-filters.php)
+    // for archive pages. The view model is built in g4t_filter_archive_context().
+    // ─────────────────────────────────────────────────────────────────────────
+    acf_add_local_field_group(
+        array(
+            'key'    => 'group_go4taste_taxonomy_hero',
+            'title'  => 'Archive Hero Settings',
+            'fields' => array(
+                array(
+                    'key'   => 'field_taxonomy_hero_icon',
+                    'label' => 'Icon',
+                    'name'  => 'hero_icon',
+                    'type'  => 'image',
+                    'instructions' => 'Icon displayed in the hero area (recommended: SVG or PNG, max 200x200px)',
+                    'return_format' => 'array',
+                    'preview_size' => 'thumbnail',
+                ),
+                array(
+                    'key'          => 'field_taxonomy_title_suffix',
+                    'label'        => 'Title Suffix',
+                    'name'         => 'title_suffix',
+                    'type'         => 'text',
+                    'instructions' => 'Text appended to "Przepisy" (e.g. "na śniadanie" → "Przepisy na śniadanie")',
+                    'prepend'      => 'Przepisy',
+                    'placeholder'  => 'na śniadanie',
+                ),
+                array(
+                    'key'          => 'field_taxonomy_short_description',
+                    'label'        => 'Short Description',
+                    'name'         => 'short_description',
+                    'type'         => 'textarea',
+                    'instructions' => 'Brief intro text displayed below the title',
+                    'rows'         => 3,
+                    'maxlength'    => 250,
+                ),
+                array(
+                    'key'           => 'field_taxonomy_hero_image',
+                    'label'         => 'Hero Image',
+                    'name'          => 'hero_image',
+                    'type'          => 'image',
+                    'instructions'  => 'Background image for the hero area (recommended: 1920x600px)',
+                    'return_format' => 'array',
+                    'preview_size'  => 'medium',
+                    'default_value' => '/wp-content/uploads/placeholders/default-hero.jpg',
+                ),
+                array(
+                    'key'          => 'field_taxonomy_short_claim',
+                    'label'        => 'Short Claim',
+                    'name'         => 'short_claim',
+                    'type'         => 'text',
+                    'instructions' => 'Short tagline (e.g. "Dobry start dnia" for Śniadanie)',
+                    'maxlength'    => 60,
+                    'placeholder'  => 'Dobry start dnia',
+                ),
+                array(
+                    'key'          => 'field_taxonomy_blog_posts',
+                    'label'        => 'Related Blog Posts',
+                    'name'         => 'blog_posts',
+                    'type'         => 'repeater',
+                    'layout'       => 'table',
+                    'button_label' => 'Add blog post',
+                    'instructions' => 'Manually curated blog posts to display in the hero area',
+                    'sub_fields'   => array(
+                        array(
+                            'key'   => 'field_taxonomy_blog_post_title',
+                            'label' => 'Title',
+                            'name'  => 'title',
+                            'type'  => 'text',
+                        ),
+                        array(
+                            'key'   => 'field_taxonomy_blog_post_url',
+                            'label' => 'URL',
+                            'name'  => 'url',
+                            'type'  => 'url',
+                        ),
+                    ),
+                ),
+            ),
+            'location' => array(
+                array(
+                    array(
+                        'param'    => 'taxonomy',
+                        'operator' => '==',
+                        'value'    => G4T_INGREDIENT_TAXONOMY,
+                    ),
+                ),
+                array(
+                    array(
+                        'param'    => 'taxonomy',
+                        'operator' => '==',
+                        'value'    => G4T_MEAL_TYPE_TAXONOMY,
+                    ),
+                ),
+                array(
+                    array(
+                        'param'    => 'taxonomy',
+                        'operator' => '==',
+                        'value'    => G4T_PREP_TIME_TAXONOMY,
+                    ),
+                ),
+                array(
+                    array(
+                        'param'    => 'taxonomy',
+                        'operator' => '==',
+                        'value'    => G4T_FEATURE_TAXONOMY,
+                    ),
+                ),
+            ),
+            'position' => 'normal',
+            'style'    => 'default',
+        )
+    );
 }

@@ -109,11 +109,19 @@ function g4t_render_options_page( Go4Taste_Recipes_Plugin $plugin ): void {
 
     echo '<div class="wrap">';
     echo '<h1>' . esc_html__( 'GO4TASTE Recipes Settings', 'go4taste-recipes-plugin' ) . '</h1>';
+    
+    // Display reverse sync results if available
+    g4t_render_reverse_sync_notice();
+    
     echo '<form method="post" action="options.php">';
     settings_fields( 'go4taste_recipes_options_group' );
     do_settings_sections( 'go4taste-recipes-settings' );
     submit_button();
     echo '</form>';
+    
+    // Reverse Sync section
+    g4t_render_reverse_sync_section();
+    
     echo '</div>';
 }
 
@@ -208,4 +216,129 @@ function g4t_render_dependency_notices( Go4Taste_Recipes_Plugin $plugin ): void 
             echo '<div class="notice notice-warning"><p><strong>GO4TASTE Recipes:</strong> WPGraphQL for ACF nie jest aktywny (opcjonalne na tym etapie).</p></div>';
         }
     }
+}
+
+/**
+ * Render reverse sync admin notice with results
+ */
+function g4t_render_reverse_sync_notice(): void {
+    $sync_status = isset( $_GET['g4t_reverse_sync'] ) ? sanitize_key( $_GET['g4t_reverse_sync'] ) : '';
+    if ( 'done' !== $sync_status ) {
+        return;
+    }
+
+    $stats = get_transient( 'g4t_reverse_sync_result' );
+    if ( ! $stats ) {
+        return;
+    }
+
+    $type = $stats['failed'] > 0 ? 'warning' : 'success';
+    ?>
+    <div class="notice notice-<?php echo esc_attr( $type ); ?> is-dismissible">
+        <h3><?php esc_html_e( 'Reverse Sync: Meta → Blocks', 'go4taste-recipes-plugin' ); ?></h3>
+        <p>
+            <strong><?php esc_html_e( 'Rezultaty:', 'go4taste-recipes-plugin' ); ?></strong><br>
+            <?php
+            printf(
+                /* translators: %d: number of posts */
+                esc_html__( 'Znaleziono postów recipe: %d', 'go4taste-recipes-plugin' ),
+                (int) $stats['total']
+            );
+            ?><br>
+            <?php
+            printf(
+                /* translators: %d: number of posts */
+                esc_html__( 'Z pustym post_content: %d', 'go4taste-recipes-plugin' ),
+                (int) $stats['empty']
+            );
+            ?><br>
+            <?php
+            printf(
+                /* translators: %d: number of posts */
+                esc_html__( 'Pomyślnie odbudowano: %d', 'go4taste-recipes-plugin' ),
+                (int) $stats['processed']
+            );
+            ?><br>
+            <?php
+            if ( $stats['failed'] > 0 ) {
+                printf(
+                    /* translators: %d: number of posts */
+                    '<span style="color:#d63638;">%s</span><br>',
+                    sprintf(
+                        esc_html__( 'Błędy: %d', 'go4taste-recipes-plugin' ),
+                        (int) $stats['failed']
+                    )
+                );
+            }
+            ?>
+        </p>
+        <?php if ( ! empty( $stats['errors'] ) ) : ?>
+            <details>
+                <summary><?php esc_html_e( 'Szczegóły błędów', 'go4taste-recipes-plugin' ); ?></summary>
+                <ul>
+                    <?php foreach ( $stats['errors'] as $error ) : ?>
+                        <li>
+                            Post #<?php echo (int) $error['post_id']; ?>
+                            (<?php echo esc_html( $error['title'] ); ?>):
+                            <em><?php echo esc_html( $error['error'] ); ?></em>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </details>
+        <?php endif; ?>
+    </div>
+    <?php
+    // Clear transient after displaying
+    delete_transient( 'g4t_reverse_sync_result' );
+}
+
+/**
+ * Render reverse sync section with button
+ */
+function g4t_render_reverse_sync_section(): void {
+    ?>
+    <hr style="margin: 40px 0;">
+    <h2><?php esc_html_e( 'Narzędzia Importu', 'go4taste-recipes-plugin' ); ?></h2>
+    
+    <div class="card">
+        <h3><?php esc_html_e( 'Reverse Sync: Meta → Blocks', 'go4taste-recipes-plugin' ); ?></h3>
+        <p>
+            <?php esc_html_e( 'Odbudowuje bloki Gutenberg w post_content na podstawie danych z post_meta.', 'go4taste-recipes-plugin' ); ?>
+        </p>
+        <p>
+            <strong><?php esc_html_e( 'Kiedy używać:', 'go4taste-recipes-plugin' ); ?></strong><br>
+            <?php esc_html_e( '• Po imporcie przez WP All Import (dane w meta, brak bloków)', 'go4taste-recipes-plugin' ); ?><br>
+            <?php esc_html_e( '• Gdy edytor WordPress jest pusty mimo danych w bazie', 'go4taste-recipes-plugin' ); ?><br>
+            <?php esc_html_e( '• Gdy template jest zalockowany i nie można dodać bloków', 'go4taste-recipes-plugin' ); ?>
+        </p>
+        <p>
+            <strong><?php esc_html_e( 'Co robi:', 'go4taste-recipes-plugin' ); ?></strong><br>
+            <?php esc_html_e( '✓ Znajduje posty recipe z pustym post_content', 'go4taste-recipes-plugin' ); ?><br>
+            <?php esc_html_e( '✓ Buduje bloki: hero, ingredients, steps, tips, source', 'go4taste-recipes-plugin' ); ?><br>
+            <?php esc_html_e( '✓ Naprawia brakujące counters i subfields', 'go4taste-recipes-plugin' ); ?><br>
+            <?php esc_html_e( '✓ Zapisuje do post_content', 'go4taste-recipes-plugin' ); ?>
+        </p>
+        
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-top: 20px;">
+            <?php wp_nonce_field( 'g4t_reverse_sync', 'g4t_reverse_sync_nonce' ); ?>
+            <input type="hidden" name="action" value="g4t_reverse_sync">
+            <?php
+            submit_button(
+                __( 'Uruchom Reverse Sync', 'go4taste-recipes-plugin' ),
+                'secondary',
+                'submit',
+                false,
+                [
+                    'onclick' => 'return confirm("' . esc_js( __( 'Czy na pewno chcesz odbudować bloki dla wszystkich postów recipe z pustym post_content?', 'go4taste-recipes-plugin' ) ) . '");',
+                ]
+            );
+            ?>
+        </form>
+        
+        <p class="description" style="margin-top: 15px;">
+            <strong><?php esc_html_e( 'Uwaga:', 'go4taste-recipes-plugin' ); ?></strong>
+            <?php esc_html_e( 'Operacja dotyczy TYLKO postów gdzie post_content jest pusty. Istniejące bloki nie będą nadpisane.', 'go4taste-recipes-plugin' ); ?>
+        </p>
+    </div>
+    <?php
 }

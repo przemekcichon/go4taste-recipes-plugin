@@ -94,6 +94,7 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
             'prep'  => (string) ( $data['time_prep'] ?? '' ),
             'cook'  => (string) ( $data['time_cook'] ?? '' ),
             'total' => (string) ( $data['time_total'] ?? '' ),
+            'soak'  => (string) ( $data['time_soak'] ?? '' ),
         ),
         'difficulty' => (string) ( $data['difficulty'] ?? '' ),
         'servings'   => array(
@@ -151,6 +152,7 @@ function g4t_get_recipe_acf_data( int $post_id ): array {
         'time_prep'             => (string) g4t_acf_field( 'recipe_time_prep', $post_id, '' ),
         'time_cook'             => (string) g4t_acf_field( 'recipe_time_cook', $post_id, '' ),
         'time_total'            => (string) g4t_acf_field( 'recipe_time_total', $post_id, '' ),
+        'time_soak'             => (string) g4t_acf_field( 'recipe_time_soak', $post_id, '' ),
         'ingredients'           => $ingredients,
         'ingredients_photo_url' => (string) g4t_acf_field( 'recipe_ingredients_photo_url', $post_id, '' ),
         'steps'                 => $steps,
@@ -188,6 +190,7 @@ function g4t_merge_recipe_data( array $primary, array $fallback ): array {
         'time_prep',
         'time_cook',
         'time_total',
+        'time_soak',
         'ingredients',
         'ingredients_photo_url',
         'steps',

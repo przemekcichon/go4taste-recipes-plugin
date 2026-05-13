@@ -1,5 +1,5 @@
 ---
-name: Plugin Reviewer
+name: G4T Recipes Plugin Reviewer
 description: Reviews changes to the GO4TASTE Recipes Plugin for architectural correctness, convention compliance, schema integrity, security, and test coverage.
 ---
 

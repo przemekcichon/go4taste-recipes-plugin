@@ -81,7 +81,8 @@
             servingsUnit: { type: "string", default: "" },
             timePrep: { type: "string", default: "" },
             timeCook: { type: "string", default: "" },
-            timeTotal: { type: "string", default: "" }
+            timeTotal: { type: "string", default: "" },
+            timeSoak: { type: "string", default: "" }
         },
         edit: function (props) {
             var attrs = props.attributes;
@@ -146,6 +147,17 @@
                         value: attrs.timeTotal,
                         placeholder: __("np. 45 min", "go4taste-recipes-plugin"),
                         onChange: function (value) { setAttrs({ timeTotal: value }); }
+                    })
+                ),
+                el(
+                    "div",
+                    { className: "go4taste-recipes-row" },
+                    el(TextControl, {
+                        label: __("Czas namoczenia (opcjonalnie)", "go4taste-recipes-plugin"),
+                        value: attrs.timeSoak,
+                        placeholder: __("np. 48 godzin", "go4taste-recipes-plugin"),
+                        help: __("Czas namaczania składników (jeśli wymagany)", "go4taste-recipes-plugin"),
+                        onChange: function (value) { setAttrs({ timeSoak: value }); }
                     })
                 )
             );

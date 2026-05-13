@@ -122,4 +122,117 @@ class Test_Context_Filters extends WP_UnitTestCase {
 
         $this->assertEquals( G4T_RECIPES_POST_TYPE, $result );
     }
+
+    /**
+     * Test taxonomy term hero data returns correct structure.
+     */
+    public function test_get_taxonomy_term_hero_data_structure() {
+        g4t_register_flat_taxonomies( $this->plugin );
+
+        $term_id = $this->factory->term->create( array(
+            'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
+            'name'     => 'Śniadanie',
+        ) );
+
+        $term = get_term( $term_id, G4T_MEAL_TYPE_TAXONOMY );
+
+        $result = g4t_get_taxonomy_term_hero_data( $term );
+
+        $this->assertIsArray( $result );
+        $this->assertArrayHasKey( 'icon', $result );
+        $this->assertArrayHasKey( 'title_suffix', $result );
+        $this->assertArrayHasKey( 'short_description', $result );
+        $this->assertArrayHasKey( 'hero_image', $result );
+        $this->assertArrayHasKey( 'short_claim', $result );
+        $this->assertArrayHasKey( 'blog_posts', $result );
+
+        // Safe defaults when ACF not active or fields empty
+        $this->assertNull( $result['icon'] );
+        $this->assertEquals( '', $result['title_suffix'] );
+        $this->assertEquals( '', $result['short_description'] );
+        $this->assertNull( $result['hero_image'] );
+        $this->assertEquals( '', $result['short_claim'] );
+        $this->assertIsArray( $result['blog_posts'] );
+    }
+
+    /**
+     * Test normalize term blog posts filters invalid entries.
+     */
+    public function test_normalize_term_blog_posts_filters_invalid() {
+        $raw_posts = array(
+            array( 'title' => 'Valid Post', 'url' => 'https://example.com/post-1' ),
+            array( 'title' => '', 'url' => 'https://example.com/post-2' ), // empty title
+            array( 'title' => 'No URL', 'url' => '' ), // empty url
+            array( 'title' => 'Invalid URL', 'url' => 'not-a-url' ), // invalid url
+            array( 'title' => 'Another Valid', 'url' => 'https://example.com/post-3' ),
+        );
+
+        $result = g4t_normalize_term_blog_posts( $raw_posts );
+
+        $this->assertCount( 2, $result );
+        $this->assertEquals( 'Valid Post', $result[0]['title'] );
+        $this->assertEquals( 'https://example.com/post-1', $result[0]['url'] );
+        $this->assertEquals( 'Another Valid', $result[1]['title'] );
+        $this->assertEquals( 'https://example.com/post-3', $result[1]['url'] );
+    }
+
+    /**
+     * Test normalize term blog posts handles empty array.
+     */
+    public function test_normalize_term_blog_posts_empty_array() {
+        $result = g4t_normalize_term_blog_posts( array() );
+
+        $this->assertIsArray( $result );
+        $this->assertCount( 0, $result );
+    }
+
+    /**
+     * Test normalize term blog posts sanitizes URLs.
+     */
+    public function test_normalize_term_blog_posts_sanitizes_urls() {
+        $raw_posts = array(
+            array( 'title' => 'Test', 'url' => 'javascript:alert(1)' ), // malicious
+            array( 'title' => 'Test 2', 'url' => 'https://example.com/post?param=value' ), // valid
+        );
+
+        $result = g4t_normalize_term_blog_posts( $raw_posts );
+
+        // javascript: URL should be filtered out (esc_url_raw returns empty for invalid/unsafe URLs)
+        $this->assertCount( 1, $result );
+        $this->assertEquals( 'Test 2', $result[0]['title'] );
+    }
+
+    /**
+     * Test archive context includes hero data for taxonomy archives.
+     */
+    public function test_filter_archive_context_includes_hero_for_taxonomy() {
+        g4t_register_flat_taxonomies( $this->plugin );
+
+        $term_id = $this->factory->term->create( array(
+            'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
+            'name'     => 'Śniadanie',
+        ) );
+
+        // Simulate is_tax() by setting global $wp_query
+        global $wp_query;
+        $original_query = $wp_query;
+        $wp_query = new WP_Query( array(
+            'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
+            'term'     => $term_id,
+        ) );
+        $wp_query->is_tax = true;
+        $wp_query->queried_object = get_term( $term_id, G4T_MEAL_TYPE_TAXONOMY );
+        $wp_query->queried_object_id = $term_id;
+
+        $context = array();
+        $result = g4t_filter_archive_context( $context, array(), $this->plugin );
+
+        $this->assertArrayHasKey( 'recipe_archive', $result );
+        $this->assertArrayHasKey( 'hero', $result['recipe_archive'] );
+        $this->assertIsArray( $result['recipe_archive']['hero'] );
+
+        // Restore original query
+        $wp_query = $original_query;
+    }
 }
+

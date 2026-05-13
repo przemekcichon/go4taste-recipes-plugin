@@ -75,6 +75,7 @@ function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $up
         'recipe_time_prep'             => sanitize_text_field( (string) ( $block_data['time_prep'] ?? '' ) ),
         'recipe_time_cook'             => sanitize_text_field( (string) ( $block_data['time_cook'] ?? '' ) ),
         'recipe_time_total'            => sanitize_text_field( (string) ( $block_data['time_total'] ?? '' ) ),
+        'recipe_time_soak'             => sanitize_text_field( (string) ( $block_data['time_soak'] ?? '' ) ),
         'recipe_difficulty'            => sanitize_text_field( (string) ( $block_data['difficulty'] ?? '' ) ),
         'recipe_servings_value'        => $block_data['servings_value'] ?? null,
         'recipe_servings_unit'         => sanitize_text_field( (string) ( $block_data['servings_unit'] ?? '' ) ),
@@ -358,6 +359,7 @@ function g4t_get_recipe_blocks_data( WP_Post $post ): array {
         'time_prep'              => '',
         'time_cook'              => '',
         'time_total'             => '',
+        'time_soak'              => '',
         'ingredients'            => array(),
         'ingredients_photo_url'  => '',
         'steps'                  => array(),
@@ -388,6 +390,7 @@ function g4t_get_recipe_blocks_data( WP_Post $post ): array {
             $result['time_prep']      = isset( $attrs['timePrep'] ) ? (string) $attrs['timePrep'] : $result['time_prep'];
             $result['time_cook']      = isset( $attrs['timeCook'] ) ? (string) $attrs['timeCook'] : $result['time_cook'];
             $result['time_total']     = isset( $attrs['timeTotal'] ) ? (string) $attrs['timeTotal'] : $result['time_total'];
+            $result['time_soak']      = isset( $attrs['timeSoak'] ) ? (string) $attrs['timeSoak'] : $result['time_soak'];
         }
 
         if ( 'go4taste-recipes/ingredients' === $block['blockName'] ) {

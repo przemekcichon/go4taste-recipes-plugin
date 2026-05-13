@@ -109,6 +109,14 @@ function g4t_filter_single_context( array $context, array $meta = array(), Go4Ta
 /**
  * Filter the Timber context for recipe archive pages.
  *
+ * WHY inject taxonomy term hero data here:
+ *
+ * Archive pages can be either post type archives (e.g. /recipes/) or taxonomy
+ * archives (e.g. /typ-dania/sniadanie/). For taxonomy archives, we fetch custom
+ * hero settings (icon, title suffix, claim, hero image, blog posts) from ACF
+ * term meta fields and inject them into the context so Timber templates can
+ * render a customized hero area per term without querying ACF directly.
+ *
  * @param array<string,mixed> $context
  * @param array<string,mixed> $meta
  * @return array<string,mixed>
@@ -127,6 +135,14 @@ function g4t_filter_archive_context( array $context, array $meta = array(), Go4T
 
     if ( is_post_type_archive( $strategy['post_type'] ) ) {
         $context['is_recipe_archive'] = true;
+    }
+
+    // Inject taxonomy term hero data for tax archives
+    if ( is_tax() ) {
+        $queried_object = get_queried_object();
+        if ( $queried_object instanceof WP_Term ) {
+            $context['recipe_archive']['hero'] = g4t_get_taxonomy_term_hero_data( $queried_object );
+        }
     }
 
     return $context;
@@ -438,4 +454,89 @@ function g4t_analyze_block_content( string $content ): array {
         'recipe_block_names'  => array_values( array_unique( $recipe_blocks ) ),
         'recipe_marker_count' => substr_count( $content, '<!-- wp:go4taste-recipes/' ),
     );
+}
+
+/**
+ * Get taxonomy term hero data from ACF term meta fields.
+ *
+ * WHY a dedicated helper instead of querying ACF in templates:
+ *
+ * This function centralizes all term meta queries and applies normalization
+ * (null coalescing, type casting, safe defaults) in one place. Templates receive
+ * a guaranteed-shape array and don't need to check if ACF exists or if fields
+ * are set. If ACF is not active, the function returns safe null values.
+ *
+ * WHY 'term_' . $term->term_id format:
+ *
+ * ACF's get_field() requires a taxonomy qualifier when fetching term meta.
+ * The canonical format is 'term_' . $term_id (e.g. 'term_123') to tell ACF
+ * we're querying a term, not a post or option.
+ *
+ * @param WP_Term $term The queried taxonomy term.
+ * @return array<string,mixed> Hero data with keys: icon, title_suffix, short_description, hero_image, short_claim, blog_posts.
+ */
+function g4t_get_taxonomy_term_hero_data( WP_Term $term ): array {
+    $term_identifier = 'term_' . $term->term_id;
+
+    // Safe default if ACF not available
+    if ( ! function_exists( 'get_field' ) ) {
+        return array(
+            'icon'              => null,
+            'title_suffix'      => '',
+            'short_description' => '',
+            'hero_image'        => null,
+            'short_claim'       => '',
+            'blog_posts'        => array(),
+        );
+    }
+
+    $icon_field        = get_field( 'hero_icon', $term_identifier );
+    $hero_image_field  = get_field( 'hero_image', $term_identifier );
+
+    return array(
+        'icon'              => is_array( $icon_field ) ? $icon_field : null,
+        'title_suffix'      => (string) ( get_field( 'title_suffix', $term_identifier ) ?: '' ),
+        'short_description' => (string) ( get_field( 'short_description', $term_identifier ) ?: '' ),
+        'hero_image'        => is_array( $hero_image_field ) ? $hero_image_field : null,
+        'short_claim'       => (string) ( get_field( 'short_claim', $term_identifier ) ?: '' ),
+        'blog_posts'        => g4t_normalize_term_blog_posts( (array) get_field( 'blog_posts', $term_identifier ) ),
+    );
+}
+
+/**
+ * Normalize blog posts repeater data from term meta.
+ *
+ * WHY separate normalizer:
+ *
+ * ACF repeater fields return arrays but the shape is not guaranteed. Empty
+ * repeaters may return false, single-row repeaters may have unexpected keys.
+ * This normalizer ensures we always return a flat array of {title, url} objects
+ * with sanitized values, regardless of what ACF returns.
+ *
+ * @param array<int,mixed> $raw_posts Raw ACF repeater value.
+ * @return array<int,array{title:string,url:string}> Normalized blog posts.
+ */
+function g4t_normalize_term_blog_posts( array $raw_posts ): array {
+    $normalized = array();
+
+    foreach ( $raw_posts as $item ) {
+        if ( ! is_array( $item ) ) {
+            continue;
+        }
+
+        $title = isset( $item['title'] ) ? trim( (string) $item['title'] ) : '';
+        $url   = isset( $item['url'] ) ? esc_url_raw( (string) $item['url'] ) : '';
+
+        // Skip entries with empty title or invalid URL
+        if ( empty( $title ) || empty( $url ) ) {
+            continue;
+        }
+
+        $normalized[] = array(
+            'title' => $title,
+            'url'   => $url,
+        );
+    }
+
+    return $normalized;
 }

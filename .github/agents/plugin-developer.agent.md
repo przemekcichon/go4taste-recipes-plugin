@@ -1,5 +1,5 @@
 ---
-name: Plugin Developer
+name: G4T Recipes Plugin Developer
 description: Implements new features in the GO4TASTE Recipes Plugin — blocks, taxonomies, ACF field groups, CPT changes — following the file ownership rules and schema contract.
 ---
 
