@@ -41,6 +41,10 @@ includes/registration/taxonomies.php         Taxonomy registration + G4T_*_TAXON
 includes/registration/blocks.php             G4T_RECIPE_BLOCK_NAMES, block type registration, editor script
 includes/acf/field-groups.php                All acf_add_local_field_group() calls
 includes/sync/meta-sync.php                  save_post → block parse → post_meta
+includes/sync/acf-to-blocks.php              acf/save_post → rebuild blocks in post_content
+includes/sync/converters.php                 post_meta → block attributes conversion helpers
+includes/sync/detection.php                  Save source detection + UI tracking
+includes/admin/reverse-sync.php              Meta→blocks batch conversion admin action
 includes/view-model/normalizers.php          Pure data normalisation helpers
 includes/view-model/builder.php              View model builder + ACF fallback
 includes/admin/settings-page.php             Admin settings page

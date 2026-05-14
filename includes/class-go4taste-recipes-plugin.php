@@ -30,7 +30,10 @@ require_once __DIR__ . '/registration/post-types.php';
 require_once __DIR__ . '/registration/taxonomies.php';
 require_once __DIR__ . '/registration/blocks.php';
 require_once __DIR__ . '/acf/field-groups.php';
+require_once __DIR__ . '/sync/converters.php';
+require_once __DIR__ . '/sync/detection.php';
 require_once __DIR__ . '/sync/meta-sync.php';
+require_once __DIR__ . '/sync/acf-to-blocks.php';
 require_once __DIR__ . '/view-model/normalizers.php';
 require_once __DIR__ . '/view-model/builder.php';
 require_once __DIR__ . '/admin/settings-page.php';
@@ -55,10 +58,12 @@ class Go4Taste_Recipes_Plugin {
         add_action( 'init', array( $this, 'proxy_register_flat_taxonomies' ) );
         add_action( 'init', array( $this, 'proxy_register_blocks' ) );
         add_action( 'acf/init', array( $this, 'proxy_register_acf_fields' ) );
+        add_action( 'acf/save_post', array( $this, 'proxy_sync_acf_to_blocks' ), 5 );
         add_action( 'save_post', array( $this, 'proxy_sync_meta' ), 20, 3 );
         add_action( 'admin_init', array( $this, 'proxy_register_settings' ) );
         add_action( 'admin_menu', array( $this, 'proxy_register_options_page' ) );
         add_action( 'admin_notices', array( $this, 'proxy_render_dependency_notices' ) );
+        add_action( 'admin_notices', array( $this, 'proxy_show_ui_switch_notice' ) );
         add_action( 'admin_post_g4t_reverse_sync', array( $this, 'proxy_handle_reverse_sync' ) );
 
         add_filter( 'go4taste/recipes/context/single',  array( $this, 'proxy_filter_single_context' ), 10, 2 );
@@ -156,6 +161,10 @@ class Go4Taste_Recipes_Plugin {
         g4t_sync_recipe_meta_from_blocks( $post_id, $post, $update, $this );
     }
 
+    public function proxy_sync_acf_to_blocks( int $post_id ): void {
+        g4t_sync_acf_to_blocks( $post_id );
+    }
+
     public function proxy_register_settings(): void {
         g4t_register_settings( $this );
     }
@@ -179,6 +188,10 @@ class Go4Taste_Recipes_Plugin {
 
     public function proxy_render_dependency_notices(): void {
         g4t_render_dependency_notices( $this );
+    }
+
+    public function proxy_show_ui_switch_notice(): void {
+        g4t_maybe_show_ui_switch_notice();
     }
 
     public function proxy_handle_reverse_sync(): void {
