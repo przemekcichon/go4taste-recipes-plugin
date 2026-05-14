@@ -28,32 +28,416 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Get ACF location rules based on current source strategy
+ *
+ * Returns dynamic location rules that adapt to the plugin's source_mode:
+ * - MODE_POST → post_type='post'
+ * - MODE_EXISTING_CPT → post_type from options
+ * - MODE_RECIPES_CPT → post_type='recipe'
+ *
+ * This ensures ACF field groups appear on the correct post type regardless
+ * of how the plugin is configured.
+ *
+ * @param Go4Taste_Recipes_Plugin $plugin Plugin instance.
+ * @return array<int,array<int,array{param:string,operator:string,value:string}>> ACF location rules.
+ */
+function g4t_get_acf_location_rules( Go4Taste_Recipes_Plugin $plugin ): array {
+    $strategy = $plugin->resolve_source_strategy();
+
+    return array(
+        array(
+            array(
+                'param'    => 'post_type',
+                'operator' => '==',
+                'value'    => $strategy['post_type'],
+            ),
+        ),
+    );
+}
+
+/**
  * Register all ACF field groups for recipe posts.
  *
  * Called on the 'acf/init' hook, which fires after ACF itself has initialised.
  * Calling acf_add_local_field_group() earlier (e.g. on 'init') is safe in
  * practice but 'acf/init' is the documented correct hook.
  *
- * WHY only one field group (ads products):
+ * WHY ACF field groups for recipe content:
  *
- * Recipe content fields (ingredients, steps, times, difficulty, etc.) are stored
- * in block attributes (post_content). They do NOT use ACF fields. The sync module
- * writes them to post_meta keys in ACF-compatible format so that:
- *  - Legacy code querying ACF directly still works
- *  - Importers can write to post_meta and have it render correctly
- *  - The view model builder can fall back to meta when block data is absent
+ * Recipe fields can be edited in TWO ways:
+ *  1. Block Editor (primary, preferred) — data in block attributes (post_content)
+ *  2. ACF Meta Boxes (alternative, fallback) — data in post_meta
  *
- * The only ACF field group defined here is for ads integration, which is not
- * part of the recipe schema contract and is managed separately from recipe data.
+ * Dual UI support allows:
+ *  - Admin users who prefer form-based editing over blocks
+ *  - WP All Import to map to ACF fields (then auto-sync to blocks)
+ *  - Legacy integrations that query ACF directly
+ *
+ * Sync flow:
+ *  - ACF save → acf/save_post priority 5 → builds blocks → post_content updated
+ *  - Block save → save_post priority 20 → syncs to meta → post_meta updated
+ *
+ * Field groups defined here:
+ *  - Recipe Hero (lead, difficulty, servings, times)
+ *  - Recipe Ingredients (repeater with taxonomy linking)
+ *  - Recipe Steps (flat repeater with heading, description, tip, image)
+ *  - Recipe Tips (general tips/notes)
+ *  - Recipe Source (attribution label + URL)
+ *  - Recipe Ads (product IDs for bottom banner)
+ *  - Taxonomy Hero (archive page customization)
  *
  * @param Go4Taste_Recipes_Plugin $plugin Plugin instance for context.
  */
 function g4t_register_acf_fields( Go4Taste_Recipes_Plugin $plugin ): void {
+    // DEBUG: Function called
+    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+        error_log( 'GO4TASTE: g4t_register_acf_fields() CALLED' );
+    }
+    
     if ( ! function_exists( 'acf_add_local_field_group' ) ) {
+        // ACF not active - early return
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+            error_log( 'GO4TASTE Recipes: ACF not active, field groups not registered' );
+        }
         return;
     }
 
     $strategy = $plugin->resolve_source_strategy();
+
+    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+        error_log( sprintf(
+            'GO4TASTE Recipes: Registering ACF field groups for post_type=%s',
+            $strategy['post_type']
+        ) );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Recipe Hero field group (simple fields)
+    //
+    // Core recipe metadata displayed in the hero area of single recipe pages.
+    // These fields provide an alternative to Block Editor for users who prefer
+    // form-based editing.
+    //
+    // Sync: ACF save → builds hero block → post_content updated
+    // ─────────────────────────────────────────────────────────────────────────
+    acf_add_local_field_group(
+        array(
+            'key'      => 'group_recipe_hero',
+            'title'    => 'Recipe Hero',
+            'fields'   => array(
+                array(
+                    'key'          => 'field_recipe_lead',
+                    'label'        => 'Lead / Excerpt',
+                    'name'         => 'recipe_lead',
+                    'type'         => 'textarea',
+                    'rows'         => 3,
+                    'instructions' => 'Krótki opis przepisu (1-2 zdania)',
+                ),
+                array(
+                    'key'           => 'field_recipe_difficulty',
+                    'label'         => 'Difficulty',
+                    'name'          => 'recipe_difficulty',
+                    'type'          => 'select',
+                    'choices'       => array(
+                        'easy'   => __( 'Łatwy', 'go4taste-recipes-plugin' ),
+                        'medium' => __( 'Średni', 'go4taste-recipes-plugin' ),
+                        'hard'   => __( 'Trudny', 'go4taste-recipes-plugin' ),
+                    ),
+                    'default_value' => 'medium',
+                ),
+                array(
+                    'key'   => 'field_recipe_servings_value',
+                    'label' => 'Servings (number)',
+                    'name'  => 'recipe_servings_value',
+                    'type'  => 'number',
+                    'min'   => 1,
+                    'step'  => 1,
+                ),
+                array(
+                    'key'           => 'field_recipe_servings_unit',
+                    'label'         => 'Servings (unit)',
+                    'name'          => 'recipe_servings_unit',
+                    'type'          => 'text',
+                    'placeholder'   => 'porcje, osoby, sztuk',
+                    'default_value' => 'porcje',
+                ),
+                array(
+                    'key'          => 'field_recipe_time_prep',
+                    'label'        => 'Prep Time',
+                    'name'         => 'recipe_time_prep',
+                    'type'         => 'text',
+                    'placeholder'  => '15 min',
+                    'instructions' => 'Czas przygotowania (forma tekstowa)',
+                ),
+                array(
+                    'key'         => 'field_recipe_time_cook',
+                    'label'       => 'Cook Time',
+                    'name'        => 'recipe_time_cook',
+                    'type'        => 'text',
+                    'placeholder' => '30 min',
+                ),
+                array(
+                    'key'         => 'field_recipe_time_total',
+                    'label'       => 'Total Time',
+                    'name'        => 'recipe_time_total',
+                    'type'        => 'text',
+                    'placeholder' => '45 min',
+                ),
+                array(
+                    'key'          => 'field_recipe_time_soak',
+                    'label'        => 'Soak Time (optional)',
+                    'name'         => 'recipe_time_soak',
+                    'type'         => 'text',
+                    'placeholder'  => '48 godzin',
+                    'instructions' => 'Czas namaczania składników (opcjonalnie)',
+                ),
+            ),
+            'location'   => g4t_get_acf_location_rules( $plugin ),
+            'position'   => 'normal',
+            'style'      => 'default',
+            'menu_order' => 10,
+        )
+    );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Recipe Ingredients field group (flat repeater)
+    //
+    // Ingredients list with taxonomy term linking and photo URL.
+    // Repeater layout: table for easy bulk entry.
+    //
+    // Fields:
+    //  - ingredient_term_id (taxonomy select) - links to recipe_ingredient taxonomy
+    //  - name (text) - fallback if term not selected
+    //  - amount (number) - quantity
+    //  - unit (text) - measurement unit
+    //  - ingredient_note (text) - optional comment/tip for ingredient
+    //  - photo_url (image) - ingredients photo (outside repeater)
+    //
+    // Sync: ACF save → builds ingredients block with itemsList array → post_content
+    // ─────────────────────────────────────────────────────────────────────────
+    acf_add_local_field_group(
+        array(
+            'key'      => 'group_recipe_ingredients',
+            'title'    => 'Recipe Ingredients',
+            'fields'   => array(
+                array(
+                    'key'          => 'field_recipe_ingredients',
+                    'label'        => 'Ingredients List',
+                    'name'         => 'recipe_ingredients',
+                    'type'         => 'repeater',
+                    'layout'       => 'table',
+                    'button_label' => __( 'Add Ingredient', 'go4taste-recipes-plugin' ),
+                    'sub_fields'   => array(
+                        array(
+                            'key'          => 'field_ingredient_term_id',
+                            'label'        => 'Ingredient',
+                            'name'         => 'ingredient_term_id',
+                            'type'         => 'taxonomy',
+                            'taxonomy'     => G4T_INGREDIENT_TAXONOMY,
+                            'field_type'   => 'select',
+                            'allow_null'   => 1,
+                            'instructions' => 'Wybierz z listy lub wpisz nazwę poniżej',
+                        ),
+                        array(
+                            'key'          => 'field_ingredient_name',
+                            'label'        => 'Name (fallback)',
+                            'name'         => 'name',
+                            'type'         => 'text',
+                            'instructions' => 'Jeśli składnika nie ma w taksonomii',
+                        ),
+                        array(
+                            'key'  => 'field_ingredient_amount',
+                            'label' => 'Amount',
+                            'name' => 'amount',
+                            'type' => 'number',
+                            'step' => 0.01,
+                        ),
+                        array(
+                            'key'         => 'field_ingredient_unit',
+                            'label'       => 'Unit',
+                            'name'        => 'unit',
+                            'type'        => 'text',
+                            'placeholder' => 'g, ml, łyżka, szczypta',
+                        ),
+                        array(
+                            'key'          => 'field_ingredient_note',
+                            'label'        => 'Wskazówka',
+                            'name'         => 'ingredient_note',
+                            'type'         => 'text',
+                            'placeholder'  => 'Opcjonalny komentarz do składnika',
+                            'instructions' => 'Np. substytuty, wskazówki zakupowe',
+                        ),
+                    ),
+                ),
+                array(
+                    'key'           => 'field_recipe_ingredients_photo_url',
+                    'label'         => 'Ingredients Photo (optional)',
+                    'name'          => 'recipe_ingredients_photo_url',
+                    'type'          => 'image',
+                    'return_format' => 'url',
+                    'instructions'  => 'Zdjęcie przygotowanych składników',
+                ),
+            ),
+            'location'   => g4t_get_acf_location_rules( $plugin ),
+            'position'   => 'normal',
+            'style'      => 'default',
+            'menu_order' => 20,
+        )
+    );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Recipe Steps
+    //
+    // Flat repeater for recipe preparation steps.
+    // Each step has: heading, description, optional tip, and optional image.
+    //
+    // Fields:
+    //  - recipe_steps (repeater)
+    //      ├─ step_header (text) - step title/heading
+    //      ├─ step_description (textarea) - step instructions
+    //      ├─ step_tip (textarea, nullable) - optional cooking tip
+    //      └─ step_image_url (image, nullable) - optional step photo
+    //
+    // Example structure:
+    //  Step 1:
+    //    - Header: "Przygotuj składniki"
+    //    - Description: "Zmierz mąkę, cukier i jajka"
+    //    - Tip: "Użyj ciepłych jajek"
+    //    - Image: (optional)
+    //
+    // Meta keys written: recipe_steps (count),
+    //                    recipe_steps_{$i}_step_header (text),
+    //                    recipe_steps_{$i}_step_description (textarea),
+    //                    recipe_steps_{$i}_step_tip (textarea),
+    //                    recipe_steps_{$i}_step_image_url (URL)
+    //
+    // Sync: ACF save → builds steps block with stepsList array → post_content
+    // ─────────────────────────────────────────────────────────────────────────
+    
+    // DEBUG: Check if this code is reached
+    if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+        error_log( 'GO4TASTE: Attempting to register group_recipe_steps' );
+    }
+    
+    acf_add_local_field_group(
+        array(
+            'key'      => 'group_recipe_steps',
+            'title'    => 'Recipe Steps',
+            'fields'   => array(
+                array(
+                    'key'          => 'field_recipe_steps',
+                    'label'        => 'Steps',
+                    'name'         => 'recipe_steps',
+                    'type'         => 'repeater',
+                    'layout'       => 'block',
+                    'button_label' => __( 'Add Step', 'go4taste-recipes-plugin' ),
+                    'sub_fields'   => array(
+                        array(
+                            'key'          => 'field_step_header',
+                            'label'        => 'Nagłówek kroku',
+                            'name'         => 'step_header',
+                            'type'         => 'text',
+                            'placeholder'  => 'np. Przygotuj składniki',
+                            'instructions' => 'Krótki tytuł kroku',
+                        ),
+                        array(
+                            'key'   => 'field_step_description',
+                            'label' => 'Opis kroku',
+                            'name'  => 'step_description',
+                            'type'  => 'textarea',
+                            'rows'  => 3,
+                            'instructions' => 'Szczegółowy opis',
+                        ),
+                        array(
+                            'key'          => 'field_step_tip',
+                            'label'        => 'Wskazówka (opcjonalnie)',
+                            'name'         => 'step_tip',
+                            'type'         => 'textarea',
+                            'rows'         => 2,
+                            'instructions' => 'Dodatkowa porada dla tego kroku',
+                        ),
+                        array(
+                            'key'           => 'field_step_image_url',
+                            'label'         => 'Zdjęcie kroku (opcjonalnie)',
+                            'name'          => 'step_image_url',
+                            'type'          => 'image',
+                            'return_format' => 'url',
+                            'instructions'  => 'Zdjęcie ilustrujące ten krok',
+                        ),
+                    ),
+                ),
+            ),
+            'location'   => g4t_get_acf_location_rules( $plugin ),
+            'position'   => 'normal',
+            'style'      => 'default',
+            'menu_order' => 30,
+        )
+    );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Recipe Tips field group
+    //
+    // General tips and notes for the recipe (not step-specific).
+    // Displayed as a separate block after preparation steps.
+    //
+    // Sync: ACF save → builds tips block → post_content updated
+    // ─────────────────────────────────────────────────────────────────────────
+    acf_add_local_field_group(
+        array(
+            'key'      => 'group_recipe_tips',
+            'title'    => 'Recipe Tips',
+            'fields'   => array(
+                array(
+                    'key'          => 'field_recipe_tips',
+                    'label'        => 'Tips',
+                    'name'         => 'recipe_tips',
+                    'type'         => 'textarea',
+                    'rows'         => 4,
+                    'instructions' => 'Ogólne wskazówki do przepisu, warianty, porady',
+                ),
+            ),
+            'location'   => g4t_get_acf_location_rules( $plugin ),
+            'position'   => 'normal',
+            'style'      => 'default',
+            'menu_order' => 40,
+        )
+    );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Recipe Source field group
+    //
+    // Source attribution for the recipe (label + URL).
+    // Allows proper crediting of original recipe authors/websites.
+    //
+    // Sync: ACF save → builds source block → post_content updated
+    // ─────────────────────────────────────────────────────────────────────────
+    acf_add_local_field_group(
+        array(
+            'key'      => 'group_recipe_source',
+            'title'    => 'Recipe Source',
+            'fields'   => array(
+                array(
+                    'key'          => 'field_recipe_source_label',
+                    'label'        => 'Source Label',
+                    'name'         => 'recipe_source_label',
+                    'type'         => 'text',
+                    'placeholder'  => 'Adapted from..., Oryginalny przepis:',
+                    'instructions' => 'Nazwa źródła przepisu',
+                ),
+                array(
+                    'key'          => 'field_recipe_source_url',
+                    'label'        => 'Source URL',
+                    'name'         => 'recipe_source_url',
+                    'type'         => 'url',
+                    'instructions' => 'Link do oryginalnego przepisu',
+                ),
+            ),
+            'location'   => g4t_get_acf_location_rules( $plugin ),
+            'position'   => 'normal',
+            'style'      => 'default',
+            'menu_order' => 50,
+        )
+    );
 
     // ─────────────────────────────────────────────────────────────────────────
     // Ads products repeater field group

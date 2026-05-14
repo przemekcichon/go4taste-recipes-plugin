@@ -174,7 +174,7 @@
         attributes: {
             itemsList: {
                 type: "array",
-                default: [{ ingredient_term_id: "", name: "", amount: "", unit: "" }]
+                default: [{ ingredient_term_id: "", name: "", amount: "", unit: "", ingredient_note: "" }]
             },
             items: { type: "string", default: "" },
             photoUrl: { type: "string", default: "" }
@@ -379,6 +379,14 @@
                                 updateIngredientRow(index, { unit: value });
                             }
                         }),
+                        el(TextControl, {
+                            label: __("Wskazówka", "go4taste-recipes-plugin"),
+                            value: row.ingredient_note || "",
+                            placeholder: __("Opcjonalny komentarz do składnika", "go4taste-recipes-plugin"),
+                            onChange: function (value) {
+                                updateIngredientRow(index, { ingredient_note: value });
+                            }
+                        }),
                         el(
                             "div",
                             { style: { display: "flex", gap: "8px", marginTop: "8px" } },
@@ -404,7 +412,7 @@
                     variant: "primary",
                     onClick: function () {
                         var next = rows.slice();
-                        next.push({ ingredient_term_id: "", name: "", amount: "", unit: "" });
+                        next.push({ ingredient_term_id: "", name: "", amount: "", unit: "", ingredient_note: "" });
                         setAttrs({ itemsList: next });
                     }
                 }, __("+ Dodaj składnik", "go4taste-recipes-plugin"))
@@ -422,7 +430,7 @@
         attributes: {
             stepsList: {
                 type: "array",
-                default: [{ heading: "", description: "", images: [], tip: "" }]
+                default: [{ heading: "", description: "", tip: "", imageUrl: "" }]
             },
             steps: { type: "string", default: "" }
         },
@@ -521,7 +529,7 @@
                     variant: "primary",
                     onClick: function () {
                         var next = rows.slice();
-                        next.push({ heading: "", description: "", images: [], tip: "" });
+                        next.push({ heading: "", description: "", tip: "", imageUrl: "" });
                         setAttrs({ stepsList: next });
                     },
                     style: { marginTop: "16px" }

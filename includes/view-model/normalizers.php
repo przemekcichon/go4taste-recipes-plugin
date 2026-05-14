@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Normalize an array of ingredient rows into a consistent shape.
  *
  * @param array<int,mixed> $items
- * @return array<int,array{ingredient_term_id:int|null,name:string,amount:float|null,unit:string}>
+ * @return array<int,array{ingredient_term_id:int|null,name:string,amount:float|null,unit:string,ingredient_note:string}>
  */
 function g4t_normalize_ingredients_list( array $items ): array {
     $normalized = array();
@@ -57,6 +57,7 @@ function g4t_normalize_ingredients_list( array $items ): array {
             'name'               => $name,
             'amount'             => $amount,
             'unit'               => isset( $row['unit'] ) ? trim( (string) $row['unit'] ) : '',
+            'ingredient_note'    => isset( $row['ingredient_note'] ) ? trim( (string) $row['ingredient_note'] ) : '',
         );
     }
 
@@ -77,9 +78,9 @@ function g4t_normalize_steps_list( array $steps ): array {
             continue;
         }
 
-        $title = isset( $row['heading'] ) ? trim( (string) $row['heading'] ) : '';
-        if ( '' === $title && isset( $row['title'] ) ) {
-            $title = trim( (string) $row['title'] );
+        $heading = isset( $row['heading'] ) ? trim( (string) $row['heading'] ) : '';
+        if ( '' === $heading && isset( $row['title'] ) ) {
+            $heading = trim( (string) $row['title'] );
         }
 
         $description = isset( $row['description'] ) ? trim( (string) $row['description'] ) : '';
@@ -90,14 +91,18 @@ function g4t_normalize_steps_list( array $steps ): array {
             $description = trim( (string) $row['step'] );
         }
 
-        $tip    = isset( $row['tip'] ) ? trim( (string) $row['tip'] ) : '';
-        $images = g4t_normalize_images_value( $row['images'] ?? array() );
+        $tip = isset( $row['tip'] ) ? trim( (string) $row['tip'] ) : '';
 
         // imageUrl from block editor (single image per step)
-        if ( empty( $images ) && ! empty( $row['imageUrl'] ) ) {
-            $url = esc_url_raw( trim( (string) $row['imageUrl'] ) );
-            if ( '' !== $url ) {
-                $images = array( $url );
+        $image_url = '';
+        if ( ! empty( $row['imageUrl'] ) ) {
+            $image_url = esc_url_raw( trim( (string) $row['imageUrl'] ) );
+        }
+        // Fallback: legacy 'images' array (first item)
+        if ( '' === $image_url && isset( $row['images'] ) && is_array( $row['images'] ) && ! empty( $row['images'] ) ) {
+            $first_image = reset( $row['images'] );
+            if ( is_string( $first_image ) ) {
+                $image_url = esc_url_raw( trim( $first_image ) );
             }
         }
 
@@ -105,15 +110,15 @@ function g4t_normalize_steps_list( array $steps ): array {
             continue;
         }
 
-        if ( '' === $title ) {
-            $title = sprintf( 'Krok %d', $index + 1 );
+        if ( '' === $heading ) {
+            $heading = sprintf( 'Krok %d', $index + 1 );
         }
 
         $normalized[] = array(
-            'title'       => $title,
+            'heading'     => $heading,
             'description' => $description,
             'tip'         => $tip,
-            'images'      => $images,
+            'imageUrl'    => $image_url,
         );
     }
 

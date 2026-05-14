@@ -16,45 +16,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Zbuduj blok hero z post_meta
  *
+ * Uses shared converter from includes/sync/converters.php
+ *
  * @param int $post_id Post ID.
  * @return string Block markup.
  */
 function g4t_build_hero_block_from_meta( int $post_id ): string {
-	$attrs = array();
-	
-	$lead           = get_post_meta( $post_id, 'recipe_lead', true );
-	$difficulty     = get_post_meta( $post_id, 'recipe_difficulty', true );
-	$servings_value = get_post_meta( $post_id, 'recipe_servings_value', true );
-	$servings_unit  = get_post_meta( $post_id, 'recipe_servings_unit', true );
-	$time_prep      = get_post_meta( $post_id, 'recipe_time_prep', true );
-	$time_cook      = get_post_meta( $post_id, 'recipe_time_cook', true );
-	$time_total     = get_post_meta( $post_id, 'recipe_time_total', true );
-	$time_soak      = get_post_meta( $post_id, 'recipe_time_soak', true );
-
-	if ( ! empty( $lead ) ) {
-		$attrs['lead'] = (string) $lead;
-	}
-	if ( ! empty( $difficulty ) ) {
-		$attrs['difficulty'] = (string) $difficulty;
-	}
-	if ( ! empty( $servings_value ) ) {
-		$attrs['servingsValue'] = $servings_value;
-	}
-	if ( ! empty( $servings_unit ) ) {
-		$attrs['servingsUnit'] = (string) $servings_unit;
-	}
-	if ( ! empty( $time_prep ) ) {
-		$attrs['timePrep'] = (string) $time_prep;
-	}
-	if ( ! empty( $time_cook ) ) {
-		$attrs['timeCook'] = (string) $time_cook;
-	}
-	if ( ! empty( $time_total ) ) {
-		$attrs['timeTotal'] = (string) $time_total;
-	}
-	if ( ! empty( $time_soak ) ) {
-		$attrs['timeSoak'] = (string) $time_soak;
-	}
+	$attrs = g4t_convert_hero_meta_to_attrs( $post_id );
 
 	if ( empty( $attrs ) ) {
 		return '<!-- wp:go4taste-recipes/hero /-->';
@@ -67,43 +35,22 @@ function g4t_build_hero_block_from_meta( int $post_id ): string {
 /**
  * Zbuduj blok ingredients z post_meta
  *
+ * Uses shared converter from includes/sync/converters.php
+ *
  * @param int $post_id Post ID.
  * @return string Block markup.
  */
 function g4t_build_ingredients_block_from_meta( int $post_id ): string {
-	// Policz składniki
-	$count = 0;
-	while ( metadata_exists( 'post', $post_id, "recipe_ingredients_{$count}_name" ) ) {
-		$count++;
-	}
+	$items = g4t_convert_ingredients_meta_to_array( $post_id );
 
-	if ( $count === 0 ) {
+	if ( empty( $items ) ) {
 		return '<!-- wp:go4taste-recipes/ingredients /-->';
 	}
 
+	$items_json = wp_json_encode( $items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+
 	// Pobierz photo URL jeśli jest
 	$photo_url = get_post_meta( $post_id, 'recipe_ingredients_photo_url', true );
-
-	// Zbuduj JSON array składników
-	$items = [];
-	for ( $i = 0; $i < $count; $i++ ) {
-		$name        = get_post_meta( $post_id, "recipe_ingredients_{$i}_name", true );
-		$amount      = get_post_meta( $post_id, "recipe_ingredients_{$i}_amount", true );
-		$unit        = get_post_meta( $post_id, "recipe_ingredients_{$i}_unit", true );
-		$term_id_raw = get_post_meta( $post_id, "recipe_ingredients_{$i}_ingredient_term_id", true );
-		
-		$term_id = ( '' !== (string) $term_id_raw && is_numeric( (string) $term_id_raw ) ) ? (int) $term_id_raw : null;
-
-		$items[] = [
-			'ingredient_term_id' => $term_id,
-			'name'               => $name,
-			'amount'             => $amount,
-			'unit'               => $unit,
-		];
-	}
-
-	$items_json = wp_json_encode( $items, JSON_UNESCAPED_UNICODE );
-
 	$attrs = '"itemsList":' . $items_json;
 	if ( ! empty( $photo_url ) ) {
 		$attrs .= ',"photoUrl":"' . esc_url( $photo_url ) . '"';
@@ -115,42 +62,28 @@ function g4t_build_ingredients_block_from_meta( int $post_id ): string {
 /**
  * Zbuduj blok steps z post_meta
  *
+ * Uses shared converter from includes/sync/converters.php
+ * Now includes nested images repeater support.
+ *
  * @param int $post_id Post ID.
  * @return string Block markup.
  */
 function g4t_build_steps_block_from_meta( int $post_id ): string {
-	// Policz kroki
-	$count = 0;
-	while ( metadata_exists( 'post', $post_id, "recipe_steps_{$count}_heading" ) ) {
-		$count++;
-	}
+	$steps = g4t_convert_steps_meta_to_array( $post_id );
 
-	if ( $count === 0 ) {
+	if ( empty( $steps ) ) {
 		return '<!-- wp:go4taste-recipes/steps /-->';
 	}
 
-	// Zbuduj JSON array kroków
-	$steps = [];
-	for ( $i = 0; $i < $count; $i++ ) {
-		$heading     = get_post_meta( $post_id, "recipe_steps_{$i}_heading", true );
-		$description = get_post_meta( $post_id, "recipe_steps_{$i}_description", true );
-		$tip         = get_post_meta( $post_id, "recipe_steps_{$i}_tip", true );
-
-		$steps[] = [
-			'heading'     => $heading,
-			'description' => $description,
-			'images'      => [],
-			'tip'         => $tip ?: '',
-		];
-	}
-
-	$steps_json = wp_json_encode( $steps, JSON_UNESCAPED_UNICODE );
+	$steps_json = wp_json_encode( $steps, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
 	return '<!-- wp:go4taste-recipes/steps {"stepsList":' . $steps_json . '} /-->';
 }
 
 /**
  * Zbuduj blok tips z post_meta
+ *
+ * Uses wp_json_encode for safe JSON attribute encoding.
  *
  * @param int $post_id Post ID.
  * @return string Block markup.
@@ -162,11 +95,15 @@ function g4t_build_tips_block_from_meta( int $post_id ): string {
 		return '<!-- wp:go4taste-recipes/tips /-->';
 	}
 
-	return '<!-- wp:go4taste-recipes/tips {"tips":"' . esc_attr( $tips ) . '"} /-->';
+	$attrs      = array( 'tips' => (string) $tips );
+	$attrs_json = wp_json_encode( $attrs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+	return '<!-- wp:go4taste-recipes/tips ' . $attrs_json . ' /-->';
 }
 
 /**
  * Zbuduj blok source z post_meta
+ *
+ * Uses wp_json_encode for safe JSON attribute encoding.
  *
  * @param int $post_id Post ID.
  * @return string Block markup.
@@ -179,15 +116,16 @@ function g4t_build_source_block_from_meta( int $post_id ): string {
 		return '<!-- wp:go4taste-recipes/source /-->';
 	}
 
-	$attrs = [];
+	$attrs = array();
 	if ( ! empty( $label ) ) {
-		$attrs[] = '"sourceLabel":"' . esc_attr( $label ) . '"';
+		$attrs['sourceLabel'] = (string) $label;
 	}
 	if ( ! empty( $url ) ) {
-		$attrs[] = '"sourceUrl":"' . esc_url( $url ) . '"';
+		$attrs['sourceUrl'] = (string) $url;
 	}
 
-	return '<!-- wp:go4taste-recipes/source {' . implode( ',', $attrs ) . '} /-->';
+	$attrs_json = wp_json_encode( $attrs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
+	return '<!-- wp:go4taste-recipes/source ' . $attrs_json . ' /-->';
 }
 
 /**
@@ -219,7 +157,7 @@ function g4t_fix_missing_meta_keys( int $post_id ): array {
 	// 2. Dodaj recipe_steps counter jeśli brakuje
 	if ( ! metadata_exists( 'post', $post_id, 'recipe_steps' ) ) {
 		$count = 0;
-		while ( metadata_exists( 'post', $post_id, "recipe_steps_{$count}_heading" ) ) {
+		while ( metadata_exists( 'post', $post_id, "recipe_steps_{$count}_step_header" ) ) {
 			$count++;
 		}
 		if ( $count > 0 ) {
@@ -231,16 +169,16 @@ function g4t_fix_missing_meta_keys( int $post_id ): array {
 	// 3. Dodaj brakujące recipe_steps_{i}_tip
 	$steps_count = (int) get_post_meta( $post_id, 'recipe_steps', true );
 	for ( $i = 0; $i < $steps_count; $i++ ) {
-		if ( ! metadata_exists( 'post', $post_id, "recipe_steps_{$i}_tip" ) ) {
-			update_post_meta( $post_id, "recipe_steps_{$i}_tip", '' );
+		if ( ! metadata_exists( 'post', $post_id, "recipe_steps_{$i}_step_tip" ) ) {
+			update_post_meta( $post_id, "recipe_steps_{$i}_step_tip", '' );
 			$stats['tips_added']++;
 		}
 	}
 
-	// 4. Dodaj brakujące recipe_steps_{i}_images
+	// 4. Dodaj brakujące recipe_steps_{i}_step_image_url
 	for ( $i = 0; $i < $steps_count; $i++ ) {
-		if ( ! metadata_exists( 'post', $post_id, "recipe_steps_{$i}_images" ) ) {
-			update_post_meta( $post_id, "recipe_steps_{$i}_images", '0' );
+		if ( ! metadata_exists( 'post', $post_id, "recipe_steps_{$i}_step_image_url" ) ) {
+			update_post_meta( $post_id, "recipe_steps_{$i}_step_image_url", '' );
 			$stats['images_added']++;
 		}
 	}
@@ -285,9 +223,6 @@ function g4t_rebuild_blocks_for_single_post( int $post_id ) {
 		],
 		true
 	);
-	
-	// Przywróć hook (bloki są już zbudowane, więc meta-sync przy następnym zapisie będzie OK)
-	add_action( 'save_post', 'g4t_sync_recipe_meta_from_blocks', 20, 4 );
 
 	if ( is_wp_error( $updated ) ) {
 		return $updated;
