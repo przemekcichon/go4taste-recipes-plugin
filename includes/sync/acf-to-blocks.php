@@ -30,14 +30,24 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Priority 5 ensures this runs BEFORE g4t_sync_recipe_meta_from_blocks() at priority 20.
  * Performance optimization: sets transient to skip block parsing in meta-sync.
  *
- * @param int $post_id Post ID being saved.
+ * WHY int|string type hint:
+ * ACF calls acf/save_post with int for posts (e.g. 123) but string for taxonomy
+ * terms (e.g. 'term_18'). We only process posts, so early return for terms.
+ *
+ * @param int|string $post_id Post ID being saved, or 'term_{id}' for taxonomy terms.
  */
-function g4t_sync_acf_to_blocks( int $post_id ): void {
+function g4t_sync_acf_to_blocks( int|string $post_id ): void {
 	static $running = false;
 	if ( $running ) {
 		return;
 	}
 	$running = true;
+
+	// Guard: skip taxonomy term saves (ACF passes 'term_{id}' as string)
+	if ( is_string( $post_id ) ) {
+		$running = false;
+		return;
+	}
 
 	// Guards
 	if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
