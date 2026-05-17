@@ -107,6 +107,43 @@ function g4t_filter_single_context( array $context, array $meta = array(), Go4Ta
 }
 
 /**
+ * Resolve active filter URL params to an array of term objects for display as tags.
+ *
+ * @return array<int, array{name: string, url: string|WP_Error, taxonomy: string}>
+ */
+function g4t_get_active_filter_tags(): array {
+    $param_to_taxonomy = array(
+        'g4t_meal_type'   => G4T_MEAL_TYPE_TAXONOMY,
+        'g4t_prep_time'   => G4T_PREP_TIME_TAXONOMY,
+        'g4t_feature'     => G4T_FEATURE_TAXONOMY,
+        'g4t_ingredients' => G4T_INGREDIENT_TAXONOMY,
+    );
+
+    $tags = array();
+    foreach ( $param_to_taxonomy as $param => $taxonomy ) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        $raw = isset( $_GET[ $param ] ) ? sanitize_text_field( wp_unslash( $_GET[ $param ] ) ) : '';
+        if ( '' === $raw ) {
+            continue;
+        }
+        $slugs = array_filter( array_map( 'sanitize_key', explode( ',', $raw ) ) );
+        foreach ( $slugs as $slug ) {
+            $term = get_term_by( 'slug', $slug, $taxonomy );
+            if ( $term instanceof WP_Term ) {
+                $term_link = get_term_link( $term );
+                $tags[] = array(
+                    'name'     => $term->name,
+                    'url'      => is_wp_error( $term_link ) ? '' : $term_link,
+                    'taxonomy' => $taxonomy,
+                );
+            }
+        }
+    }
+
+    return $tags;
+}
+
+/**
  * Filter the Timber context for recipe archive pages.
  *
  * WHY inject taxonomy term hero data here:
@@ -145,6 +182,8 @@ function g4t_filter_archive_context( array $context, array $meta = array(), Go4T
         }
     }
 
+    $context['recipe_archive']['active_filter_tags'] = g4t_get_active_filter_tags();
+
     return $context;
 }
 
@@ -162,7 +201,8 @@ function g4t_filter_home_context( array $context, array $meta = array(), Go4Tast
     $context['recipes']['scope'] = 'home';
     $context['is_recipe_home']   = true;
     $context['recipe_home']      = array(
-        'post_type' => $strategy['post_type'],
+        'post_type'             => $strategy['post_type'],
+        'active_filter_tags'    => g4t_get_active_filter_tags(),
     );
 
     return $context;
@@ -225,6 +265,8 @@ function g4t_base_context_meta( array $strategy ): array {
         'fallback_used'       => $strategy['fallback_used'],
         'acf_available'       => function_exists( 'get_field' ),
         'wpgraphql_available' => defined( 'GRAPHQL_REQUEST' ) || class_exists( 'WPGraphQL\\Router' ),
+        'facetwp_available'   => function_exists( 'FWP' ) || class_exists( 'FacetWP' ),
+        'facetwp_prefix'      => 'g4t_',
     );
 }
 
