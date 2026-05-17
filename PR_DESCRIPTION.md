@@ -1,3 +1,96 @@
+# Fix taxonomy hero description source and ACF taxonomy term save crash
+
+## Summary
+
+This PR fixes two issues related to taxonomy term editing and taxonomy hero rendering:
+
+1. Removes duplicate ACF term field `short_description` from taxonomy hero settings.
+2. Uses native WordPress taxonomy term description (`$term->description`) as archive hero description source.
+3. Fixes fatal error on `acf/save_post` when ACF saves taxonomy terms and passes a string post id (for example `term_18`).
+
+## Motivation
+
+### 1) Duplicate source of taxonomy description
+
+Taxonomy terms already have a built-in WordPress description field. Keeping a second ACF `short_description` field creates redundant data and inconsistency risk.
+
+### 2) Fatal error while saving taxonomy term ACF fields
+
+ACF triggers `acf/save_post` for both posts and terms.
+For terms, it passes a string id such as `term_18`.
+The plugin proxy method expected only `int`, which caused a TypeError and blocked term save.
+
+## Changes
+
+### ACF field groups
+
+File: `includes/acf/field-groups.php`
+
+- Removed taxonomy hero field:
+  - key: `field_taxonomy_short_description`
+  - name: `short_description`
+
+### Taxonomy hero context mapping
+
+File: `includes/timber/context-filters.php`
+
+- Updated `g4t_get_taxonomy_term_hero_data()`:
+  - replaced hero key `short_description` with `description`
+  - description source is now native `$term->description`
+- Updated function docblock to reflect new hero shape and source rationale.
+
+### ACF save hook type-safety fix
+
+Files:
+- `includes/class-go4taste-recipes-plugin.php`
+- `includes/sync/acf-to-blocks.php`
+
+- Changed method/function signatures from `int` to `int|string`:
+  - `proxy_sync_acf_to_blocks( int|string $post_id )`
+  - `g4t_sync_acf_to_blocks( int|string $post_id )`
+- Added early return guard in `g4t_sync_acf_to_blocks()` for taxonomy term saves:
+  - if `$post_id` is a string (`term_{id}`), skip ACF→blocks post sync.
+
+### Schema contract documentation
+
+File: `SCHEMA_CONTRACT_V1.md`
+
+- Updated taxonomy hero contract:
+  - replaced `short_description` with `description`
+  - documented source column (ACF vs native WordPress)
+  - clarified description origin: `$term->description`
+
+## Validation
+
+### Functional
+
+- Saving taxonomy terms with ACF taxonomy hero fields no longer crashes.
+- Taxonomy archive hero description reads from native term description.
+
+### Static checks
+
+- `php -l includes/class-go4taste-recipes-plugin.php`
+- `php -l includes/sync/acf-to-blocks.php`
+- `php -l includes/timber/context-filters.php`
+- `php -l includes/acf/field-groups.php`
+
+All changed files passed syntax checks.
+
+## Backward compatibility
+
+- Change is additive-safe for rendering logic on archive hero level.
+- Existing `short_description` ACF term meta is no longer read.
+- Term descriptions should now be maintained in WordPress native taxonomy description field.
+
+## Risks
+
+- Theme templates still referencing `hero.short_description` must be updated to `hero.description`.
+
+## Rollback
+
+If needed, rollback this PR by reverting commit:
+
+- `0130c4a`
 # Dual UI Support: Add ACF Field Groups for Recipe Content
 
 ## Motivation
