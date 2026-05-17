@@ -137,6 +137,14 @@ function g4t_filter_archive_context( array $context, array $meta = array(), Go4T
         $context['is_recipe_archive'] = true;
     }
 
+    // Inject total post count from WP_Query (available via posts.count in Timber)
+    if ( isset( $context['posts'] ) && is_array( $context['posts'] ) && ! empty( $context['posts'] ) ) {
+        $wp_query = $GLOBALS['wp_query'] ?? null;
+        if ( $wp_query instanceof WP_Query ) {
+            $context['recipe_archive']['total_posts'] = (int) $wp_query->found_posts;
+        }
+    }
+
     // Inject taxonomy term hero data for tax archives
     if ( is_tax() ) {
         $queried_object = get_queried_object();
