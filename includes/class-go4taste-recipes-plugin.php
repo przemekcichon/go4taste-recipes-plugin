@@ -38,6 +38,7 @@ require_once __DIR__ . '/view-model/normalizers.php';
 require_once __DIR__ . '/view-model/builder.php';
 require_once __DIR__ . '/admin/settings-page.php';
 require_once __DIR__ . '/admin/reverse-sync.php';
+require_once __DIR__ . '/integrations/facetwp.php';
 require_once __DIR__ . '/timber/context-filters.php';
 
 class Go4Taste_Recipes_Plugin {
@@ -72,6 +73,10 @@ class Go4Taste_Recipes_Plugin {
         add_filter( 'go4taste/recipes/use_archive_template', array( $this, 'proxy_filter_use_archive_template' ), 10, 2 );
         add_filter( 'go4taste/recipes/home_query_args', array( $this, 'proxy_filter_home_query_args' ), 10, 1 );
         add_filter( 'go4taste/recipes/source_post_type', array( $this, 'proxy_filter_source_post_type' ), 10, 1 );
+        add_filter( 'facetwp_is_main_query', array( $this, 'proxy_filter_facetwp_is_main_query' ), 10, 2 );
+        add_filter( 'facetwp_preload_url_vars', array( $this, 'proxy_filter_facetwp_preload_url_vars' ), 10, 1 );
+        add_filter( 'facetwp_query_args', array( $this, 'proxy_filter_facetwp_query_args' ), 10, 2 );
+        add_filter( 'facetwp_template_use_archive', array( $this, 'proxy_filter_facetwp_template_use_archive' ), 10, 1 );
         add_filter( 'register_post_type_args',          array( $this, 'proxy_register_post_type_args' ), 10, 2 );
     }
 
@@ -243,6 +248,54 @@ class Go4Taste_Recipes_Plugin {
 
     public function proxy_filter_source_post_type( string $post_type = 'post' ): string {
         return g4t_filter_source_post_type( $post_type, $this );
+    }
+
+    /**
+     * @param bool     $is_main_query
+     * @param WP_Query $query
+     */
+    public function proxy_filter_facetwp_is_main_query( bool $is_main_query, WP_Query $query ): bool {
+        if ( function_exists( 'g4t_filter_facetwp_is_main_query' ) ) {
+            return g4t_filter_facetwp_is_main_query( $is_main_query, $query, $this );
+        }
+
+        return $is_main_query;
+    }
+
+    /**
+     * @param array<string,mixed> $url_vars
+     * @return array<string,mixed>
+     */
+    public function proxy_filter_facetwp_preload_url_vars( array $url_vars ): array {
+        if ( function_exists( 'g4t_filter_facetwp_preload_url_vars' ) ) {
+            return g4t_filter_facetwp_preload_url_vars( $url_vars, $this );
+        }
+
+        return $url_vars;
+    }
+
+    /**
+     * @param array<string,mixed> $query_args
+     * @param mixed               $facetwp
+     * @return array<string,mixed>
+     */
+    public function proxy_filter_facetwp_query_args( array $query_args, $facetwp ): array {
+        if ( function_exists( 'g4t_filter_facetwp_query_args' ) ) {
+            return g4t_filter_facetwp_query_args( $query_args, $facetwp, $this );
+        }
+
+        return $query_args;
+    }
+
+    /**
+     * @param bool $use_archive
+     */
+    public function proxy_filter_facetwp_template_use_archive( bool $use_archive ): bool {
+        if ( function_exists( 'g4t_filter_facetwp_template_use_archive' ) ) {
+            return g4t_filter_facetwp_template_use_archive( $use_archive, $this );
+        }
+
+        return $use_archive;
     }
 
     /**
