@@ -160,13 +160,19 @@ function g4t_get_active_filter_tags(): array {
  */
 function g4t_filter_archive_context( array $context, array $meta = array(), Go4Taste_Recipes_Plugin $plugin ): array {
     $strategy = $plugin->resolve_source_strategy();
+    $queried_object = get_queried_object();
+    $archive_description = '';
+
+    if ( $queried_object instanceof WP_Term ) {
+        $archive_description = trim( (string) $queried_object->description );
+    }
 
     $context['recipes']                              = g4t_base_context_meta( $strategy );
     $context['recipes']['scope']                     = 'archive';
     $context['recipes']['use_archive_recipe_template'] = g4t_should_use_archive_recipe_template( $strategy );
     $context['recipe_archive']                       = array(
         'title'       => isset( $context['title'] ) ? (string) $context['title'] : '',
-        'description' => trim( (string) term_description() ),
+        'description' => $archive_description,
         'post_type'   => $strategy['post_type'],
     );
 
@@ -174,9 +180,8 @@ function g4t_filter_archive_context( array $context, array $meta = array(), Go4T
         $context['is_recipe_archive'] = true;
     }
 
-    // Inject taxonomy term hero data for tax archives
-    if ( is_tax() ) {
-        $queried_object = get_queried_object();
+    // Inject taxonomy term hero data for all term archives (custom tax, category, tag).
+    if ( is_tax() || is_category() || is_tag() ) {
         if ( $queried_object instanceof WP_Term ) {
             $context['recipe_archive']['hero'] = g4t_get_taxonomy_term_hero_data( $queried_object );
         }
