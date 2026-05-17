@@ -196,11 +196,10 @@ $context = [
     
     'is_recipe_archive' => (bool),  // true if post-type archive or related taxonomy
     'recipe_archive'    => [
-        'title'        => (string),   // archive title (category name, taxonomy label, etc.)
-        'description'  => (string),   // archive description (term description)
-        'post_type'    => (string),   // source post type key
-        'total_posts'  => (int),      // TOTAL count of posts in archive (from wp_query->found_posts), used for counter display
-        'hero'         => [ /* taxonomy term hero data, see below */ ], // ONLY for taxonomy archives
+        'title'       => (string),   // archive title (category name, taxonomy label, etc.)
+        'description' => (string),   // archive description (term description)
+        'post_type'   => (string),   // source post type key
+        'hero'        => [ /* taxonomy term hero data, see below */ ], // ONLY for taxonomy archives
     ],
 ];
 ```
