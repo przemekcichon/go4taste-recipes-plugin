@@ -68,19 +68,9 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
 
     $normalized_ingredients = ( ! empty( $data['ingredients'] ) && is_array( $data['ingredients'] ) ) ? $data['ingredients'] : array();
 
-    $ads_products_raw = g4t_acf_field( 'recipe_ads_products', $post_id, array() );
-    $ads_product_ids  = array();
-    if ( is_array( $ads_products_raw ) ) {
-        foreach ( $ads_products_raw as $row ) {
-            if ( ! is_array( $row ) || ! isset( $row['product_id'] ) ) {
-                continue;
-            }
-
-            $product_id = trim( (string) $row['product_id'] );
-            if ( '' !== $product_id ) {
-                $ads_product_ids[] = $product_id;
-            }
-        }
+    $ads_product_ids = g4t_get_ads_product_ids_from_block_data( $block_data );
+    if ( empty( $ads_product_ids ) ) {
+        $ads_product_ids = g4t_get_ads_product_ids_from_acf( $post_id );
     }
 
     return array(
@@ -119,6 +109,71 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
             'enabled'            => ! empty( $ads_product_ids ),
         ),
     );
+}
+
+/**
+ * Extract ads product IDs from parsed block data.
+ *
+ * @param array<string,mixed> $block_data Parsed recipe blocks data.
+ * @return array<int,string>
+ */
+function g4t_get_ads_product_ids_from_block_data( array $block_data ): array {
+    $raw_ids = array();
+
+    if ( isset( $block_data['ads_product_ids'] ) && is_array( $block_data['ads_product_ids'] ) ) {
+        $raw_ids = $block_data['ads_product_ids'];
+    }
+
+    return g4t_normalize_ads_product_ids( $raw_ids );
+}
+
+/**
+ * Extract ads product IDs from legacy ACF/meta repeater.
+ *
+ * @param int $post_id Post ID.
+ * @return array<int,string>
+ */
+function g4t_get_ads_product_ids_from_acf( int $post_id ): array {
+    $ads_products_raw = g4t_acf_field( 'recipe_ads_products', $post_id, array() );
+    $raw_ids          = array();
+
+    if ( is_array( $ads_products_raw ) ) {
+        foreach ( $ads_products_raw as $row ) {
+            if ( is_array( $row ) && isset( $row['product_id'] ) ) {
+                $raw_ids[] = $row['product_id'];
+            }
+        }
+    }
+
+    return g4t_normalize_ads_product_ids( $raw_ids );
+}
+
+/**
+ * Normalize ads product ID values to a unique, ordered list of strings.
+ *
+ * @param array<int,mixed> $raw_ids Raw ids from blocks/meta.
+ * @return array<int,string>
+ */
+function g4t_normalize_ads_product_ids( array $raw_ids ): array {
+    $normalized = array();
+
+    foreach ( $raw_ids as $raw_id ) {
+        if ( is_scalar( $raw_id ) ) {
+            $product_id = trim( (string) $raw_id );
+        } elseif ( is_array( $raw_id ) && isset( $raw_id['id'] ) && is_scalar( $raw_id['id'] ) ) {
+            $product_id = trim( (string) $raw_id['id'] );
+        } elseif ( is_array( $raw_id ) && isset( $raw_id['product_id'] ) && is_scalar( $raw_id['product_id'] ) ) {
+            $product_id = trim( (string) $raw_id['product_id'] );
+        } else {
+            $product_id = '';
+        }
+
+        if ( '' !== $product_id ) {
+            $normalized[] = $product_id;
+        }
+    }
+
+    return array_values( array_unique( $normalized ) );
 }
 
 /**

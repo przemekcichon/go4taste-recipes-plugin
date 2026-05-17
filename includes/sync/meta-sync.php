@@ -349,6 +349,7 @@ function g4t_get_recipe_blocks_data( WP_Post $post ): array {
         '_has_hero_block'        => false,
         '_has_ingredients_block' => false,
         '_has_steps_block'       => false,
+        'ads_product_ids'        => array(),
         'lead'                   => '',
         'difficulty'             => '',
         'servings_value'         => null,
@@ -421,6 +422,19 @@ function g4t_get_recipe_blocks_data( WP_Post $post ): array {
             }
         }
 
+        if ( 'go4taste-ads/inline-banner' === $block['blockName'] ) {
+            $products = isset( $attrs['products'] ) && is_array( $attrs['products'] ) ? $attrs['products'] : array();
+            foreach ( $products as $product_entry ) {
+                $normalized_id = g4t_extract_ads_product_id( $product_entry );
+                if ( '' !== $normalized_id ) {
+                    $result['ads_product_ids'][] = $normalized_id;
+                }
+            }
+            if ( ! empty( $result['ads_product_ids'] ) ) {
+                $result['ads_product_ids'] = array_values( array_unique( $result['ads_product_ids'] ) );
+            }
+        }
+
         if ( 'go4taste-recipes/notes' === $block['blockName'] ) {
             $result['_has_recipe_blocks'] = true;
             $result['tips']         = isset( $attrs['tips'] ) ? (string) $attrs['tips'] : $result['tips'];
@@ -441,6 +455,34 @@ function g4t_get_recipe_blocks_data( WP_Post $post ): array {
     }
 
     return $result;
+}
+
+/**
+ * Extract a product ID from inline-banner products attribute entry.
+ *
+ * Supported entry shapes:
+ * - scalar id: "123" / 123
+ * - object-like arrays: ['id' => '123'] or ['product_id' => '123']
+ *
+ * @param mixed $product_entry Product entry from block attrs.
+ * @return string
+ */
+function g4t_extract_ads_product_id( $product_entry ): string {
+    if ( is_scalar( $product_entry ) ) {
+        return trim( (string) $product_entry );
+    }
+
+    if ( is_array( $product_entry ) ) {
+        if ( isset( $product_entry['id'] ) && is_scalar( $product_entry['id'] ) ) {
+            return trim( (string) $product_entry['id'] );
+        }
+
+        if ( isset( $product_entry['product_id'] ) && is_scalar( $product_entry['product_id'] ) ) {
+            return trim( (string) $product_entry['product_id'] );
+        }
+    }
+
+    return '';
 }
 
 /**
