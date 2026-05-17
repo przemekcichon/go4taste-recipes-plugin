@@ -1,66 +1,36 @@
-﻿# FacetWP Integration and Active Filter Tags for Recipes Plugin
+﻿# PR: Zachowanie atrybutow bloku ads w ACF sync i odczyt product IDs z tresci bloku
 
-## Summary
+**Branch:** `feature/ads-block-sync-and-product-ids` -> `main`
 
-This PR adds first-class FacetWP integration in the recipes plugin and extends Timber context with active filter tags used by archive/home hero UI.
+## Motywacja
 
-## Motivation
+Po wybraniu produktow w bloku `go4taste-ads/inline-banner` i zapisaniu przez ACF, produkty znikaly po odswiezeniu. Przyczyną bylo to, ze sync ACF->bloki w `acf-to-blocks.php` zawsze nadpisywal blok ads pustym komentarzem `<!-- wp:go4taste-ads/inline-banner /-->`, kasujac atrybut `products`. Niezaleznie od tego, view model pluginu odczytywal ID produktow wylacznie z ACF meta (`recipe_ads_products`), a nie z atrybutow bloku.
 
-The quick actions filter flow needs plugin-level integration points to keep FacetWP behavior aligned with recipe listing requests and to expose active taxonomy filters in a reusable context contract.
+Dodatkowo przy parsowaniu atrybutu `products` (tablica obiektow `{id, name, ...}`) wykonywany byl rzut `(string)` na cala tablice, generujac `Warning: Array to string conversion` x N.
 
-## Changes
+## Zakres zmian
 
-### 1. New FacetWP integration module
+### `includes/sync/acf-to-blocks.php`
+- Zastapiono hardcodowane `<!-- wp:go4taste-ads/inline-banner /-->` wywolaniem `g4t_build_inline_banner_block_from_existing_content()`.
+- Helper parsuje aktualna tresc posta i serializuje istniejacy blok ads z jego atrybutami (produkty zostaja zachowane).
+- Dodano `g4t_find_inline_banner_block()` — rekurencyjne wyszukiwanie bloku w drzewie blokow.
 
-File: `includes/integrations/facetwp.php`
+### `includes/sync/meta-sync.php`
+- W `g4t_get_recipe_blocks_data()` dodano obsluge bloku `go4taste-ads/inline-banner`: ekstrahuje ID produktow z atrybutu `products` do klucza `ads_product_ids`.
+- Dodano `g4t_extract_ads_product_id()` — bezpieczne wyciaganie ID z formatow: scalar, `['id' => ...]`, `['product_id' => ...]`. Eliminuje `Array to string conversion`.
 
-- Added request target detection for recipe listing views.
-- Added FacetWP hook callbacks for:
-  - `facetwp_is_main_query`
-  - `facetwp_preload_url_vars`
-  - `facetwp_query_args`
-  - `facetwp_template_use_archive`
-- Normalizes URL vars and enforces the resolved recipe source post type for FacetWP queries.
+### `includes/view-model/builder.php`
+- `g4t_build_single_recipe_view_model()` — ID produktow pobierane najpierw z `block_data['ads_product_ids']`, dopiero potem fallback do ACF meta.
+- Dodano pomocniki `g4t_get_ads_product_ids_from_block_data()`, `g4t_get_ads_product_ids_from_acf()`, `g4t_normalize_ads_product_ids()`.
 
-### 2. Orchestrator hook wiring
+## Weryfikacja
 
-File: `includes/class-go4taste-recipes-plugin.php`
+- Produkty wybrane w edytorze nie znikaja po zapisie przez ACF.
+- Brak `Warning: Array to string conversion` w logach PHP.
+- Posty bez bloku ads lub bez wybranych produktow renderuja sie bez zmian.
+- Importowane posty bez bloku nadal korzystaja z fallbacku ACF meta.
 
-- Added module include for `includes/integrations/facetwp.php`.
-- Registered hook proxies for all FacetWP filters listed above.
-- Kept orchestration-only responsibility in class layer via proxy methods.
+## Brak breaking changes
 
-### 3. Active filter tags in Timber context
-
-File: `includes/timber/context-filters.php`
-
-- Added `g4t_get_active_filter_tags()` to resolve active URL facet params to term tag objects.
-- Added `recipe_archive.active_filter_tags`.
-- Added `recipe_home.active_filter_tags`.
-- Extended base meta with `facetwp_available` and `facetwp_prefix` fields.
-
-## Validation
-
-- Verified plugin changes are limited to:
-  - `includes/integrations/facetwp.php`
-  - `includes/class-go4taste-recipes-plugin.php`
-  - `includes/timber/context-filters.php`
-- Confirmed active tags are available for both archive and home contexts.
-- Confirmed FacetWP callbacks are registered through orchestrator proxies.
-
-## Backward Compatibility
-
-- Additive change only.
-- Existing context fields remain intact.
-- New context keys are optional for consumers.
-
-## Risks
-
-- Low risk.
-- Main risk area is interaction with existing FacetWP site config; mitigated by target-request checks and conservative query arg normalization.
-
-## Rollback
-
-Revert commit:
-
-- `f7ecaf5`
+- Kolejnosc priorytetow: block data > ACF meta (bez zmian w stosunku do pozostalych pol).
+- `g4t_fetch_ads_products()` wywoluje sie tylko gdy sa ID do pobrania.
