@@ -74,7 +74,7 @@ function g4t_sync_acf_to_blocks( int|string $post_id ): void {
 		'',
 		g4t_build_source_block_from_acf( $post_id ),
 		'',
-		'<!-- wp:go4taste-ads/inline-banner /-->',
+		g4t_build_inline_banner_block_from_existing_content( $post_id ),
 	);
 
 	$post_content = implode( "\n", $blocks );
@@ -223,4 +223,66 @@ function g4t_build_steps_block_from_acf( int $post_id ): string {
 	$steps_json = wp_json_encode( $steps, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
 	return '<!-- wp:go4taste-recipes/steps {"stepsList":' . $steps_json . '} /-->';
+}
+
+/**
+ * Preserve the existing inline-banner block (with attributes) during ACF sync.
+ *
+ * WHY this helper exists:
+ *
+ * ACF->blocks rebuild previously appended an empty inline-banner block comment,
+ * which removed selected products from block attributes on the next save.
+ * This helper keeps the existing block instance when available.
+ *
+ * @param int $post_id Post ID.
+ * @return string Block markup.
+ */
+function g4t_build_inline_banner_block_from_existing_content( int $post_id ): string {
+	$default_block = '<!-- wp:go4taste-ads/inline-banner /-->';
+
+	if ( ! function_exists( 'parse_blocks' ) || ! function_exists( 'serialize_block' ) ) {
+		return $default_block;
+	}
+
+	$post = get_post( $post_id );
+	if ( ! $post instanceof WP_Post ) {
+		return $default_block;
+	}
+
+	$found = g4t_find_inline_banner_block( parse_blocks( (string) $post->post_content ) );
+
+	if ( null === $found ) {
+		return $default_block;
+	}
+
+	return serialize_block( $found );
+}
+
+/**
+ * Recursively find the first go4taste-ads/inline-banner block.
+ *
+ * @param array<int,array<string,mixed>> $blocks Parsed block tree.
+ * @return array<string,mixed>|null
+ */
+function g4t_find_inline_banner_block( array $blocks ): ?array {
+	foreach ( $blocks as $block ) {
+		if ( ! is_array( $block ) ) {
+			continue;
+		}
+
+		$block_name = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
+		if ( 'go4taste-ads/inline-banner' === $block_name ) {
+			return $block;
+		}
+
+		$inner_blocks = isset( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ? $block['innerBlocks'] : array();
+		if ( ! empty( $inner_blocks ) ) {
+			$nested_found = g4t_find_inline_banner_block( $inner_blocks );
+			if ( null !== $nested_found ) {
+				return $nested_found;
+			}
+		}
+	}
+
+	return null;
 }
