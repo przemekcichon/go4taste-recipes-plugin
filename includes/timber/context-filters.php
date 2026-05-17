@@ -472,8 +472,14 @@ function g4t_analyze_block_content( string $content ): array {
  * The canonical format is 'term_' . $term_id (e.g. 'term_123') to tell ACF
  * we're querying a term, not a post or option.
  *
+ * WHY description comes from $term->description:
+ *
+ * WordPress taxonomies have a built-in description field accessible via
+ * $term->description. There is no need for a duplicate ACF field. This
+ * ensures consistency with WordPress core taxonomy UI and reduces redundancy.
+ *
  * @param WP_Term $term The queried taxonomy term.
- * @return array<string,mixed> Hero data with keys: icon, title_suffix, short_description, hero_image, short_claim, blog_posts.
+ * @return array<string,mixed> Hero data with keys: icon, title_suffix, description, hero_image, short_claim, blog_posts.
  */
 function g4t_get_taxonomy_term_hero_data( WP_Term $term ): array {
     $term_identifier = 'term_' . $term->term_id;
@@ -481,12 +487,12 @@ function g4t_get_taxonomy_term_hero_data( WP_Term $term ): array {
     // Safe default if ACF not available
     if ( ! function_exists( 'get_field' ) ) {
         return array(
-            'icon'              => null,
-            'title_suffix'      => '',
-            'short_description' => '',
-            'hero_image'        => null,
-            'short_claim'       => '',
-            'blog_posts'        => array(),
+            'icon'         => null,
+            'title_suffix' => '',
+            'description'  => ! empty( $term->description ) ? $term->description : '',
+            'hero_image'   => null,
+            'short_claim'  => '',
+            'blog_posts'   => array(),
         );
     }
 
@@ -494,12 +500,12 @@ function g4t_get_taxonomy_term_hero_data( WP_Term $term ): array {
     $hero_image_field  = get_field( 'hero_image', $term_identifier );
 
     return array(
-        'icon'              => is_array( $icon_field ) ? $icon_field : null,
-        'title_suffix'      => (string) ( get_field( 'title_suffix', $term_identifier ) ?: '' ),
-        'short_description' => (string) ( get_field( 'short_description', $term_identifier ) ?: '' ),
-        'hero_image'        => is_array( $hero_image_field ) ? $hero_image_field : null,
-        'short_claim'       => (string) ( get_field( 'short_claim', $term_identifier ) ?: '' ),
-        'blog_posts'        => g4t_normalize_term_blog_posts( (array) get_field( 'blog_posts', $term_identifier ) ),
+        'icon'         => is_array( $icon_field ) ? $icon_field : null,
+        'title_suffix' => (string) ( get_field( 'title_suffix', $term_identifier ) ?: '' ),
+        'description'  => ! empty( $term->description ) ? (string) $term->description : '',
+        'hero_image'   => is_array( $hero_image_field ) ? $hero_image_field : null,
+        'short_claim'  => (string) ( get_field( 'short_claim', $term_identifier ) ?: '' ),
+        'blog_posts'   => g4t_normalize_term_blog_posts( (array) get_field( 'blog_posts', $term_identifier ) ),
     );
 }
 

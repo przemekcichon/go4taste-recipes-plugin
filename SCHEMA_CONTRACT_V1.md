@@ -206,7 +206,7 @@ $context = [
 
 ### Taxonomy Term Hero Data (Archive Context Only)
 
-For taxonomy archive pages (e.g., `/typ-dania/sniadanie/`), `$context['recipe_archive']['hero']` contains custom hero area settings from ACF term meta fields.
+For taxonomy archive pages (e.g., `/typ-dania/sniadanie/`), `$context['recipe_archive']['hero']` contains custom hero area settings from ACF term meta fields and native WordPress taxonomy fields.
 
 **PHP Type:** `array<string, mixed>`  
 **ACF Fields:** Optional (if ACF not active or fields not set, returns safe defaults)  
@@ -216,15 +216,15 @@ For taxonomy archive pages (e.g., `/typ-dania/sniadanie/`), `$context['recipe_ar
 
 ```php
 $hero = [
-    'icon'              => (array|null),    // ACF image field (array with 'url', 'alt', 'width', 'height') or null
-    'title_suffix'      => (string),        // Text to append to "Przepisy" (e.g., "na śniadanie")
-    'short_description' => (string),        // Brief intro text (textarea, nullable, can be empty string)
-    'hero_image'        => (array|null),    // ACF image field (array) or null; has default_value placeholder URL
-    'short_claim'       => (string),        // Tagline (e.g., "Dobry start dnia"), nullable, can be empty string
-    'blog_posts'        => [                // Array of related blog posts (repeater)
+    'icon'         => (array|null),    // ACF image field (array with 'url', 'alt', 'width', 'height') or null
+    'title_suffix' => (string),        // ACF field: text to append to "Przepisy" (e.g., "na śniadanie")
+    'description'  => (string),        // Native WP taxonomy description ($term->description), nullable, can be empty string
+    'hero_image'   => (array|null),    // ACF image field (array) or null; has default_value placeholder URL
+    'short_claim'  => (string),        // ACF field: tagline (e.g., "Dobry start dnia"), nullable, can be empty string
+    'blog_posts'   => [                // ACF repeater: array of related blog posts
         [
             'title' => (string),            // Blog post title (required, non-empty)
-            'url'   => (string),            // Blog post URL (validatedesc_url_raw, required, non-empty)
+            'url'   => (string),            // Blog post URL (validated esc_url_raw, required, non-empty)
         ],
         // ... more blog posts
     ],
@@ -233,14 +233,14 @@ $hero = [
 
 **Nullability Rules:**
 
-| Field | Nullable | Default if empty |
-|-------|----------|------------------|
-| `icon` | ✅ YES | `null` |
-| `title_suffix` | ❌ NO | `""` (empty string) |
-| `short_description` | ❌ NO | `""` (empty string) |
-| `hero_image` | ✅ YES | `null` (ACF has default_value for placeholder) |
-| `short_claim` | ❌ NO | `""` (empty string) |
-| `blog_posts` | ❌ NO | `[]` (empty array) |
+| Field | Nullable | Default if empty | Source |
+|-------|----------|------------------|--------|
+| `icon` | ✅ YES | `null` | ACF field `hero_icon` |
+| `title_suffix` | ❌ NO | `""` (empty string) | ACF field `title_suffix` |
+| `description` | ❌ NO | `""` (empty string) | Native WordPress `$term->description` |
+| `hero_image` | ✅ YES | `null` (ACF has default_value for placeholder) | ACF field `hero_image` |
+| `short_claim` | ❌ NO | `""` (empty string) | ACF field `short_claim` |
+| `blog_posts` | ❌ NO | `[]` (empty array) | ACF repeater `blog_posts` |
 
 **Data Normalization:**
 

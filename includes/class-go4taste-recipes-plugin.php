@@ -161,7 +161,7 @@ class Go4Taste_Recipes_Plugin {
         g4t_sync_recipe_meta_from_blocks( $post_id, $post, $update, $this );
     }
 
-    public function proxy_sync_acf_to_blocks( int $post_id ): void {
+    public function proxy_sync_acf_to_blocks( int|string $post_id ): void {
         g4t_sync_acf_to_blocks( $post_id );
     }
 

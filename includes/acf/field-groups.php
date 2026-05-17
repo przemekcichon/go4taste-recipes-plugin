@@ -531,15 +531,6 @@ function g4t_register_acf_fields( Go4Taste_Recipes_Plugin $plugin ): void {
                     'placeholder'  => 'na śniadanie',
                 ),
                 array(
-                    'key'          => 'field_taxonomy_short_description',
-                    'label'        => 'Short Description',
-                    'name'         => 'short_description',
-                    'type'         => 'textarea',
-                    'instructions' => 'Brief intro text displayed below the title',
-                    'rows'         => 3,
-                    'maxlength'    => 250,
-                ),
-                array(
                     'key'           => 'field_taxonomy_hero_image',
                     'label'         => 'Hero Image',
                     'name'          => 'hero_image',
