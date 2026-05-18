@@ -72,6 +72,13 @@ function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $up
         return;
     }
 
+    // Mark this post as recently Gutenberg-saved so the immediately-following
+    // ACF meta box POST (which carries stale $_POST['acf'] values from page load)
+    // cannot overwrite the new blocks via g4t_sync_acf_to_blocks().
+    if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+        set_transient( "g4t_rest_save_{$post_id}", true, 30 );
+    }
+
     $block_data = g4t_get_recipe_blocks_data( $post );
     if ( empty( $block_data['_has_recipe_blocks'] ) ) {
         g4t_sync_ingredient_taxonomy_from_existing_meta( $post_id );
@@ -102,9 +109,6 @@ function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $up
 
     g4t_sync_ingredients_repeater_meta( $post_id, $ingredients );
     g4t_sync_steps_repeater_meta( $post_id, $steps );
-
-    // Track that this edit came from blocks
-    g4t_track_edit_source( $post_id, 'blocks' );
 
     $running = false;
 }
