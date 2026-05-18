@@ -64,7 +64,6 @@ class Go4Taste_Recipes_Plugin {
         add_action( 'admin_init', array( $this, 'proxy_register_settings' ) );
         add_action( 'admin_menu', array( $this, 'proxy_register_options_page' ) );
         add_action( 'admin_notices', array( $this, 'proxy_render_dependency_notices' ) );
-        add_action( 'admin_notices', array( $this, 'proxy_show_ui_switch_notice' ) );
         add_action( 'admin_post_g4t_reverse_sync', array( $this, 'proxy_handle_reverse_sync' ) );
 
         add_filter( 'go4taste/recipes/context/single',  array( $this, 'proxy_filter_single_context' ), 10, 2 );
@@ -167,7 +166,7 @@ class Go4Taste_Recipes_Plugin {
     }
 
     public function proxy_sync_acf_to_blocks( int|string $post_id ): void {
-        g4t_sync_acf_to_blocks( $post_id );
+        g4t_sync_acf_to_blocks( $post_id, $this );
     }
 
     public function proxy_register_settings(): void {
@@ -193,10 +192,6 @@ class Go4Taste_Recipes_Plugin {
 
     public function proxy_render_dependency_notices(): void {
         g4t_render_dependency_notices( $this );
-    }
-
-    public function proxy_show_ui_switch_notice(): void {
-        g4t_maybe_show_ui_switch_notice();
     }
 
     public function proxy_handle_reverse_sync(): void {

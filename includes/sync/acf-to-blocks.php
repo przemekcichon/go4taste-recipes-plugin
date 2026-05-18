@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @param int|string $post_id Post ID being saved, or 'term_{id}' for taxonomy terms.
  */
-function g4t_sync_acf_to_blocks( int|string $post_id ): void {
+function g4t_sync_acf_to_blocks( int|string $post_id, Go4Taste_Recipes_Plugin $plugin ): void {
 	static $running = false;
 	if ( $running ) {
 		return;
@@ -51,6 +51,25 @@ function g4t_sync_acf_to_blocks( int|string $post_id ): void {
 
 	// Guards
 	if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+		$running = false;
+		return;
+	}
+
+	// Never run during REST API requests (Gutenberg saves always use REST).
+	// Belt-and-suspenders guard: ACF Pro 6.x can fire acf/save_post during REST
+	// saves with $_POST['acf'] populated, which would fool g4t_detect_save_source().
+	if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+		$running = false;
+		return;
+	}
+
+	// Skip if this post was just saved via Gutenberg REST API.
+	// After the REST PUT, Gutenberg sends a follow-up meta box form POST
+	// ($_POST['acf'] set, REST_REQUEST false) containing stale field values
+	// from when the page loaded. Without this guard those stale values would
+	// rebuild blocks from old meta and overwrite the blocks the REST PUT saved.
+	if ( get_transient( "g4t_rest_save_{$post_id}" ) ) {
+		delete_transient( "g4t_rest_save_{$post_id}" );
 		$running = false;
 		return;
 	}
@@ -83,7 +102,7 @@ function g4t_sync_acf_to_blocks( int|string $post_id ): void {
 	set_transient( "g4t_acf_save_{$post_id}", true, 60 );
 
 	// Disable block→meta sync to avoid loop
-	remove_action( 'save_post', 'g4t_sync_recipe_meta_from_blocks', 20 );
+	remove_action( 'save_post', array( $plugin, 'proxy_sync_meta' ), 20 );
 
 	$result = wp_update_post(
 		array(
@@ -103,10 +122,7 @@ function g4t_sync_acf_to_blocks( int|string $post_id ): void {
 	}
 
 	// Re-enable (for future saves)
-	add_action( 'save_post', 'g4t_sync_recipe_meta_from_blocks', 20, 4 );
-
-	// Track that this edit came from ACF
-	g4t_track_edit_source( $post_id, 'acf' );
+	add_action( 'save_post', array( $plugin, 'proxy_sync_meta' ), 20, 3 );
 
 	$running = false;
 }
