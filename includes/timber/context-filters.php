@@ -317,10 +317,6 @@ function g4t_is_recipe_debug_enabled(): bool {
         return false;
     }
 
-    if ( function_exists( 'wp_get_environment_type' ) && 'local' === wp_get_environment_type() ) {
-        return true;
-    }
-
     if ( ! function_exists( 'current_user_can' ) ) {
         return false;
     }
