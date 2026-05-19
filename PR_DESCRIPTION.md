@@ -1,50 +1,78 @@
-﻿# PR: Fix stale ACF overwrite after Gutenberg REST save
+﻿# PR: Support textual ingredient amounts and schema v2
 
-**Branch:** `feature/archive-description-markup-fix` -> `main`
+**Branch:** `feature/ingredient-amount-text-v2` -> `main`
 
 ## Motywacja
 
-Przy zapisie przepisu z edytora blokowego nowa tresc `post_content` potrafila zostac nadpisana starsza trescia z momentu otwarcia wpisu.
+Aktualne pole ingredient amount bylo traktowane jako wartosc numeryczna (float), co blokowalo poprawne wpisy kulinarne typu:
+- `1/3`
+- `1 1/2`
+- `szczypta`
 
-Scenariusz problemowy:
-1. Gutenberg zapisuje nowe bloki przez REST (`REST PUT`) -> `post_content` jest poprawnie aktualizowany.
-2. Nastepnie Gutenberg wysyla formularz meta boxow (z `$_POST['acf']`) ze starymi wartosciami.
-3. `g4t_sync_acf_to_blocks()` traktowal ten drugi request jako zapis ACF i przebudowywal bloki z nieaktualnej mety.
-4. Efekt: nowe bloki byly nadpisywane starym stanem.
+Wymaganiem biznesowym jest pelne wsparcie ilosci tekstowych w calym przeplywie danych (ACF -> sync -> view model -> frontend).
 
 ## Zakres zmian
 
+### `includes/acf/field-groups.php`
+- Pole `field_ingredient_amount` zmieniono z `number` na `text`.
+- Usunieto `step` i dodano placeholder z przykladowymi wartosciami.
+
+### `includes/view-model/normalizers.php`
+- `g4t_normalize_ingredients_list()` nie castuje juz `amount` do `float`.
+- Nowa semantyka:
+	- pusty string po trim -> `null`
+	- niepusty string -> zachowany jako `string`
+
 ### `includes/sync/meta-sync.php`
-- Dodano transient `g4t_rest_save_{post_id}` ustawiany podczas zapisu REST (`REST_REQUEST`).
-- Transient jest krotkotrwaly (30s) i sluzy jako znacznik, ze post zostal wlasnie zapisany przez Gutenberg.
+- `g4t_load_ingredients_repeater_meta()` nie wymusza juz `is_numeric()`.
+- `amount` ladowane i zwracane jako `string|null`.
 
-### `includes/sync/acf-to-blocks.php`
-- Zmieniono sygnature `g4t_sync_acf_to_blocks(...)`, aby przyjmowala instancje pluginu i mogla poprawnie operowac na proxy hookach.
-- Dodano guard: natychmiastowy return dla requestow REST.
-- Dodano guard na transient `g4t_rest_save_{post_id}`: follow-up POST z meta boxow jest ignorowany, aby nie nadpisac nowo zapisanych blokow.
-- Poprawiono `remove_action/add_action` dla `save_post`: teraz uzywa proxy metody klasy (`array($plugin, 'proxy_sync_meta')`), zgodnie z rzeczywista rejestracja hooka.
-- Usunieto nieuzywany tracking edit source z tej sciezki.
+### `includes/sync/converters.php`
+- `g4t_convert_ingredients_meta_to_array()` nie wykonuje `floatval()`.
+- `amount` jest zachowywane jako tekst (po sanitize/trim) dla sciezki meta -> blocks.
 
-### `includes/class-go4taste-recipes-plugin.php`
-- `proxy_sync_acf_to_blocks()` przekazuje instancje pluginu do `g4t_sync_acf_to_blocks()`.
-- Usunieto hook i proxy metody zwiazane z UI switch notice (nieuzywana sciezka po cleanupie).
+### `includes/view-model/builder.php`
+- Aktualizacja odniesien dokumentacyjnych z `SCHEMA_CONTRACT_V1.md` na `SCHEMA_CONTRACT_V2.md`.
 
-### Cleanup
+### `includes/registration/blocks.php`
+- Aktualizacja komentarza referencyjnego do kontraktu v2.
 
-#### `includes/sync/detection.php`
-- Usunieto nieuzywane funkcje trackingowe i notice (`g4t_track_edit_source`, `g4t_maybe_show_ui_switch_notice`).
+### Testy
 
-#### `includes/view-model/normalizers.php`
-- Usunieto nieuzywane helpery normalizacji obrazow.
+#### `tests/unit/test-normalizers.php`
+- Aktualizacja oczekiwan typu amount (`string|null`).
+- Dodany coverage dla przypadkow tekstowych i ulamkow (`1/3`).
+
+#### `tests/unit/test-meta-sync.php`
+- Aktualizacja asercji pod `string` amount.
+- Dodany test preserving fractional amount z meta (`1/3`).
+
+### Dokumentacja kontraktu
+
+#### Nowe pliki
+- `SCHEMA_CONTRACT_V2.md`
+- `SCHEMA_MIGRATION_v1_to_v2.md`
+
+#### Istniejace pliki
+- `SCHEMA_CONTRACT_V1.md` oznaczone jako superseded.
+- `RELEASE_NOTES.md` uzupelnione o sekcje breaking changes dla schema v2.
 
 ## Weryfikacja
 
-- `php -l` dla wszystkich zmienionych plikow: OK (brak bledow skladni).
-- Reka (scenariusz reprodukcji): zapis w Gutenberg nie jest juz cofany przez nastepujacy POST meta boxow.
-- Hook `save_post` jest tymczasowo odlaczany i ponownie dolaczany poprawnym callbackiem proxy.
+- Testy jednostkowe:
+	- `vendor/bin/phpunit tests/unit/test-normalizers.php tests/unit/test-meta-sync.php`
+	- wynik: `EXIT:0`
 
 ## Ryzyko / kompatybilnosc
 
-- Brak zmian w publicznym API pluginu.
-- Zmiany dotycza tylko orkiestracji zapisu i usuniecia martwego kodu.
-- Zachowanie po stronie ACF-only pozostaje bez zmian; guardy dotyczace REST zapobiegaja jedynie niechcianemu overwrite po zapisie Gutenberg.
+- To jest zmiana breaking w kontrakcie danych:
+	- `ingredients[].amount`: `float|null` -> `string|null`
+- Odczyt legacy danych pozostaje kompatybilny (stare wartosci numeryczne sa nadal czytelne).
+- Konsumenci wykonujacy obliczenia na amount musza jawnie parsowac/castowac wartosc.
+
+## Checklist
+
+- [x] Kod backend i sync zaktualizowany do semantyki `string|null`
+- [x] Testy jednostkowe zaktualizowane i przechodza
+- [x] Dokumentacja kontraktu v2 i migracji dodana
+- [x] Release notes uzupelnione

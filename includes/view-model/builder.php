@@ -4,7 +4,7 @@
  *
  * Builds the canonical view model for a single recipe post. This is the data shape
  * consumed by Timber templates, WPGraphQL resolvers, and any other downstream
- * system. The shape is documented in SCHEMA_CONTRACT_V1.md.
+ * system. The shape is documented in SCHEMA_CONTRACT_V2.md.
  *
  * Data sources, in priority order:
  *  1. Block attributes — parsed from post_content. The editor writes here.
@@ -35,14 +35,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  *  2. Reading ACF/post_meta fallback data (g4t_get_recipe_acf_data)
  *  3. Merging the two sources with block data preferred (g4t_merge_recipe_data)
  *  4. Normalizing repeater arrays (g4t_normalize_ingredients_list, g4t_normalize_steps_list)
- *  5. Assembling the final view model array matching SCHEMA_CONTRACT_V1.md
+ *  5. Assembling the final view model array matching SCHEMA_CONTRACT_V2.md
  *
  * The returned array is frozen in structure: adding/removing/renaming keys requires
- * a schema version bump and migration plan. See SCHEMA_CONTRACT_V1.md for details.
+ * a schema version bump and migration plan. See SCHEMA_CONTRACT_V2.md for details.
  *
  * @param WP_Post $post Post object.
  * @param Go4Taste_Recipes_Plugin $plugin Plugin instance for context.
- * @return array<string,mixed> View model matching SCHEMA_CONTRACT_V1.md shape.
+ * @return array<string,mixed> View model matching SCHEMA_CONTRACT_V2.md shape.
  */
 function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plugin $plugin ): array {
     $post_id    = (int) $post->ID;

@@ -30,3 +30,16 @@ Zakres: merge feature/recipe-structured-fields do main (91008ad)
 ## Known notes
 - W commitach wystapily ostrzezenia CRLF/LF (bez wplywu na dzialanie).
 - Zalecana regresja end-to-end dla: edycja przepisu, zapis, archiwa taksonomii, odczyt w motywie.
+
+## 2026-05-19 - Schema v2 (breaking)
+
+### Breaking changes
+- ingredients[].amount: float|null -> string|null.
+- Pole ACF amount w skladnikach: number -> text.
+
+### Why
+- Obsluga zapisow kulinarnych typu 1/3, 1 1/2 oraz tekstowych ilosci typu szczypta.
+
+### Migration
+- Szczegoly: SCHEMA_MIGRATION_v1_to_v2.md.
+- Nowy kontrakt: SCHEMA_CONTRACT_V2.md.

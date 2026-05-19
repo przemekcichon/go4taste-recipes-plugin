@@ -44,7 +44,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *  3. Add the block to the template array in includes/registration/post-types.php.
  *  4. Add a case in the block-parsing loop in includes/sync/meta-sync.php.
  *  5. Add view model keys in includes/view-model/builder.php.
- *  6. Document in SCHEMA_CONTRACT_V1.md.
+ *  6. Document in SCHEMA_CONTRACT_V2.md.
  *
  * @var array<int,string>
  */

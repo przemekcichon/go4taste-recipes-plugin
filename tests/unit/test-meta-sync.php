@@ -72,13 +72,13 @@ class Test_Meta_Sync extends WP_UnitTestCase {
             array(
                 'ingredient_term_id' => null,
                 'name'               => 'Mąka',
-                'amount'             => 500.0,
+                'amount'             => '500',
                 'unit'               => 'g',
             ),
             array(
                 'ingredient_term_id' => null,
                 'name'               => 'Cukier',
-                'amount'             => 200.0,
+                'amount'             => '200',
                 'unit'               => 'g',
             ),
         );
@@ -91,7 +91,7 @@ class Test_Meta_Sync extends WP_UnitTestCase {
 
         // Check first ingredient
         $this->assertEquals( 'Mąka', get_post_meta( $this->post_id, 'recipe_ingredients_0_name', true ) );
-        $this->assertEquals( 500.0, get_post_meta( $this->post_id, 'recipe_ingredients_0_amount', true ) );
+        $this->assertEquals( '500', get_post_meta( $this->post_id, 'recipe_ingredients_0_amount', true ) );
         $this->assertEquals( 'g', get_post_meta( $this->post_id, 'recipe_ingredients_0_unit', true ) );
 
         // Check taxonomy assignment
@@ -145,8 +145,24 @@ class Test_Meta_Sync extends WP_UnitTestCase {
 
         $this->assertCount( 2, $result );
         $this->assertEquals( 'Sól', $result[0]['name'] );
-        $this->assertEquals( 5.0, $result[0]['amount'] );
+        $this->assertEquals( '5', $result[0]['amount'] );
         $this->assertEquals( 'Pieprz', $result[1]['name'] );
+    }
+
+    /**
+     * Test load ingredients repeater meta preserves fractional amounts.
+     */
+    public function test_load_ingredients_repeater_meta_preserves_fractional_amount() {
+        update_post_meta( $this->post_id, 'recipe_ingredients', 1 );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_name', 'Mąka' );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_amount', '1/3' );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_unit', 'szklanki' );
+
+        $result = g4t_load_ingredients_repeater_meta( $this->post_id, 1 );
+
+        $this->assertCount( 1, $result );
+        $this->assertEquals( 'Mąka', $result[0]['name'] );
+        $this->assertEquals( '1/3', $result[0]['amount'] );
     }
 
     /**

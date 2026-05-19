@@ -95,7 +95,7 @@ function g4t_convert_ingredients_meta_to_array( int $post_id ): array {
 		$items[] = array(
 			'ingredient_term_id' => $term_id,
 			'name'               => sanitize_text_field( (string) $name ),
-			'amount'             => ( '' !== (string) $amount && is_numeric( (string) $amount ) ) ? (string) floatval( $amount ) : '',
+			'amount'             => sanitize_text_field( trim( (string) $amount ) ),
 			'unit'               => sanitize_text_field( (string) $unit ),
 			'ingredient_note'    => sanitize_text_field( (string) $ingredient_note ),
 		);
