@@ -164,11 +164,15 @@ function g4t_sync_ingredients_repeater_meta( int $post_id, array $ingredients ):
     }
 
     foreach ( $ingredients as $index => $row ) {
-        $name = (string) ( $row['name'] ?? '' );
+        $name            = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
+        $amount          = sanitize_text_field( trim( (string) ( $row['amount'] ?? '' ) ) );
+        $unit            = sanitize_text_field( (string) ( $row['unit'] ?? '' ) );
+        $ingredient_note = sanitize_text_field( (string) ( $row['ingredient_note'] ?? '' ) );
+
         update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_name', $index ), $name );
-        update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $index ), $row['amount'] ?? '' );
-        update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $index ), (string) ( $row['unit'] ?? '' ) );
-        update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_note', $index ), (string) ( $row['ingredient_note'] ?? '' ) );
+        update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $index ), $amount );
+        update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_unit', $index ), $unit );
+        update_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_note', $index ), $ingredient_note );
 
         $term_id = null;
         if ( isset( $row['ingredient_term_id'] ) && is_numeric( (string) $row['ingredient_term_id'] ) ) {
