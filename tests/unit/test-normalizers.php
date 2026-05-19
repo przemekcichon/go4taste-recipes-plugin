@@ -34,13 +34,13 @@ class Test_Normalizers extends WP_UnitTestCase {
         // First ingredient
         $this->assertEquals( 123, $result[0]['ingredient_term_id'] );
         $this->assertEquals( 'Mąka', $result[0]['name'] );
-        $this->assertEquals( 500.0, $result[0]['amount'] );
+        $this->assertEquals( '500', $result[0]['amount'] );
         $this->assertEquals( 'g', $result[0]['unit'] );
 
         // Second ingredient (no term_id)
         $this->assertNull( $result[1]['ingredient_term_id'] );
         $this->assertEquals( 'Cukier', $result[1]['name'] );
-        $this->assertEquals( 200.0, $result[1]['amount'] );
+        $this->assertEquals( '200', $result[1]['amount'] );
         $this->assertEquals( 'g', $result[1]['unit'] );
     }
 
@@ -61,18 +61,20 @@ class Test_Normalizers extends WP_UnitTestCase {
     }
 
     /**
-     * Test g4t_normalize_ingredients_list handles non-numeric amounts.
+     * Test g4t_normalize_ingredients_list keeps non-empty amounts as text.
      */
-    public function test_normalize_ingredients_list_handles_non_numeric_amounts() {
+    public function test_normalize_ingredients_list_keeps_textual_amounts() {
         $input = array(
             array( 'name' => 'Sól', 'amount' => 'szczypta', 'unit' => '' ),
-            array( 'name' => 'Mąka', 'amount' => '', 'unit' => 'g' ),
+            array( 'name' => 'Mąka', 'amount' => '1/3', 'unit' => 'szklanki' ),
+            array( 'name' => 'Cukier', 'amount' => '', 'unit' => 'g' ),
         );
 
         $result = g4t_normalize_ingredients_list( $input );
 
-        $this->assertNull( $result[0]['amount'] );
-        $this->assertNull( $result[1]['amount'] );
+        $this->assertEquals( 'szczypta', $result[0]['amount'] );
+        $this->assertEquals( '1/3', $result[1]['amount'] );
+        $this->assertNull( $result[2]['amount'] );
     }
 
     /**

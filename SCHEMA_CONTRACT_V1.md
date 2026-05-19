@@ -1,5 +1,7 @@
 # GO4TASTE Recipes Plugin — Schema Contract v1
 
+> Superseded by SCHEMA_CONTRACT_V2.md for current development. v1 is kept for historical compatibility reference.
+
 **Last Updated:** Phase 1-3 (ACF field groups & sync flows added)  
 **Status:** Stable — dual UI support complete (Block Editor + ACF Meta Boxes)
 

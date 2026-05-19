@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Normalize an array of ingredient rows into a consistent shape.
  *
  * @param array<int,mixed> $items
- * @return array<int,array{ingredient_term_id:int|null,name:string,amount:float|null,unit:string,ingredient_note:string}>
+ * @return array<int,array{ingredient_term_id:int|null,name:string,amount:string|null,unit:string,ingredient_note:string}>
  */
 function g4t_normalize_ingredients_list( array $items ): array {
     $normalized = array();
@@ -40,8 +40,11 @@ function g4t_normalize_ingredients_list( array $items ): array {
         }
 
         $amount = null;
-        if ( isset( $row['amount'] ) && '' !== trim( (string) $row['amount'] ) && is_numeric( (string) $row['amount'] ) ) {
-            $amount = (float) $row['amount'];
+        if ( isset( $row['amount'] ) ) {
+            $amount_raw = trim( (string) $row['amount'] );
+            if ( '' !== $amount_raw ) {
+                $amount = $amount_raw;
+            }
         }
 
         $ingredient_term_id = null;

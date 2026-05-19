@@ -249,8 +249,8 @@ function g4t_register_acf_fields( Go4Taste_Recipes_Plugin $plugin ): void {
                             'key'  => 'field_ingredient_amount',
                             'label' => 'Amount',
                             'name' => 'amount',
-                            'type' => 'number',
-                            'step' => 0.01,
+                            'type' => 'text',
+                            'placeholder' => 'np. 1/3, 1.5, szczypta',
                         ),
                         array(
                             'key'         => 'field_ingredient_unit',

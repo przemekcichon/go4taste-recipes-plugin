@@ -275,7 +275,7 @@ function g4t_sync_steps_repeater_meta( int $post_id, array $steps ): void {
 /**
  * Load ingredient rows from post meta ACF repeater format.
  *
- * @return array<int,array{ingredient_term_id:int|null,name:string,amount:float|null,unit:string}>
+ * @return array<int,array{ingredient_term_id:int|null,name:string,amount:string|null,unit:string}>
  */
 function g4t_load_ingredients_repeater_meta( int $post_id, int $count ): array {
     $rows = array();
@@ -287,7 +287,10 @@ function g4t_load_ingredients_repeater_meta( int $post_id, int $count ): array {
         }
 
         $amount_raw = get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_amount', $i ), true );
-        $amount     = ( '' !== (string) $amount_raw && is_numeric( (string) $amount_raw ) ) ? (float) $amount_raw : null;
+        $amount     = trim( (string) $amount_raw );
+        if ( '' === $amount ) {
+            $amount = null;
+        }
         $term_raw   = get_post_meta( $post_id, sprintf( 'recipe_ingredients_%d_ingredient_term_id', $i ), true );
         $term_id    = ( '' !== (string) $term_raw && is_numeric( (string) $term_raw ) ) ? (int) $term_raw : null;
 
