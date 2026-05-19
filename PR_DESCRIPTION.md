@@ -1,78 +1,50 @@
-﻿# PR: Support textual ingredient amounts and schema v2
+﻿# PR: Security hardening for ingredient meta writes and debug mode access
 
-**Branch:** `feature/ingredient-amount-text-v2` -> `main`
+**Branch:** `feature/security-hardening-ingredients-debug` -> `main`
 
 ## Motywacja
 
-Aktualne pole ingredient amount bylo traktowane jako wartosc numeryczna (float), co blokowalo poprawne wpisy kulinarne typu:
-- `1/3`
-- `1 1/2`
-- `szczypta`
+W ramach przegladu security wykryto dwa obszary do utwardzenia:
+1. Dane ingredients zapisywane do post meta byly zapisywane bez sanitizacji na sciezce block -> meta.
+2. Tryb debug recept byl dostepny dla kazdego uzytkownika na local env po dodaniu parametru query.
 
-Wymaganiem biznesowym jest pelne wsparcie ilosci tekstowych w calym przeplywie danych (ACF -> sync -> view model -> frontend).
+Cel tej zmiany to zmniejszenie powierzchni ataku (stored XSS i ekspozycja danych diagnostycznych) bez zmiany logiki biznesowej pluginu.
 
 ## Zakres zmian
 
-### `includes/acf/field-groups.php`
-- Pole `field_ingredient_amount` zmieniono z `number` na `text`.
-- Usunieto `step` i dodano placeholder z przykladowymi wartosciami.
+### [includes/sync/meta-sync.php](includes/sync/meta-sync.php)
+- W `g4t_sync_ingredients_repeater_meta()` dodano sanitizacje przed zapisem:
+	- `name` -> `sanitize_text_field`
+	- `amount` -> `sanitize_text_field( trim(...) )`
+	- `unit` -> `sanitize_text_field`
+	- `ingredient_note` -> `sanitize_text_field`
+- Zapis do `update_post_meta()` odbywa sie juz na przetworzonych, bezpieczniejszych wartosciach.
 
-### `includes/view-model/normalizers.php`
-- `g4t_normalize_ingredients_list()` nie castuje juz `amount` do `float`.
-- Nowa semantyka:
-	- pusty string po trim -> `null`
-	- niepusty string -> zachowany jako `string`
-
-### `includes/sync/meta-sync.php`
-- `g4t_load_ingredients_repeater_meta()` nie wymusza juz `is_numeric()`.
-- `amount` ladowane i zwracane jako `string|null`.
-
-### `includes/sync/converters.php`
-- `g4t_convert_ingredients_meta_to_array()` nie wykonuje `floatval()`.
-- `amount` jest zachowywane jako tekst (po sanitize/trim) dla sciezki meta -> blocks.
-
-### `includes/view-model/builder.php`
-- Aktualizacja odniesien dokumentacyjnych z `SCHEMA_CONTRACT_V1.md` na `SCHEMA_CONTRACT_V2.md`.
-
-### `includes/registration/blocks.php`
-- Aktualizacja komentarza referencyjnego do kontraktu v2.
-
-### Testy
-
-#### `tests/unit/test-normalizers.php`
-- Aktualizacja oczekiwan typu amount (`string|null`).
-- Dodany coverage dla przypadkow tekstowych i ulamkow (`1/3`).
-
-#### `tests/unit/test-meta-sync.php`
-- Aktualizacja asercji pod `string` amount.
-- Dodany test preserving fractional amount z meta (`1/3`).
-
-### Dokumentacja kontraktu
-
-#### Nowe pliki
-- `SCHEMA_CONTRACT_V2.md`
-- `SCHEMA_MIGRATION_v1_to_v2.md`
-
-#### Istniejace pliki
-- `SCHEMA_CONTRACT_V1.md` oznaczone jako superseded.
-- `RELEASE_NOTES.md` uzupelnione o sekcje breaking changes dla schema v2.
+### [includes/timber/context-filters.php](includes/timber/context-filters.php)
+- W `g4t_is_recipe_debug_enabled()` usunieto automatyczne wlaczenie debug na local env.
+- Debug jest teraz dostepny tylko dla uzytkownika z capability `manage_options` i parametrem `g4t_recipe_debug`.
 
 ## Weryfikacja
 
+- Skladnia PHP:
+	- `php -l includes/sync/meta-sync.php`
+	- `php -l includes/timber/context-filters.php`
+	- wynik: brak bledow skladni
+
 - Testy jednostkowe:
-	- `vendor/bin/phpunit tests/unit/test-normalizers.php tests/unit/test-meta-sync.php`
+	- `vendor/bin/phpunit tests/unit/test-meta-sync.php tests/unit/test-normalizers.php`
 	- wynik: `EXIT:0`
 
 ## Ryzyko / kompatybilnosc
 
-- To jest zmiana breaking w kontrakcie danych:
-	- `ingredients[].amount`: `float|null` -> `string|null`
-- Odczyt legacy danych pozostaje kompatybilny (stare wartosci numeryczne sa nadal czytelne).
-- Konsumenci wykonujacy obliczenia na amount musza jawnie parsowac/castowac wartosc.
+- Niskie ryzyko regresji.
+- Brak zmian publicznego API pluginu.
+- Mozliwy efekt uboczny: wartosci ingredients z nietypowymi znakami HTML/JS sa teraz normalizowane/sanitizowane przy zapisie.
+- Tryb debug nie jest juz widoczny dla nieuprzywilejowanych uzytkownikow, nawet na local env.
 
 ## Checklist
 
-- [x] Kod backend i sync zaktualizowany do semantyki `string|null`
-- [x] Testy jednostkowe zaktualizowane i przechodza
-- [x] Dokumentacja kontraktu v2 i migracji dodana
-- [x] Release notes uzupelnione
+- [x] Hardening zapisu ingredients do meta
+- [x] Hardening dostepu do debug mode
+- [x] Testy unit przechodza
+- [x] Branch wypchniety i gotowy do PR
