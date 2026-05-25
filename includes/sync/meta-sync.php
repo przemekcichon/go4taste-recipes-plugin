@@ -86,12 +86,22 @@ function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $up
         return;
     }
 
+    $source_block_present = ! empty( $block_data['_has_source_block'] ) || ! empty( $block_data['_has_legacy_notes_block'] );
+    $source_block_empty = $source_block_present && empty( (string) ( $block_data['source_label'] ?? '' ) ) && empty( (string) ( $block_data['source_url'] ?? '' ) );
+    $existing_source_label = '';
+    $existing_source_url   = '';
+    if ( $source_block_empty ) {
+        $existing_source_label = (string) get_post_meta( $post_id, 'recipe_source_label', true );
+        $existing_source_url   = (string) get_post_meta( $post_id, 'recipe_source_url', true );
+    }
+
     $payload = array(
+        'recipe_lead'                  => sanitize_textarea_field( (string) ( $block_data['lead'] ?? '' ) ),
         'recipe_time_prep'             => sanitize_text_field( (string) ( $block_data['time_prep'] ?? '' ) ),
         'recipe_time_cook'             => sanitize_text_field( (string) ( $block_data['time_cook'] ?? '' ) ),
         'recipe_time_total'            => sanitize_text_field( (string) ( $block_data['time_total'] ?? '' ) ),
         'recipe_time_soak'             => sanitize_text_field( (string) ( $block_data['time_soak'] ?? '' ) ),
-        'recipe_difficulty'            => sanitize_text_field( (string) ( $block_data['difficulty'] ?? '' ) ),
+        'recipe_difficulty'            => g4t_normalize_difficulty_for_meta( (string) ( $block_data['difficulty'] ?? '' ) ),
         'recipe_servings_value'        => $block_data['servings_value'] ?? null,
         'recipe_servings_unit'         => sanitize_text_field( (string) ( $block_data['servings_unit'] ?? '' ) ),
         'recipe_ingredients_photo_url' => esc_url_raw( (string) ( $block_data['ingredients_photo_url'] ?? '' ) ),
@@ -100,8 +110,35 @@ function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $up
         'recipe_source_url'            => esc_url_raw( (string) ( $block_data['source_url'] ?? '' ) ),
     );
 
+    // Preserve existing meta for optional fields when block values are empty.
+    // WHY: If user edits one block (e.g., hero) but not source/tips block,
+    // the empty block attrs would overwrite existing meta with empty strings,
+    // causing data loss. Fallback to current meta if block is empty and meta has data.
+    if ( empty( $payload['recipe_tips'] ) && empty( $block_data['_has_tips_block'] ) && empty( $block_data['_has_legacy_notes_block'] ) ) {
+        $existing_tips = get_post_meta( $post_id, 'recipe_tips', true );
+        if ( ! empty( $existing_tips ) ) {
+            $payload['recipe_tips'] = $existing_tips;
+        }
+    }
+    if ( empty( $payload['recipe_source_label'] ) && ! $source_block_present ) {
+        $existing_label = get_post_meta( $post_id, 'recipe_source_label', true );
+        if ( ! empty( $existing_label ) ) {
+            $payload['recipe_source_label'] = $existing_label;
+        }
+    }
+    if ( empty( $payload['recipe_source_url'] ) && ! $source_block_present ) {
+        $existing_url = get_post_meta( $post_id, 'recipe_source_url', true );
+        if ( ! empty( $existing_url ) ) {
+            $payload['recipe_source_url'] = $existing_url;
+        }
+    }
+
     foreach ( $payload as $meta_key => $value ) {
         update_post_meta( $post_id, $meta_key, $value );
+    }
+
+    if ( $source_block_empty && ( '' !== $existing_source_label || '' !== $existing_source_url ) ) {
+        g4t_backfill_source_block_attrs_from_meta( $post_id, $post, $existing_source_label, $existing_source_url, $plugin );
     }
 
     $ingredients = ( ! empty( $block_data['ingredients'] ) && is_array( $block_data['ingredients'] ) ) ? $block_data['ingredients'] : array();
@@ -111,6 +148,106 @@ function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $up
     g4t_sync_steps_repeater_meta( $post_id, $steps );
 
     $running = false;
+}
+
+/**
+ * Normalize difficulty value for ACF select field storage.
+ *
+ * ACF uses canonical keys: easy|medium|hard. Editor block currently allows
+ * free text, so we map common Polish labels to canonical keys.
+ */
+function g4t_normalize_difficulty_for_meta( string $difficulty ): string {
+    $value = strtolower( trim( sanitize_text_field( $difficulty ) ) );
+
+    if ( '' === $value ) {
+        return '';
+    }
+
+    $map = array(
+        'easy'   => 'easy',
+        'latwy'  => 'easy',
+        'łatwy'  => 'easy',
+        'medium' => 'medium',
+        'sredni' => 'medium',
+        'średni' => 'medium',
+        'hard'   => 'hard',
+        'trudny' => 'hard',
+    );
+
+    return $map[ $value ] ?? $value;
+}
+
+/**
+ * Backfill source block attrs in post_content from existing meta values.
+ *
+ * WHY this helper exists:
+ * Some imported posts have source data only in meta while source block attrs
+ * are empty. Preserving meta avoids data loss, but Gutenberg form still looks
+ * empty unless attrs are written back to post_content.
+ */
+function g4t_backfill_source_block_attrs_from_meta( int $post_id, WP_Post $post, string $label, string $url, Go4Taste_Recipes_Plugin $plugin ): void {
+    if ( ! function_exists( 'parse_blocks' ) || ! function_exists( 'serialize_blocks' ) ) {
+        return;
+    }
+
+    $blocks = parse_blocks( (string) $post->post_content );
+    list( $patched_blocks, $changed ) = g4t_patch_source_block_attrs_recursive( $blocks, $label, $url );
+
+    if ( ! $changed ) {
+        return;
+    }
+
+    $new_content = serialize_blocks( $patched_blocks );
+    if ( $new_content === (string) $post->post_content ) {
+        return;
+    }
+
+    // save_post recursion is already protected by the static guard in
+    // g4t_sync_recipe_meta_from_blocks(), so no dynamic hook rewiring is needed.
+    wp_update_post(
+        array(
+            'ID'           => $post_id,
+            'post_content' => $new_content,
+        )
+    );
+}
+
+/**
+ * Recursively patch first go4taste-recipes/source block attrs.
+ *
+ * @param array<int,array<string,mixed>> $blocks Parsed block tree.
+ * @return array{0: array<int,array<string,mixed>>, 1: bool}
+ */
+function g4t_patch_source_block_attrs_recursive( array $blocks, string $label, string $url ): array {
+    foreach ( $blocks as $index => $block ) {
+        if ( ! is_array( $block ) ) {
+            continue;
+        }
+
+        $block_name = isset( $block['blockName'] ) ? (string) $block['blockName'] : '';
+        if ( 'go4taste-recipes/source' === $block_name ) {
+            $attrs = isset( $block['attrs'] ) && is_array( $block['attrs'] ) ? $block['attrs'] : array();
+            if ( '' !== $label ) {
+                $attrs['sourceLabel'] = $label;
+            }
+            if ( '' !== $url ) {
+                $attrs['sourceUrl'] = $url;
+            }
+            $blocks[ $index ]['attrs'] = $attrs;
+            return array( $blocks, true );
+        }
+
+        $inner_blocks = isset( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ? $block['innerBlocks'] : array();
+        if ( ! empty( $inner_blocks ) ) {
+            list( $patched_inner_blocks, $changed ) = g4t_patch_source_block_attrs_recursive( $inner_blocks, $label, $url );
+            if ( $changed ) {
+                $blocks[ $index ]['innerBlocks'] = $patched_inner_blocks;
+                return array( $blocks, true );
+            }
+        }
+    }
+
+    return array( $blocks, false );
 }
 
 /**
@@ -360,6 +497,9 @@ function g4t_get_recipe_blocks_data( WP_Post $post ): array {
         '_has_hero_block'        => false,
         '_has_ingredients_block' => false,
         '_has_steps_block'       => false,
+        '_has_tips_block'        => false,
+        '_has_source_block'      => false,
+        '_has_legacy_notes_block' => false,
         'ads_product_ids'        => array(),
         'lead'                   => '',
         'difficulty'             => '',
@@ -448,6 +588,7 @@ function g4t_get_recipe_blocks_data( WP_Post $post ): array {
 
         if ( 'go4taste-recipes/notes' === $block['blockName'] ) {
             $result['_has_recipe_blocks'] = true;
+            $result['_has_legacy_notes_block'] = true;
             $result['tips']         = isset( $attrs['tips'] ) ? (string) $attrs['tips'] : $result['tips'];
             $result['source_label'] = isset( $attrs['sourceLabel'] ) ? (string) $attrs['sourceLabel'] : $result['source_label'];
             $result['source_url']   = isset( $attrs['sourceUrl'] ) ? (string) $attrs['sourceUrl'] : $result['source_url'];
@@ -455,11 +596,13 @@ function g4t_get_recipe_blocks_data( WP_Post $post ): array {
 
         if ( 'go4taste-recipes/tips' === $block['blockName'] ) {
             $result['_has_recipe_blocks'] = true;
+            $result['_has_tips_block'] = true;
             $result['tips'] = isset( $attrs['tips'] ) ? (string) $attrs['tips'] : $result['tips'];
         }
 
         if ( 'go4taste-recipes/source' === $block['blockName'] ) {
             $result['_has_recipe_blocks'] = true;
+            $result['_has_source_block'] = true;
             $result['source_label'] = isset( $attrs['sourceLabel'] ) ? (string) $attrs['sourceLabel'] : $result['source_label'];
             $result['source_url']   = isset( $attrs['sourceUrl'] ) ? (string) $attrs['sourceUrl'] : $result['source_url'];
         }
