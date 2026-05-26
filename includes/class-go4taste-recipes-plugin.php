@@ -29,11 +29,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once __DIR__ . '/slices/recipe-composition/index.php';
 require_once __DIR__ . '/slices/recipe-registration/index.php';
 require_once __DIR__ . '/slices/recipe-storage/index.php';
-require_once __DIR__ . '/view-model/normalizers.php';
-require_once __DIR__ . '/view-model/builder.php';
+require_once __DIR__ . '/slices/recipe-read-model/index.php';
 require_once __DIR__ . '/slices/recipe-admin-config/index.php';
 require_once __DIR__ . '/slices/recipe-input-surface/index.php';
 require_once __DIR__ . '/slices/recipe-output-surface/index.php';
+require_once __DIR__ . '/slices/recipe-storage/field-groups.php';
+require_once __DIR__ . '/slices/recipe-input-surface/recipe-creator.php';
 
 class Go4Taste_Recipes_Plugin {
     public const OPTION_KEY = 'go4taste_recipes_options';
