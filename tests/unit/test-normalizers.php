@@ -133,6 +133,28 @@ class Test_Normalizers extends WP_UnitTestCase {
     }
 
     /**
+     * Regression: normalize ACF repeater step keys used by recipe creator/metabox.
+     */
+    public function test_normalize_steps_list_supports_acf_step_keys() {
+        $input = array(
+            array(
+                'step_header'      => 'Przygotuj składniki',
+                'step_description' => 'Pokrój warzywa i odmierz przyprawy.',
+                'step_tip'         => 'Nożem szefa kuchni idzie szybciej.',
+                'step_image_url'   => 'https://example.com/step-1.jpg',
+            ),
+        );
+
+        $result = g4t_normalize_steps_list( $input );
+
+        $this->assertCount( 1, $result );
+        $this->assertEquals( 'Przygotuj składniki', $result[0]['heading'] );
+        $this->assertEquals( 'Pokrój warzywa i odmierz przyprawy.', $result[0]['description'] );
+        $this->assertEquals( 'Nożem szefa kuchni idzie szybciej.', $result[0]['tip'] );
+        $this->assertEquals( 'https://example.com/step-1.jpg', $result[0]['imageUrl'] );
+    }
+
+    /**
      * Test g4t_has_value helper function.
      */
     public function test_has_value() {
