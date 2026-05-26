@@ -714,13 +714,11 @@ function g4t_recipe_creator_save_state_to_draft( array $state, int $requested_po
         $post_id = (int) $inserted;
     }
 
-    $blocks_content = g4t_build_recipe_blocks_from_creator_state( $state, $post_id );
-    $result         = wp_update_post(
+    $result = wp_update_post(
         array(
-            'ID'           => $post_id,
-            'post_title'   => '' !== $title ? $title : get_the_title( $post_id ),
-            'post_status'  => 'draft',
-            'post_content' => $blocks_content,
+            'ID'          => $post_id,
+            'post_title'  => '' !== $title ? $title : get_the_title( $post_id ),
+            'post_status' => 'draft',
         ),
         true
     );
@@ -732,6 +730,8 @@ function g4t_recipe_creator_save_state_to_draft( array $state, int $requested_po
             'postId'  => $post_id,
         );
     }
+
+    g4t_creator_state_to_meta( $state, $post_id );
 
     return array(
         'ok'      => true,
@@ -806,173 +806,107 @@ function g4t_clear_recipe_creator_user_draft_state( int $post_id ): void {
 }
 
 /**
- * Build Gutenberg blocks content from creator state payload.
+ * Write recipe creator state directly to post meta (meta-only save path).
  *
- * @param array<string,mixed> $state
- * @param int $post_id
- * @return string
+ * Replaces the old block-build → post_content → meta-sync round-trip.
+ * Ingredient taxonomy terms are synced via g4t_sync_ingredients_repeater_meta().
+ * Featured image is set directly as the post thumbnail — no ACF intermediary needed.
+ *
+ * @param array<string,mixed> $state  Creator state payload.
+ * @param int                 $post_id Post ID to write to.
  */
-function g4t_build_recipe_blocks_from_creator_state( array $state, int $post_id ): string {
-    $lead        = isset( $state['lead'] ) ? sanitize_textarea_field( (string) $state['lead'] ) : '';
-    $difficulty  = isset( $state['difficulty'] ) ? g4t_normalize_difficulty_key( (string) $state['difficulty'] ) : '';
-    $servings    = isset( $state['portions'] ) && is_numeric( (string) $state['portions'] ) ? (int) $state['portions'] : 0;
-    $servings_u  = isset( $state['portionUnit'] ) ? sanitize_text_field( (string) $state['portionUnit'] ) : '';
-    $prep_mins   = isset( $state['timePrep'] ) && is_numeric( (string) $state['timePrep'] ) ? (int) $state['timePrep'] : 0;
-    $cook_mins   = isset( $state['timeCook'] ) && is_numeric( (string) $state['timeCook'] ) ? (int) $state['timeCook'] : 0;
-    $soak_mins   = isset( $state['timeSoak'] ) && is_numeric( (string) $state['timeSoak'] ) ? (int) $state['timeSoak'] : 0;
-
-    $hero_attrs = array();
-    if ( '' !== $lead ) {
-        $hero_attrs['lead'] = $lead;
-    }
-    if ( '' !== $difficulty ) {
-        $hero_attrs['difficulty'] = $difficulty;
-    }
-    if ( $servings > 0 ) {
-        $hero_attrs['servingsValue'] = $servings;
-    }
-    if ( '' !== $servings_u ) {
-        $hero_attrs['servingsUnit'] = $servings_u;
-    }
-    if ( $prep_mins > 0 ) {
-        $hero_attrs['timePrep'] = g4t_recipe_creator_format_minutes( $prep_mins );
-    }
-    if ( $cook_mins > 0 ) {
-        $hero_attrs['timeCook'] = g4t_recipe_creator_format_minutes( $cook_mins );
-    }
-    if ( $soak_mins > 0 ) {
-        $hero_attrs['timeSoak'] = g4t_recipe_creator_format_minutes( $soak_mins );
-    }
+function g4t_creator_state_to_meta( array $state, int $post_id ): void {
+    $lead       = isset( $state['lead'] ) ? sanitize_textarea_field( (string) $state['lead'] ) : '';
+    $difficulty = isset( $state['difficulty'] ) ? g4t_normalize_difficulty_key( (string) $state['difficulty'] ) : '';
+    $servings   = isset( $state['portions'] ) && is_numeric( (string) $state['portions'] ) ? (int) $state['portions'] : 0;
+    $servings_u = isset( $state['portionUnit'] ) ? sanitize_text_field( (string) $state['portionUnit'] ) : '';
+    $prep_mins  = isset( $state['timePrep'] ) && is_numeric( (string) $state['timePrep'] ) ? (int) $state['timePrep'] : 0;
+    $cook_mins  = isset( $state['timeCook'] ) && is_numeric( (string) $state['timeCook'] ) ? (int) $state['timeCook'] : 0;
+    $soak_mins  = isset( $state['timeSoak'] ) && is_numeric( (string) $state['timeSoak'] ) ? (int) $state['timeSoak'] : 0;
     $total_mins = $prep_mins + $cook_mins + $soak_mins;
-    if ( $total_mins > 0 ) {
-        $hero_attrs['timeTotal'] = g4t_recipe_creator_format_minutes( $total_mins );
+
+    update_post_meta( $post_id, 'recipe_lead', $lead );
+    update_post_meta( $post_id, 'recipe_difficulty', g4t_normalize_difficulty_for_meta( $difficulty ) );
+    update_post_meta( $post_id, 'recipe_servings_value', $servings > 0 ? $servings : '' );
+    update_post_meta( $post_id, 'recipe_servings_unit', $servings_u );
+    update_post_meta( $post_id, 'recipe_time_prep', $prep_mins > 0 ? g4t_recipe_creator_format_minutes( $prep_mins ) : '' );
+    update_post_meta( $post_id, 'recipe_time_cook', $cook_mins > 0 ? g4t_recipe_creator_format_minutes( $cook_mins ) : '' );
+    update_post_meta( $post_id, 'recipe_time_soak', $soak_mins > 0 ? g4t_recipe_creator_format_minutes( $soak_mins ) : '' );
+    update_post_meta( $post_id, 'recipe_time_total', $total_mins > 0 ? g4t_recipe_creator_format_minutes( $total_mins ) : '' );
+    update_post_meta( $post_id, 'recipe_tips', wp_kses_post( (string) ( $state['tips'] ?? '' ) ) );
+    update_post_meta( $post_id, 'recipe_source_label', sanitize_text_field( (string) ( $state['sourceName'] ?? '' ) ) );
+    update_post_meta( $post_id, 'recipe_source_url', esc_url_raw( (string) ( $state['sourceUrl'] ?? '' ) ) );
+
+    // Featured image — set directly as post thumbnail, no ACF field needed as intermediary.
+    if ( isset( $state['image'] ) && is_array( $state['image'] ) && ! empty( $state['image']['id'] ) ) {
+        $attachment_id = (int) $state['image']['id'];
+        if ( $attachment_id > 0 ) {
+            set_post_thumbnail( $post_id, $attachment_id );
+        }
+    } elseif ( array_key_exists( 'image', $state ) && null === $state['image'] ) {
+        delete_post_thumbnail( $post_id );
     }
 
-    $ingredients_block = '<!-- wp:go4taste-recipes/ingredients /-->';
+    // Ingredients photo URL.
+    $ingredients_photo_url = '';
+    if ( isset( $state['ingredientsPhoto'] ) ) {
+        $ingredients_photo_url = g4t_recipe_creator_extract_photo_url( $state['ingredientsPhoto'] );
+    }
+    update_post_meta( $post_id, 'recipe_ingredients_photo_url', $ingredients_photo_url );
+
+    // Ingredients repeater — maps creator field names to meta-sync field names.
+    $ingredients = array();
     if ( isset( $state['ingredients'] ) && is_array( $state['ingredients'] ) ) {
-        $items = array();
         foreach ( $state['ingredients'] as $row ) {
             if ( ! is_array( $row ) ) {
                 continue;
             }
-            $name   = isset( $row['name'] ) ? sanitize_text_field( (string) $row['name'] ) : '';
-            $amount = isset( $row['amount'] ) ? sanitize_text_field( (string) $row['amount'] ) : '';
+            $name   = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
+            $amount = sanitize_text_field( trim( (string) ( $row['amount'] ?? '' ) ) );
             if ( '' === $name && '' === $amount ) {
                 continue;
             }
-
-            $item = array(
-                'name' => $name,
-            );
-            if ( '' !== $amount ) {
-                $item['amount'] = $amount;
-            }
-            if ( isset( $row['unit'] ) && '' !== trim( (string) $row['unit'] ) ) {
-                $item['unit'] = sanitize_text_field( (string) $row['unit'] );
-            }
-            if ( isset( $row['hint'] ) && '' !== trim( (string) $row['hint'] ) ) {
-                $item['ingredient_note'] = sanitize_text_field( (string) $row['hint'] );
-            }
+            $term_id = null;
             if ( isset( $row['termId'] ) && is_numeric( (string) $row['termId'] ) && (int) $row['termId'] > 0 ) {
-                $item['ingredient_term_id'] = (int) $row['termId'];
+                $term_id = (int) $row['termId'];
             }
-            $items[] = $item;
-        }
-
-        $ingredients_attrs = array();
-        if ( ! empty( $items ) ) {
-            $ingredients_attrs['itemsList'] = $items;
-        }
-
-        if ( isset( $state['ingredientsPhoto'] ) ) {
-            $photo_url = g4t_recipe_creator_extract_photo_url( $state['ingredientsPhoto'] );
-            if ( '' !== $photo_url ) {
-                $ingredients_attrs['photoUrl'] = $photo_url;
-            }
-        }
-
-        if ( ! empty( $ingredients_attrs ) ) {
-            $ingredients_block = '<!-- wp:go4taste-recipes/ingredients ' . wp_json_encode( $ingredients_attrs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ' /-->';
+            $ingredients[] = array(
+                'name'               => $name,
+                'amount'             => '' !== $amount ? $amount : null,
+                'unit'               => sanitize_text_field( (string) ( $row['unit'] ?? '' ) ),
+                'ingredient_note'    => sanitize_text_field( (string) ( $row['hint'] ?? '' ) ),
+                'ingredient_term_id' => $term_id,
+            );
         }
     }
+    // g4t_sync_ingredients_repeater_meta() writes meta rows AND syncs taxonomy terms.
+    g4t_sync_ingredients_repeater_meta( $post_id, $ingredients );
 
-    $steps_block = '<!-- wp:go4taste-recipes/steps /-->';
+    // Steps repeater — maps creator field names to meta-sync field names.
+    $steps = array();
     if ( isset( $state['steps'] ) && is_array( $state['steps'] ) ) {
-        $steps_list = array();
         foreach ( $state['steps'] as $row ) {
             if ( ! is_array( $row ) ) {
                 continue;
             }
-            $heading = isset( $row['heading'] ) ? sanitize_text_field( (string) $row['heading'] ) : '';
-            $body    = isset( $row['body'] ) ? wp_kses_post( (string) $row['body'] ) : '';
+            $heading = sanitize_text_field( (string) ( $row['heading'] ?? '' ) );
+            $body    = wp_kses_post( (string) ( $row['body'] ?? '' ) );
             if ( '' === $heading && '' === trim( wp_strip_all_tags( $body ) ) ) {
                 continue;
             }
-            $step = array();
-            if ( '' !== $heading ) {
-                $step['heading'] = $heading;
-            }
-            if ( '' !== $body ) {
-                $step['description'] = $body;
-            }
-            if ( isset( $row['hint'] ) && '' !== trim( (string) $row['hint'] ) ) {
-                $step['tip'] = sanitize_text_field( (string) $row['hint'] );
-            }
+            $step_photo_url = '';
             if ( isset( $row['photo'] ) ) {
-                $step_photo = g4t_recipe_creator_extract_photo_url( $row['photo'] );
-                if ( '' !== $step_photo ) {
-                    $step['imageUrl'] = $step_photo;
-                }
+                $step_photo_url = g4t_recipe_creator_extract_photo_url( $row['photo'] );
             }
-            $steps_list[] = $step;
+            $steps[] = array(
+                'heading'     => $heading,
+                'description' => $body,
+                'tip'         => sanitize_text_field( (string) ( $row['hint'] ?? '' ) ),
+                'imageUrl'    => $step_photo_url,
+            );
         }
-        if ( ! empty( $steps_list ) ) {
-            $steps_block = '<!-- wp:go4taste-recipes/steps ' . wp_json_encode( array( 'stepsList' => $steps_list ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ' /-->';
-        }
     }
-
-    $tips = isset( $state['tips'] ) ? wp_kses_post( (string) $state['tips'] ) : '';
-    $tips_block = '' !== trim( wp_strip_all_tags( $tips ) )
-        ? '<!-- wp:go4taste-recipes/tips ' . wp_json_encode( array( 'tips' => $tips ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ' /-->'
-        : '<!-- wp:go4taste-recipes/tips /-->';
-
-    $source_label = isset( $state['sourceName'] ) ? sanitize_text_field( (string) $state['sourceName'] ) : '';
-    $source_url   = isset( $state['sourceUrl'] ) ? esc_url_raw( (string) $state['sourceUrl'] ) : '';
-    $source_attrs = array();
-    if ( '' !== $source_label ) {
-        $source_attrs['sourceLabel'] = $source_label;
-    }
-    if ( '' !== $source_url ) {
-        $source_attrs['sourceUrl'] = $source_url;
-    }
-    $source_block = ! empty( $source_attrs )
-        ? '<!-- wp:go4taste-recipes/source ' . wp_json_encode( $source_attrs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ' /-->'
-        : '<!-- wp:go4taste-recipes/source /-->';
-
-    $hero_block = ! empty( $hero_attrs )
-        ? '<!-- wp:go4taste-recipes/hero ' . wp_json_encode( $hero_attrs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) . ' /-->'
-        : '<!-- wp:go4taste-recipes/hero /-->';
-
-    $inline_banner_block = function_exists( 'g4t_build_inline_banner_block_from_existing_content' )
-        ? g4t_build_inline_banner_block_from_existing_content( $post_id )
-        : '<!-- wp:go4taste-ads/inline-banner /-->';
-
-    $blocks = array(
-        $hero_block,
-        '',
-        $ingredients_block,
-        '',
-        '',
-        $steps_block,
-        '',
-        $tips_block,
-        '',
-        $source_block,
-        '',
-        $inline_banner_block,
-    );
-
-    return implode( "\n", $blocks );
+    g4t_sync_steps_repeater_meta( $post_id, $steps );
 }
 
 /**

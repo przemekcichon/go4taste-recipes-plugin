@@ -64,18 +64,10 @@ function g4t_get_acf_location_rules( Go4Taste_Recipes_Plugin $plugin ): array {
  *
  * WHY ACF field groups for recipe content:
  *
- * Recipe fields can be edited in TWO ways:
- *  1. Block Editor (primary, preferred) — data in block attributes (post_content)
- *  2. ACF Meta Boxes (alternative, fallback) — data in post_meta
- *
- * Dual UI support allows:
- *  - Admin users who prefer form-based editing over blocks
- *  - WP All Import to map to ACF fields (then auto-sync to blocks)
- *  - Legacy integrations that query ACF directly
- *
- * Sync flow:
- *  - ACF save → acf/save_post priority 5 → builds blocks → post_content updated
- *  - Block save → save_post priority 20 → syncs to meta → post_meta updated
+ * Recipe data is canonical in ACF/post_meta. These field groups power:
+ *  - Frontend recipe creator save/load mapping
+ *  - Admin-side metabox editing and inspection
+ *  - Integrations/importers that write directly to recipe meta keys
  *
  * Field groups defined here:
  *  - Recipe Hero (lead, difficulty, servings, times)

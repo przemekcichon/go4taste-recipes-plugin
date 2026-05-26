@@ -4,13 +4,13 @@ WordPress plugin for recipe content structure and editor experience used in go4t
 
 ## Features
 
-- Structured recipe data via ACF Blocks (hero, ingredients, steps, tips, source)
-- **Dual UI support**: Block Editor (Gutenberg blocks) + ACF Meta Boxes
-- **Bidirectional sync**: ACF edits → blocks, block edits → meta
-- Ingredient taxonomy with auto-sync from block editor
+- Structured recipe data via ACF/meta keys (hero, ingredients, steps, tips, source)
+- Frontend Recipe Creator as the primary authoring surface
+- ACF meta boxes available in wp-admin for inspection and admin edits
+- Gutenberg disabled for the configured recipe post type
+- Ingredient taxonomy auto-sync from recipe ingredient repeater rows
 - Additional classification taxonomies (meal type, prep time, features)
-- Block → ACF/post_meta synchronization
-- Timber view model integration
+- Timber view model integration (meta-only runtime)
 - Configurable source post type (post / existing CPT / dedicated recipe CPT)
 
 ## Testing
@@ -52,16 +52,20 @@ phpunit tests/unit
 includes/
 ├── class-go4taste-recipes-plugin.php   # Orchestrator (proxy methods only)
 ├── registration/
-│   ├── post-types.php                  # CPT registration + block template
+│   ├── post-types.php                  # CPT registration + block editor disable rule
 │   ├── taxonomies.php                  # Taxonomy registration
-│   └── blocks.php                      # Block type registration
 ├── acf/
 │   └── field-groups.php                # ACF field group definitions
+├── front/
+│   ├── recipe-creator.php              # Frontend creator logic (save/load meta)
+│   ├── recipe-creator-helpers.php      # Creator helper utilities
+│   ├── recipe-creator-page.php         # Template loader + acf_form bridge
+│   └── recipe-creator-template.php     # Creator markup shell
 ├── sync/
-│   └── meta-sync.php                   # Block → meta sync + taxonomy binding
+│   └── meta-sync.php                   # Repeater/taxonomy utilities
 ├── view-model/
 │   ├── normalizers.php                 # Data normalization helpers
-│   └── builder.php                     # View model builder + ACF fallback
+│   └── builder.php                     # View model builder (meta-first)
 ├── timber/
 │   └── context-filters.php             # Timber context filters
 └── admin/
@@ -73,46 +77,28 @@ tests/
     ├── test-normalizers.php            # Normalizers tests
     ├── test-post-types.php             # CPT registration tests
     ├── test-taxonomies.php             # Taxonomy tests
-    ├── test-blocks.php                 # Block registration tests
-    ├── test-meta-sync.php              # Meta sync tests
+    ├── test-meta-sync.php              # Legacy parser + repeater utilities tests
     ├── test-builder.php                # View model builder tests
     ├── test-context-filters.php        # Timber integration tests
     └── test-settings-page.php          # Settings page tests
 ```
 
-## Dual UI & Sync Flows
+## Editing Model
 
-The plugin supports **two alternative UIs** for editing recipe data:
+The plugin now uses a single canonical editing model:
 
-1. **Block Editor** (Gutenberg blocks) — Primary, source of truth
-2. **ACF Meta Boxes** — Alternative for users preferring field-based UI
+1. **Frontend Recipe Creator** — primary authoring surface
+2. **ACF Meta Boxes in wp-admin** — backend field view/editor for administrators
 
-### Bidirectional Sync
+Gutenberg blocks are not used for recipe authoring. The block editor is disabled
+for the configured recipe post type (derived from plugin source strategy).
 
-Both UIs are automatically synchronized:
+### Data Flow
 
-- **ACF save → blocks** (priority 5): ACF field edits rebuild `post_content` with Gutenberg block markup
-  - File: `includes/sync/acf-to-blocks.php`
-  - Hook: `acf/save_post` priority 5
-  - Uses shared converters from `includes/sync/converters.php`
-  
-- **Block save → meta** (priority 20): Block edits sync attributes to `post_meta` for ACF read/fallback
-  - File: `includes/sync/meta-sync.php`
-  - Hook: `save_post` priority 20
-  - Parses blocks, writes meta, syncs taxonomy terms
-
-### Architecture Files (Sync-Related)
-
-```
-includes/
-├── sync/
-│   ├── acf-to-blocks.php      # ACF → blocks sync (priority 5)
-│   ├── meta-sync.php          # Blocks → meta sync (priority 20)
-│   ├── converters.php         # Shared meta↔block converters (DRY)
-│   └── detection.php          # Save source detection + UI switch tracking
-└── admin/
-    └── reverse-sync.php       # Manual blocks rebuild (WP All Import compat)
-```
+- Creator save path writes directly to `post_meta`.
+- Featured image is set directly via `set_post_thumbnail()`.
+- Ingredient repeater writes immediately sync ingredient taxonomy terms.
+- View model builder reads ACF/meta only.
 
 ### ACF Field Groups
 
@@ -123,51 +109,15 @@ Four ACF field groups registered for recipe content:
 - **group_recipe_ingredients**: Flat repeater (ingredient_term_id, name, amount, unit) + photo URL
 - **group_recipe_steps**: Nested repeater (groups > steps > step_text)
 
-See [SCHEMA_CONTRACT_V1.md](SCHEMA_CONTRACT_V1.md#acf-field-groups--sync-flows) for detailed field structure and sync documentation.
+See [SCHEMA_CONTRACT_V2.md](SCHEMA_CONTRACT_V2.md) for the active view-model contract.
 
-### Testing Dual UI Sync
+### Testing Current Editing Flow
 
-**Test ACF → Blocks:**
-1. Create or edit a post in WordPress admin
-2. Scroll to ACF meta boxes (Recipe Hero, etc.)
-3. Fill in fields, click "Update"
-4. Switch to Block Editor → verify blocks appear with correct data
-
-**Test Blocks → ACF:**
-1. Edit a post in Block Editor
-2. Add/edit recipe blocks (hero, ingredients, steps)
-3. Click "Update"
-4. Scroll to ACF meta boxes → verify fields match block data
-
-**Verify no infinite loops:**
-- Edit via ACF → save → reload → blocks match
-- Edit via blocks → save → reload → ACF fields match
-- No performance degradation (transient flag skips redundant parses)
-
-**Check admin notice:**
-- Edit via ACF → save → wait 5min → open Block Editor
-- Should see admin notice: "You recently edited this recipe in ACF Meta Boxes"
-- Notice disappears after 24 hours or if dismissed
-
-### Troubleshooting Sync Issues
-
-**ACF edits don't update blocks:**
-- Check transient `g4t_acf_save_{POST_ID}` (expires in 60s)
-- Clear transient: `wp transient delete g4t_acf_save_{POST_ID}`
-
-**Block edits don't update ACF fields:**
-- Verify `save_post` hook at priority 20 is registered
-- Check for plugin conflicts (other plugins hooking `save_post`)
-
-**Empty blocks or fields after save:**
-- Verify ACF field names match meta key patterns (`recipe_*`)
-- Check PHP error log for parse_blocks() errors
-
-**Infinite loop on save:**
-- Check static `$running` flag in acf-to-blocks.php
-- Verify re-entry guards not bypassed
-
-See full troubleshooting guide in [SCHEMA_CONTRACT_V1.md](SCHEMA_CONTRACT_V1.md#troubleshooting).
+1. Open frontend recipe creator page.
+2. Save a new draft and verify values are present in ACF/meta keys.
+3. Verify featured image appears as post thumbnail.
+4. Verify ingredient taxonomy terms reflect ingredient repeater rows.
+5. Open single recipe page and verify rendering from recipe view model.
 
 ## Release Checklist
 
@@ -177,7 +127,8 @@ Before each production deployment:
 2. Pull latest changes: `git pull --ff-only`.
 3. **Run test suite**: `phpunit` to verify all modules pass.
 4. Smoke test critical flows in local WP:
-   - recipe editor blocks,
+  - recipe creator save/edit,
+  - wp-admin ACF metabox visibility,
    - single recipe rendering,
    - archive listing rendering.
 5. Push release commit to `main`.
@@ -216,6 +167,26 @@ Tag: vX.Y.Z
 ```
 
 ## Release Notes
+
+### go4taste-recipes-plugin v1.1.0
+
+Release date: 2026-05-26
+Tag: v1.1.0
+
+#### Summary
+- Migrated recipe editing from block-based dual UI to meta-first creator workflow.
+
+#### Changed
+- Frontend creator now saves directly to ACF/meta keys.
+- Featured image is written directly as post thumbnail.
+- Ingredient taxonomy sync now runs from meta-only save path.
+- View model builder switched to meta-only reads.
+- Gutenberg is disabled for the configured recipe post type.
+
+#### Removed
+- Recipe block registration and block template lock workflow.
+- ACF→blocks and blocks→meta sync modules.
+- Reverse-sync admin action and related legacy sync helpers.
 
 ### go4taste-recipes-plugin v1.0.0
 

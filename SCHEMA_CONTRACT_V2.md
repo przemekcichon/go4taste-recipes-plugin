@@ -71,5 +71,4 @@ Both fields are always present (empty string when not set).
 - includes/acf/field-groups.php
 - includes/view-model/normalizers.php
 - includes/sync/meta-sync.php
-- includes/sync/converters.php
 - includes/view-model/builder.php

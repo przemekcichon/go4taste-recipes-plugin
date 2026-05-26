@@ -3,7 +3,9 @@
 > Superseded by SCHEMA_CONTRACT_V2.md for current development. v1 is kept for historical compatibility reference.
 
 **Last Updated:** Phase 1-3 (ACF field groups & sync flows added)  
-**Status:** Stable — dual UI support complete (Block Editor + ACF Meta Boxes)
+**Status:** Archived legacy reference (block-era model; not current runtime)
+
+> Uwaga: ten dokument opisuje historyczny model block + sync. Aktywny runtime i bieżący kontrakt znajdują się w SCHEMA_CONTRACT_V2.md.
 
 ---
 
@@ -321,7 +323,7 @@ get_option( 'go4taste_recipes_options' ) => [
 ## ACF Field Groups & Sync Flows
 
 **Added:** Phase 1-3 of ACF field groups implementation  
-**Status:** Stable — dual UI support (Block Editor + ACF Meta Boxes)
+**Status:** Archived legacy section (replaced by meta-only editing model)
 
 ### Overview
 
@@ -520,7 +522,6 @@ Detects which UI triggered the save:
 |-------------|------------------|----------------|
 | ACF Meta Boxes | `$_POST['acf']` present | `'acf'` |
 | Block Editor | `defined('REST_REQUEST') && REST_REQUEST` | `'blocks'` |
-| Reverse Sync | `doing_action('admin_post_g4t_reverse_sync')` | `'reverse_sync'` |
 | Unknown | None of above | `'unknown'` |
 
 **Edit source tracking:**

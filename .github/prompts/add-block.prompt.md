@@ -68,18 +68,11 @@ In `g4t_get_recipe_acf_data()`:
 '{field_key}' => (string) g4t_acf_field( 'recipe_{field_key}', $post_id, '' ),
 ```
 
-In the `$keys` array inside `g4t_merge_recipe_data()`:
-```php
-'{field_key}',
-```
-
 ### 6. `includes/registration/post-types.php`
 
-Add the block to `$args['template']` in `g4t_apply_recipe_block_template()`:
+No block template update is required in the current meta-only architecture.
 
-```php
-array( 'go4taste-recipes/{slug}' ),
-```
+If the new field is editor-facing, wire it in the frontend creator state and save/load mapping.
 
 ### 7. `SCHEMA_CONTRACT_V1.md`
 

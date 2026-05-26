@@ -6,19 +6,9 @@
  * consumed by Timber templates, WPGraphQL resolvers, and any other downstream
  * system. The shape is documented in SCHEMA_CONTRACT_V2.md.
  *
- * Data sources, in priority order:
- *  1. Block attributes — parsed from post_content. The editor writes here.
- *     Always the most up-to-date representation of what the editor last saved.
- *  2. ACF / post_meta — written by the sync module on save_post. Used as
- *     fallback for posts imported or created without the block editor.
- *
- * WHY blocks win over ACF:
- *
- * ACF meta may contain stale data from a CSV import, a migration script, or an
- * older version of the plugin. A post that was opened in the block editor and
- * saved has authoritative data in post_content. Falling back to ACF only when
- * block data is absent (or empty for a given field) keeps the view model
- * consistent with what the editor shows.
+ * Data source:
+ *  1. ACF / post_meta — the canonical and only runtime source of truth for recipe data.
+ *     Written by the frontend creator (g4t_creator_state_to_meta) and by ACF metaboxes.
  *
  * @package Go4Taste_Recipes_Plugin
  */
@@ -31,11 +21,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Build the full view model for a single recipe post.
  *
  * This function orchestrates:
- *  1. Parsing block data from post_content (g4t_get_recipe_blocks_data from sync module)
- *  2. Reading ACF/post_meta fallback data (g4t_get_recipe_acf_data)
- *  3. Merging the two sources with block data preferred (g4t_merge_recipe_data)
- *  4. Normalizing repeater arrays (g4t_normalize_ingredients_list, g4t_normalize_steps_list)
- *  5. Assembling the final view model array matching SCHEMA_CONTRACT_V2.md
+ *  1. Reading ACF/post_meta data (g4t_get_recipe_acf_data)
+ *  2. Normalizing repeater arrays (g4t_normalize_ingredients_list, g4t_normalize_steps_list)
+ *  3. Assembling the final view model array matching SCHEMA_CONTRACT_V2.md
  *
  * The returned array is frozen in structure: adding/removing/renaming keys requires
  * a schema version bump and migration plan. See SCHEMA_CONTRACT_V2.md for details.
@@ -45,10 +33,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return array<string,mixed> View model matching SCHEMA_CONTRACT_V2.md shape.
  */
 function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plugin $plugin ): array {
-    $post_id    = (int) $post->ID;
-    $block_data = g4t_get_recipe_blocks_data( $post );
-    $acf_data   = g4t_get_recipe_acf_data( $post_id );
-    $data       = g4t_merge_recipe_data( $block_data, $acf_data );
+    $post_id  = (int) $post->ID;
+    $acf_data = g4t_get_recipe_acf_data( $post_id );
+    $data     = $acf_data;
 
     $created_timestamp  = (int) get_post_time( 'U', false, $post_id );
     $modified_timestamp = (int) get_post_modified_time( 'U', false, $post_id );
@@ -68,10 +55,7 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
 
     $normalized_ingredients = ( ! empty( $data['ingredients'] ) && is_array( $data['ingredients'] ) ) ? $data['ingredients'] : array();
 
-    $ads_product_ids = g4t_get_ads_product_ids_from_block_data( $block_data );
-    if ( empty( $ads_product_ids ) ) {
-        $ads_product_ids = g4t_get_ads_product_ids_from_acf( $post_id );
-    }
+    $ads_product_ids = g4t_get_ads_product_ids_from_acf( $post_id );
 
     $hero_image_url = get_the_post_thumbnail_url( $post_id, 'full' );
 
@@ -115,22 +99,6 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
             'enabled'            => ! empty( $ads_product_ids ),
         ),
     );
-}
-
-/**
- * Extract ads product IDs from parsed block data.
- *
- * @param array<string,mixed> $block_data Parsed recipe blocks data.
- * @return array<int,string>
- */
-function g4t_get_ads_product_ids_from_block_data( array $block_data ): array {
-    $raw_ids = array();
-
-    if ( isset( $block_data['ads_product_ids'] ) && is_array( $block_data['ads_product_ids'] ) ) {
-        $raw_ids = $block_data['ads_product_ids'];
-    }
-
-    return g4t_normalize_ads_product_ids( $raw_ids );
 }
 
 /**
@@ -221,107 +189,6 @@ function g4t_get_recipe_acf_data( int $post_id ): array {
         'source_label'          => (string) g4t_acf_field( 'recipe_source_label', $post_id, '' ),
         'source_url'            => (string) g4t_acf_field( 'recipe_source_url', $post_id, '' ),
     );
-}
-
-/**
- * Merge recipe data from block attributes and ACF/meta, preferring block data.
- *
- * WHY this is a separate function:
- *
- * The merge logic uses g4t_has_value() to determine if a field is "empty".
- * Empty strings, empty arrays, and null values trigger fallback to ACF data.
- * This allows imported recipes (which only have ACF data) to render correctly
- * while still respecting explicit editor changes (e.g. clearing a field sets it
- * to empty string in blocks, which should override a non-empty ACF value).
- *
- * The $keys array lists all fields that participate in the merge. If you add
- * a new recipe field, add it here.
- *
- * @param array<string,mixed> $primary Block data (preferred).
- * @param array<string,mixed> $fallback ACF/meta data (fallback).
- * @return array<string,mixed> Merged data.
- */
-function g4t_merge_recipe_data( array $primary, array $fallback ): array {
-    $result = $primary;
-    $keys   = array(
-        'lead',
-        'difficulty',
-        'servings_value',
-        'servings_unit',
-        'time_prep',
-        'time_cook',
-        'time_total',
-        'time_soak',
-        'ingredients',
-        'ingredients_photo_url',
-        'steps',
-        'tips',
-        'source_label',
-        'source_url',
-    );
-
-    foreach ( $keys as $key ) {
-        $value = $result[ $key ] ?? null;
-        if ( ! g4t_has_value( $value ) && isset( $fallback[ $key ] ) ) {
-            $result[ $key ] = $fallback[ $key ];
-        }
-    }
-
-    if ( isset( $result['steps'] ) && is_array( $result['steps'] ) && isset( $fallback['steps'] ) && is_array( $fallback['steps'] ) ) {
-        $result['steps'] = g4t_merge_step_images( $result['steps'], $fallback['steps'] );
-    }
-
-    return $result;
-}
-
-/**
- * Fill missing step images from fallback data while preserving block-authored text.
- *
- * @param array<int,mixed> $primary_steps Block-derived steps.
- * @param array<int,mixed> $fallback_steps ACF/meta-derived steps.
- * @return array<int,mixed>
- */
-function g4t_merge_step_images( array $primary_steps, array $fallback_steps ): array {
-    $merged = array();
-
-    foreach ( $primary_steps as $index => $step ) {
-        if ( ! is_array( $step ) ) {
-            $merged[] = $step;
-            continue;
-        }
-
-        $fallback_step = $fallback_steps[ $index ] ?? null;
-        if ( ! is_array( $fallback_step ) ) {
-            $merged[] = $step;
-            continue;
-        }
-
-        $primary_image = isset( $step['imageUrl'] ) && is_scalar( $step['imageUrl'] )
-            ? trim( (string) $step['imageUrl'] )
-            : '';
-
-        $fallback_image = '';
-        if ( isset( $fallback_step['imageUrl'] ) && is_scalar( $fallback_step['imageUrl'] ) ) {
-            $fallback_image = trim( (string) $fallback_step['imageUrl'] );
-        } elseif ( isset( $fallback_step['images'] ) && is_array( $fallback_step['images'] ) && ! empty( $fallback_step['images'] ) ) {
-            $first_image = reset( $fallback_step['images'] );
-            $fallback_image = is_scalar( $first_image ) ? trim( (string) $first_image ) : '';
-        }
-
-        if ( '' === $primary_image && '' !== $fallback_image ) {
-            $resolved_url = esc_url_raw( $fallback_image );
-            if ( '' !== $resolved_url ) {
-                $step['imageUrl'] = $resolved_url;
-                if ( ! isset( $step['images'] ) || ! is_array( $step['images'] ) || empty( $step['images'] ) ) {
-                    $step['images'] = array( $resolved_url );
-                }
-            }
-        }
-
-        $merged[] = $step;
-    }
-
-    return $merged;
 }
 
 /**

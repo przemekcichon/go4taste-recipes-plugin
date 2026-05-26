@@ -336,7 +336,7 @@ function g4t_collect_blocks_debug( WP_Post $post ): array {
     }
 
     $blocks = parse_blocks( (string) $post->post_content );
-    $blocks = g4t_flatten_recipe_blocks( $blocks );
+    $blocks = g4t_flatten_debug_blocks( $blocks );
 
     $debug_blocks = array();
     foreach ( $blocks as $index => $block ) {
@@ -363,28 +363,13 @@ function g4t_collect_blocks_debug( WP_Post $post ): array {
  * @return array<string,mixed>
  */
 function g4t_collect_recipe_source_debug( WP_Post $post, Go4Taste_Recipes_Plugin $plugin ): array {
-    $post_id      = (int) $post->ID;
     $post_content = (string) $post->post_content;
-    $block_data   = g4t_get_recipe_blocks_data( $post );
-    $has_blocks   = ! empty( $block_data['_has_recipe_blocks'] );
-    $data_source  = $has_blocks ? 'blocks' : 'no_blocks';
-
-    $recipe_blocks_present = array();
-    if ( ! empty( $block_data['_has_hero_block'] ) ) {
-        $recipe_blocks_present[] = 'hero';
-    }
-    if ( ! empty( $block_data['_has_ingredients_block'] ) ) {
-        $recipe_blocks_present[] = 'ingredients';
-    }
-    if ( ! empty( $block_data['_has_steps_block'] ) ) {
-        $recipe_blocks_present[] = 'steps';
-    }
 
     return array(
-        'data_source'                         => $data_source,
-        'has_recipe_blocks'                   => $has_blocks,
+        'data_source'                         => 'meta_only',
+        'has_recipe_blocks'                   => false,
         'current_content_recipe_marker_count' => substr_count( $post_content, '<!-- wp:go4taste-recipes/' ),
-        'recipe_blocks_present'               => $recipe_blocks_present,
+        'recipe_blocks_present'               => array(),
     );
 }
 
@@ -476,7 +461,7 @@ function g4t_analyze_block_content( string $content ): array {
     $has_named_blocks = false;
 
     if ( function_exists( 'parse_blocks' ) ) {
-        $blocks = g4t_flatten_recipe_blocks( parse_blocks( $content ) );
+        $blocks = g4t_flatten_debug_blocks( parse_blocks( $content ) );
         foreach ( $blocks as $block ) {
             if ( ! is_array( $block ) || empty( $block['blockName'] ) ) {
                 continue;
@@ -497,6 +482,30 @@ function g4t_analyze_block_content( string $content ): array {
         'recipe_block_names'  => array_values( array_unique( $recipe_blocks ) ),
         'recipe_marker_count' => substr_count( $content, '<!-- wp:go4taste-recipes/' ),
     );
+}
+
+/**
+ * Flatten parsed blocks for debug-only inspection.
+ *
+ * @param array<int,mixed> $blocks
+ * @return array<int,mixed>
+ */
+function g4t_flatten_debug_blocks( array $blocks ): array {
+    $flat = array();
+
+    foreach ( $blocks as $block ) {
+        if ( ! is_array( $block ) ) {
+            continue;
+        }
+
+        $flat[] = $block;
+
+        if ( isset( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) && ! empty( $block['innerBlocks'] ) ) {
+            $flat = array_merge( $flat, g4t_flatten_debug_blocks( $block['innerBlocks'] ) );
+        }
+    }
+
+    return $flat;
 }
 
 /**

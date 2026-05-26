@@ -57,78 +57,26 @@ class Test_Builder extends WP_UnitTestCase {
     }
 
     /**
-     * Test merge recipe data prefers primary over fallback.
+     * Test ACF/meta data loader returns repeater rows from post meta.
      */
-    public function test_merge_recipe_data_prefers_primary() {
-        $primary = array(
-            'lead'       => 'Primary lead',
-            'difficulty' => 'easy',
-            'tips'       => '',
-        );
+    public function test_get_recipe_acf_data_loads_repeaters_from_meta() {
+        update_post_meta( $this->post_id, 'recipe_ingredients', 1 );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_name', 'Maka' );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_amount', '250' );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_unit', 'g' );
 
-        $fallback = array(
-            'lead'       => 'Fallback lead',
-            'difficulty' => 'hard',
-            'tips'       => 'Fallback tips',
-        );
+        update_post_meta( $this->post_id, 'recipe_steps', 1 );
+        update_post_meta( $this->post_id, 'recipe_steps_0_step_header', 'Krok 1' );
+        update_post_meta( $this->post_id, 'recipe_steps_0_step_description', 'Wymieszaj skladniki.' );
+        update_post_meta( $this->post_id, 'recipe_steps_0_step_image_url', 'https://example.com/step.jpg' );
 
-        $result = g4t_merge_recipe_data( $primary, $fallback );
-
-        $this->assertEquals( 'Primary lead', $result['lead'] );
-        $this->assertEquals( 'easy', $result['difficulty'] );
-        $this->assertEquals( 'Fallback tips', $result['tips'] ); // Empty string uses fallback
-    }
-
-    /**
-     * Test merge recipe data uses fallback for empty arrays.
-     */
-    public function test_merge_recipe_data_empty_arrays() {
-        $primary = array(
-            'ingredients' => array(),
-            'steps'       => array(),
-        );
-
-        $fallback = array(
-            'ingredients' => array( array( 'name' => 'Mąka' ) ),
-            'steps'       => array( array( 'description' => 'Piecz' ) ),
-        );
-
-        $result = g4t_merge_recipe_data( $primary, $fallback );
+        $result = g4t_get_recipe_acf_data( $this->post_id );
 
         $this->assertCount( 1, $result['ingredients'] );
+        $this->assertEquals( 'Maka', $result['ingredients'][0]['name'] );
         $this->assertCount( 1, $result['steps'] );
-    }
-
-    /**
-     * Test merge recipe data fills missing step image from fallback data.
-     */
-    public function test_merge_recipe_data_fills_missing_step_image_from_fallback() {
-        $primary = array(
-            'steps' => array(
-                array(
-                    'title'       => 'Krok 1',
-                    'description' => 'Opis',
-                    'imageUrl'    => '',
-                    'images'      => array(),
-                ),
-            ),
-        );
-
-        $fallback = array(
-            'steps' => array(
-                array(
-                    'title'       => 'Krok 1 fallback',
-                    'description' => 'Opis fallback',
-                    'imageUrl'    => 'https://example.com/step.jpg',
-                ),
-            ),
-        );
-
-        $result = g4t_merge_recipe_data( $primary, $fallback );
-
         $this->assertEquals( 'Krok 1', $result['steps'][0]['title'] );
         $this->assertEquals( 'https://example.com/step.jpg', $result['steps'][0]['imageUrl'] );
-        $this->assertEquals( array( 'https://example.com/step.jpg' ), $result['steps'][0]['images'] );
     }
 
     /**
