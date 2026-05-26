@@ -19,13 +19,13 @@ define( 'GO4TASTE_RECIPES_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 require_once GO4TASTE_RECIPES_PLUGIN_PATH . 'includes/class-go4taste-recipes-plugin.php';
 
 function go4taste_recipes_plugin_bootstrap() {
-    static $plugin = null;
+    global $g4t_recipes_plugin;
 
-    if ( null === $plugin ) {
-        $plugin = new Go4Taste_Recipes_Plugin();
+    if ( null === $g4t_recipes_plugin ) {
+        $g4t_recipes_plugin = new Go4Taste_Recipes_Plugin();
     }
 
-    return $plugin;
+    return $g4t_recipes_plugin;
 }
 
 go4taste_recipes_plugin_bootstrap();

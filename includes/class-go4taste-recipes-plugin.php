@@ -40,6 +40,9 @@ require_once __DIR__ . '/admin/settings-page.php';
 require_once __DIR__ . '/admin/reverse-sync.php';
 require_once __DIR__ . '/integrations/facetwp.php';
 require_once __DIR__ . '/timber/context-filters.php';
+require_once __DIR__ . '/front/recipe-creator.php';
+require_once __DIR__ . '/front/recipe-creator-algolia.php';
+require_once __DIR__ . '/front/recipe-creator-helpers.php';
 
 class Go4Taste_Recipes_Plugin {
     public const OPTION_KEY = 'go4taste_recipes_options';
@@ -59,10 +62,11 @@ class Go4Taste_Recipes_Plugin {
         add_action( 'init', array( $this, 'proxy_register_flat_taxonomies' ) );
         add_action( 'init', array( $this, 'proxy_register_blocks' ) );
         add_action( 'acf/init', array( $this, 'proxy_register_acf_fields' ) );
-        add_action( 'acf/save_post', array( $this, 'proxy_sync_acf_to_blocks' ), 5 );
+        add_action( 'acf/save_post', array( $this, 'proxy_sync_acf_to_blocks' ), 20 );
         add_action( 'save_post', array( $this, 'proxy_sync_meta' ), 20, 3 );
         add_action( 'admin_init', array( $this, 'proxy_register_settings' ) );
         add_action( 'admin_menu', array( $this, 'proxy_register_options_page' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'proxy_enqueue_settings_assets' ) );
         add_action( 'admin_notices', array( $this, 'proxy_render_dependency_notices' ) );
         add_action( 'admin_post_g4t_reverse_sync', array( $this, 'proxy_handle_reverse_sync' ) );
 
@@ -77,6 +81,17 @@ class Go4Taste_Recipes_Plugin {
         add_filter( 'facetwp_query_args', array( $this, 'proxy_filter_facetwp_query_args' ), 10, 2 );
         add_filter( 'facetwp_template_use_archive', array( $this, 'proxy_filter_facetwp_template_use_archive' ), 10, 1 );
         add_filter( 'register_post_type_args',          array( $this, 'proxy_register_post_type_args' ), 10, 2 );
+
+        add_filter( 'theme_page_templates', array( $this, 'proxy_register_recipe_creator_template' ) );
+        add_filter( 'template_include', array( $this, 'proxy_load_recipe_creator_template' ) );
+        add_action( 'wp_enqueue_scripts', array( $this, 'proxy_enqueue_recipe_creator_assets' ) );
+        add_action( 'wp_ajax_g4t_save_recipe_ads_products', array( $this, 'proxy_save_recipe_ads_products' ) );
+        add_action( 'wp_ajax_g4t_upload_image', array( $this, 'proxy_upload_image' ) );
+        add_action( 'wp_ajax_g4t_save_recipe_draft', array( $this, 'proxy_save_recipe_draft' ) );
+        add_filter( 'heartbeat_received', array( $this, 'proxy_recipe_creator_heartbeat_received' ), 10, 2 );
+        add_filter( 'acf/pre_save_post', array( $this, 'proxy_recipe_creator_force_pre_save_post' ), 10, 2 );
+        add_filter( 'acf/load_value/key=field_ingredient_term_id', array( $this, 'proxy_normalize_acf_ingredient_term_value' ), 10, 3 );
+        add_filter( 'acf/update_value/key=field_ingredient_term_id', array( $this, 'proxy_normalize_acf_ingredient_term_value' ), 10, 3 );
     }
 
     /**
@@ -93,6 +108,10 @@ class Go4Taste_Recipes_Plugin {
         $defaults = array(
             'source_mode'        => self::MODE_POST,
             'existing_post_type' => 'post',
+            'creator_min_role'   => 'editor',
+            'creator_brand_mark' => 0,
+            'creator_brand_name' => '',
+            'creator_heartbeat_roles' => array(),
         );
 
         $this->cached_options = wp_parse_args( $raw, $defaults );
@@ -169,6 +188,34 @@ class Go4Taste_Recipes_Plugin {
         g4t_sync_acf_to_blocks( $post_id, $this );
     }
 
+    /**
+     * @param int|string          $post_id
+     * @param array<string,mixed> $form
+     * @return int|string
+     */
+    public function proxy_recipe_creator_force_pre_save_post( $post_id, array $form ) {
+        return g4t_recipe_creator_force_pre_save_post( $post_id, $form );
+    }
+
+    /**
+     * @param mixed               $value
+     * @param int|string          $post_id
+     * @param array<string,mixed> $field
+     * @return int|string
+     */
+    public function proxy_normalize_acf_ingredient_term_value( $value, $post_id, array $field ) {
+        return g4t_normalize_acf_ingredient_term_value( $value, $post_id, $field );
+    }
+
+    /**
+     * @param array<string,mixed> $response
+     * @param array<string,mixed> $data
+     * @return array<string,mixed>
+     */
+    public function proxy_recipe_creator_heartbeat_received( array $response, array $data ): array {
+        return g4t_recipe_creator_handle_heartbeat( $response, $data, $this );
+    }
+
     public function proxy_register_settings(): void {
         g4t_register_settings( $this );
     }
@@ -188,6 +235,10 @@ class Go4Taste_Recipes_Plugin {
     // -------------------------------------------------------------------------
     public function proxy_register_options_page(): void {
         g4t_register_options_page( $this );
+    }
+
+    public function proxy_enqueue_settings_assets( string $hook_suffix ): void {
+        g4t_enqueue_settings_assets( $hook_suffix );
     }
 
     public function proxy_render_dependency_notices(): void {
@@ -299,5 +350,53 @@ class Go4Taste_Recipes_Plugin {
      */
     public function proxy_register_post_type_args( array $args, string $post_type ): array {
         return g4t_apply_recipe_block_template( $args, $post_type, $this );
+    }
+
+    /**
+     * Register recipe creator page template.
+     *
+     * @param array<string,string> $templates
+     * @return array<string,string>
+     */
+    public function proxy_register_recipe_creator_template( array $templates ): array {
+        return g4t_register_recipe_creator_template( $templates );
+    }
+
+    /**
+     * Load recipe creator page template.
+     *
+     * @param string $template
+     * @return string
+     */
+    public function proxy_load_recipe_creator_template( string $template ): string {
+        return g4t_load_recipe_creator_template( $template );
+    }
+
+    /**
+     * Enqueue recipe creator assets (CSS, JS).
+     */
+    public function proxy_enqueue_recipe_creator_assets(): void {
+        g4t_enqueue_recipe_creator_assets();
+    }
+
+    /**
+     * Handle saving recipe product selections from Algolia.
+     */
+    public function proxy_save_recipe_ads_products(): void {
+        g4t_handle_save_recipe_ads_products();
+    }
+
+    /**
+     * Handle AJAX image upload to WordPress Media Library.
+     */
+    public function proxy_upload_image(): void {
+        g4t_handle_upload_image();
+    }
+
+    /**
+     * Handle explicit draft save from recipe creator modal.
+     */
+    public function proxy_save_recipe_draft(): void {
+        g4t_handle_recipe_creator_save_draft( $this );
     }
 }

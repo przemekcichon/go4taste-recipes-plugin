@@ -44,10 +44,20 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @param int $post_id Post ID being saved.
  * @param WP_Post $post Post object.
  * @param bool $update Whether this is an update (true) or insert (false).
- * @param Go4Taste_Recipes_Plugin $plugin Plugin instance for context.
+ * @param Go4Taste_Recipes_Plugin|null $plugin Plugin instance for context.
  */
-function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $update, Go4Taste_Recipes_Plugin $plugin ): void {
+function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $update, ?Go4Taste_Recipes_Plugin $plugin = null ): void {
     static $running = false;
+
+    if ( ! $plugin instanceof Go4Taste_Recipes_Plugin ) {
+        global $g4t_recipes_plugin;
+        $plugin = $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ? $g4t_recipes_plugin : null;
+    }
+
+    if ( ! $plugin instanceof Go4Taste_Recipes_Plugin ) {
+        return;
+    }
+
     if ( $running ) {
         return;
     }
@@ -158,23 +168,12 @@ function g4t_sync_recipe_meta_from_blocks( int $post_id, WP_Post $post, bool $up
  */
 function g4t_normalize_difficulty_for_meta( string $difficulty ): string {
     $value = strtolower( trim( sanitize_text_field( $difficulty ) ) );
-
     if ( '' === $value ) {
         return '';
     }
 
-    $map = array(
-        'easy'   => 'easy',
-        'latwy'  => 'easy',
-        'łatwy'  => 'easy',
-        'medium' => 'medium',
-        'sredni' => 'medium',
-        'średni' => 'medium',
-        'hard'   => 'hard',
-        'trudny' => 'hard',
-    );
-
-    return $map[ $value ] ?? $value;
+    $normalized = g4t_normalize_difficulty_key( $value );
+    return '' !== $normalized ? $normalized : $value;
 }
 
 /**

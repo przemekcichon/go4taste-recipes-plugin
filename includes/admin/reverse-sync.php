@@ -214,7 +214,12 @@ function g4t_rebuild_blocks_for_single_post( int $post_id ) {
 	$post_content = implode( "\n", $blocks );
 
 	// 3. Zapisz do post_content (wyłącz meta-sync żeby uniknąć re-entry)
-	remove_action( 'save_post', 'g4t_sync_recipe_meta_from_blocks', 20 );
+	global $g4t_recipes_plugin;
+	if ( $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ) {
+		remove_action( 'save_post', [ $g4t_recipes_plugin, 'proxy_sync_meta' ], 20 );
+	} else {
+		remove_action( 'save_post', 'g4t_sync_recipe_meta_from_blocks', 20 );
+	}
 	
 	$updated = wp_update_post(
 		[
