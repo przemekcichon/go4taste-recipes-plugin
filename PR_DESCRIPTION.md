@@ -1,15 +1,16 @@
-﻿# PR: Migrate recipes plugin to vertical slices with compatibility adapters
+﻿# PR: Finalize vertical-slices architecture by removing legacy adapters
 
-**Branch:** feat/vertical-slices-migration -> main
+**Branch:** chore/phase-6-adapter-cleanup -> main
 
 ## Motywacja
 
-Domkniecie kolejnego etapu reorganizacji architektury pluginu z ukladu warstwowego
-na vertical slices, bez zmiany kontraktu danych i bez zmiany publicznych hookow.
+Domkniecie Fazy 6 planu migracji: usuniecie tymczasowych adapterow kompatybilnosci
+po migracji do vertical slices. Celem jest uproszczenie include graph i utrzymanie
+jednego, docelowego punktu prawdy w `includes/slices/*`.
 
 Cel tej zmiany:
-1. Przeniesc logike do `includes/slices/{slice}/...`.
-2. Zostawic cienkie adaptery w starych lokalizacjach dla kompatybilnosci.
+1. Usunac adaptery w starych sciezkach warstwowych.
+2. Podpiac orchestrator i autoload Composer bezposrednio pod entrypointy slice.
 3. Utrzymac niezmieniony runtime behavior i SCHEMA_CONTRACT_V2.
 
 ## Zakres zmian
@@ -24,28 +25,34 @@ Cel tej zmiany:
 - `includes/slices/recipe-output-surface/`
 - `includes/slices/recipe-admin-config/`
 
-### Adaptery kompatybilnosci w starych sciezkach
+### Usuniete legacy adaptery i stare warstwy
 
-Nizsze warstwy (`includes/view-model/*`, `includes/registration/*`, `includes/sync/*`,
-`includes/front/*`, `includes/timber/*`, `includes/integrations/*`, `includes/admin/*`)
-zostaly zamienione na cienkie pliki `require_once` wskazujace na nowe slices.
+Usuniete zostaly pliki adapterow oraz puste indeksy ze starych katalogow:
+
+- `includes/view-model/*`
+- `includes/registration/*`
+- `includes/sync/*`
+- `includes/front/*`
+- `includes/timber/*`
+- `includes/integrations/*`
+- `includes/admin/*`
+- `includes/acf/*`
 
 ### Orchestrator
 
 - `includes/class-go4taste-recipes-plugin.php` laduje teraz entrypointy slices.
 - Publiczne hooki, akcje AJAX i sygnatury callbackow pozostaja bez zmian.
 
-### Fixy w trakcie migracji
+### Composer autoload
 
-- Naprawiony fatal na admin options page:
-  - input slice entrypoint przestal ladowac executable template files przy bootstrapie.
-- Naprawione znikajace etapy przygotowania na froncie:
-  - normalizer krokow obsluguje klucze ACF (`step_header`, `step_description`, `step_tip`, `step_image_url`).
+- `composer.json` (autoload `files`) wskazuje teraz tylko na entrypointy slice,
+  bez odniesien do usunietych sciezek legacy.
 
-### Testy
+### Zakres celowo bez zmian funkcjonalnych
 
-- Dodany test regresji dla normalizacji krokow ACF:
-  - `tests/unit/test-normalizers.php`
+- Brak zmian kontraktu view-modelu.
+- Brak zmian publicznych hookow i callback signatures.
+- Brak zmian semantyki zapisu/odczytu danych recipe.
 
 ## Weryfikacja
 
@@ -54,14 +61,14 @@ zostaly zamienione na cienkie pliki `require_once` wskazujace na nowe slices.
 
 ## Ryzyko / kompatybilnosc
 
-- Ryzyko funkcjonalne niskie: zmiana ma charakter architektoniczny (relokacja kodu + adaptery).
+- Ryzyko funkcjonalne niskie: zmiana ma charakter architektoniczny (cleanup include graph).
 - Publiczne API pluginu (hooki/filtry/AJAX) pozostaje stabilne.
-- Adaptery pozostaja tymczasowo; ich cleanup planowany w kolejnym PR (Faza 6).
+- Usuniecie adapterow moze ujawnic ukryte, niestandardowe importy po stronie zewnetrznej.
+  W tym PR brak takich odniesien w kodzie pluginu.
 
 ## Checklist
 
-- [x] Slices utworzone i podlaczone
-- [x] Legacy sciezki utrzymane przez adaptery
-- [x] Naprawiony fatal na options page
-- [x] Naprawione renderowanie etapow przygotowania
+- [x] Legacy adaptery usuniete
+- [x] Orchestrator laduje bezposrednio slice entrypointy
+- [x] Composer autoload zaktualizowany
 - [x] Testy unit przechodza

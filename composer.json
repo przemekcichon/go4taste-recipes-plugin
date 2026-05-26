@@ -13,20 +13,23 @@
     },
     "autoload": {
         "files": [
-            "includes/registration/post-types.php",
-            "includes/registration/taxonomies.php",
-            "includes/registration/blocks.php",
-            "includes/acf/field-groups.php",
-            "includes/sync/meta-sync.php",
-            "includes/view-model/normalizers.php",
-            "includes/view-model/builder.php",
-            "includes/admin/settings-page.php",
-            "includes/timber/context-filters.php"
+            "includes/slices/recipe-composition/index.php",
+            "includes/slices/recipe-registration/index.php",
+            "includes/slices/recipe-storage/index.php",
+            "includes/slices/recipe-read-model/index.php",
+            "includes/slices/recipe-admin-config/index.php",
+            "includes/slices/recipe-input-surface/index.php",
+            "includes/slices/recipe-output-surface/index.php"
         ]
     },
     "scripts": {
         "test": "phpunit",
         "test:unit": "phpunit tests/unit",
         "phpstan": "phpstan analyse includes --level=8"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
     }
 }
