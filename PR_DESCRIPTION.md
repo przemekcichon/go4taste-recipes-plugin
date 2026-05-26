@@ -1,50 +1,68 @@
-﻿# PR: Security hardening for ingredient meta writes and debug mode access
+﻿# PR: Finalize meta-only recipe architecture and remove block-sync legacy
 
-**Branch:** `feature/security-hardening-ingredients-debug` -> `main`
+**Branch:** feat/meta-only-architecture-cleanup -> main
 
 ## Motywacja
 
-W ramach przegladu security wykryto dwa obszary do utwardzenia:
-1. Dane ingredients zapisywane do post meta byly zapisywane bez sanitizacji na sciezce block -> meta.
-2. Tryb debug recept byl dostepny dla kazdego uzytkownika na local env po dodaniu parametru query.
+Domkniecie migracji do modelu meta-only dla recipes pluginu.
 
-Cel tej zmiany to zmniejszenie powierzchni ataku (stored XSS i ekspozycja danych diagnostycznych) bez zmiany logiki biznesowej pluginu.
+Wczesniejsza architektura block/sync zostawiala martwe moduly i niespny UX w adminie
+(Import Tools / Reverse Sync), mimo ze runtime juz dzialal w modelu creator + ACF/meta.
+
+Celem tej zmiany jest:
+1. Usuniecie legacy kodu block-era i fallbackow runtime.
+2. Ujednolicenie zapisu/odczytu recipe do jednego modelu danych (meta-only).
+3. Dostosowanie testow i dokumentacji do aktualnej architektury.
 
 ## Zakres zmian
 
-### [includes/sync/meta-sync.php](includes/sync/meta-sync.php)
-- W `g4t_sync_ingredients_repeater_meta()` dodano sanitizacje przed zapisem:
-	- `name` -> `sanitize_text_field`
-	- `amount` -> `sanitize_text_field( trim(...) )`
-	- `unit` -> `sanitize_text_field`
-	- `ingredient_note` -> `sanitize_text_field`
-- Zapis do `update_post_meta()` odbywa sie juz na przetworzonych, bezpieczniejszych wartosciach.
+### Runtime i zapis danych
 
-### [includes/timber/context-filters.php](includes/timber/context-filters.php)
-- W `g4t_is_recipe_debug_enabled()` usunieto automatyczne wlaczenie debug na local env.
-- Debug jest teraz dostepny tylko dla uzytkownika z capability `manage_options` i parametrem `g4t_recipe_debug`.
+- Front creator zapisuje bezposrednio do post_meta (bez budowania block markup).
+- Featured image jest ustawiane bezposrednio przez post thumbnail.
+- View model builder dziala wylacznie na danych ACF/meta.
+- Gutenberg jest wylaczony dla skonfigurowanego recipe post type.
+
+### Usuniete moduly legacy
+
+- includes/registration/blocks.php
+- includes/sync/acf-to-blocks.php
+- includes/sync/converters.php
+- includes/sync/detection.php
+- includes/admin/reverse-sync.php
+
+### Admin i UX
+
+- Usuniety UI reverse sync z settings page (sekcja Import Tools i notice results).
+
+### Dokumentacja i instrukcje
+
+- Zaktualizowane: README.md, CLAUDE.md, .github/copilot-instructions.md.
+- SCHEMA_CONTRACT_V2.md dopiete do aktualnego runtime (bez usunietych modulow).
+- SCHEMA_CONTRACT_V1.md oznaczony jako archival legacy reference.
+- Zaktualizowane prompty/komendy pomocnicze, aby nie odwolywaly sie do usunietego flow.
+
+### Testy
+
+- tests/unit/test-builder.php dostosowany do usuniecia merge-helperow.
+- Dodatkowe pokrycie dla ladowania repeaterow z meta-only.
 
 ## Weryfikacja
 
-- Skladnia PHP:
-	- `php -l includes/sync/meta-sync.php`
-	- `php -l includes/timber/context-filters.php`
-	- wynik: brak bledow skladni
-
 - Testy jednostkowe:
-	- `vendor/bin/phpunit tests/unit/test-meta-sync.php tests/unit/test-normalizers.php`
-	- wynik: `EXIT:0`
+  - .\\vendor\\bin\\phpunit tests/unit/test-builder.php tests/unit/test-normalizers.php
+  - wynik: EXIT=0
 
 ## Ryzyko / kompatybilnosc
 
-- Niskie ryzyko regresji.
-- Brak zmian publicznego API pluginu.
-- Mozliwy efekt uboczny: wartosci ingredients z nietypowymi znakami HTML/JS sa teraz normalizowane/sanitizowane przy zapisie.
-- Tryb debug nie jest juz widoczny dla nieuprzywilejowanych uzytkownikow, nawet na local env.
+- Zmiana celowo usuwa backward compatibility dla block-era workflow.
+- Srodowiska zalezne od starego block sync/reverse sync musza przejsc na model creator + ACF/meta.
+- Publiczny runtime recipe opiera sie teraz jednoznacznie na meta-only contract.
 
 ## Checklist
 
-- [x] Hardening zapisu ingredients do meta
-- [x] Hardening dostepu do debug mode
-- [x] Testy unit przechodza
+- [x] Legacy block/sync modules usuniete
+- [x] Settings page oczyszczony z reverse sync UI
+- [x] Builder i runtime przejscie na meta-only
+- [x] Testy builder/normalizers przechodza
 - [x] Branch wypchniety i gotowy do PR

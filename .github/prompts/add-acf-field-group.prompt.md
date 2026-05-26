@@ -57,8 +57,6 @@ In `g4t_build_single_recipe_view_model()`, add:
 '{field_key}' => $data['{field_key}'] ?? null,
 ```
 
-Add `'{field_key}'` to the `$keys` array in `g4t_merge_recipe_data()`.
-
 For repeaters: read the repeater rows via `g4t_acf_field()`, loop and extract sub-fields, return a clean array — follow the `g4t_get_recipe_acf_data()` pattern for `recipe_ads_products`.
 
 ### 3. `SCHEMA_CONTRACT_V1.md`
@@ -70,4 +68,4 @@ If the change is non-additive, enforce major schema bump policy.
 ### 4. Tests
 
 - PHPUnit tests for new normalizers or helpers.
-- WordPress integration tests for field persistence and view model merge behavior.
+- WordPress integration tests for field persistence and view model mapping behavior.

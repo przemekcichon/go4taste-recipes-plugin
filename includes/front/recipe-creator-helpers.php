@@ -42,7 +42,21 @@ function g4t_get_recipe_creator_access_denied_message(): string {
 function g4t_get_recipe_for_editing( int $post_id ) {
     $post = get_post( $post_id );
 
-    if ( ! $post || ! in_array( $post->post_type, array( 'post', 'recipe' ), true ) ) {
+    if ( ! $post ) {
+        return false;
+    }
+
+    // Determine the current recipe post type from plugin settings rather than a
+    // hardcoded list. This supports all three source modes (post, existing_cpt,
+    // recipes_cpt) without manual maintenance.
+    $recipe_post_type = 'post'; // Fallback when plugin not yet bootstrapped.
+    global $g4t_recipes_plugin;
+    if ( $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ) {
+        $strategy         = $g4t_recipes_plugin->resolve_source_strategy();
+        $recipe_post_type = $strategy['post_type'];
+    }
+
+    if ( $post->post_type !== $recipe_post_type ) {
         return false;
     }
 
@@ -62,8 +76,15 @@ function g4t_get_recipe_for_editing( int $post_id ) {
  * @return array<string,mixed> ACF form configuration.
  */
 function g4t_get_recipe_form_config( $post_id ) {
-    // Front creator on this site must always create standard WP posts.
-    $cpt_key = 'post';
+    // Read the recipe post type from plugin settings so all three source modes
+    // (post, existing_cpt, recipes_cpt) work without hardcoded lists.
+    $cpt_key = 'post'; // Fallback when plugin not yet bootstrapped.
+    global $g4t_recipes_plugin;
+    if ( $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ) {
+        $strategy = $g4t_recipes_plugin->resolve_source_strategy();
+        $cpt_key  = $strategy['post_type'];
+    }
+
     $return_post_id = is_numeric( $post_id ) ? (string) (int) $post_id : '%post_id%';
 
     return array(
