@@ -196,6 +196,67 @@ function g4t_sync_steps_repeater_meta( int $post_id, array $steps ): void {
 }
 
 /**
+ * Sync classification taxonomy terms for recipe creator state.
+ *
+ * Rules:
+ * - recipe_meal_type: single select (max 1)
+ * - recipe_prep_time_range: single select (max 1)
+ * - recipe_feature: multi select (no limit)
+ *
+ * @param int $post_id Post ID.
+ * @param array<string,array<int,mixed>> $taxonomy_term_ids Taxonomy => selected term IDs.
+ */
+function g4t_sync_recipe_classification_taxonomies( int $post_id, array $taxonomy_term_ids ): void {
+    $config = array(
+        G4T_MEAL_TYPE_TAXONOMY => 1,
+        G4T_PREP_TIME_TAXONOMY => 1,
+        G4T_FEATURE_TAXONOMY   => 0,
+    );
+
+    foreach ( $config as $taxonomy_key => $single_limit ) {
+        if ( ! taxonomy_exists( $taxonomy_key ) ) {
+            continue;
+        }
+
+        $selected = $taxonomy_term_ids[ $taxonomy_key ] ?? array();
+        $term_ids = g4t_normalize_recipe_term_ids( $selected );
+
+        if ( 1 === $single_limit ) {
+            $term_ids = array_slice( $term_ids, 0, 1 );
+        }
+
+        wp_set_object_terms( $post_id, $term_ids, $taxonomy_key, false );
+    }
+}
+
+/**
+ * Normalize mixed term ID payload into a unique int list.
+ *
+ * @param mixed $selected Raw selected term IDs.
+ * @return array<int,int>
+ */
+function g4t_normalize_recipe_term_ids( $selected ): array {
+    if ( ! is_array( $selected ) ) {
+        return array();
+    }
+
+    $term_ids = array();
+
+    foreach ( $selected as $value ) {
+        if ( ! is_numeric( (string) $value ) ) {
+            continue;
+        }
+
+        $id = (int) $value;
+        if ( $id > 0 ) {
+            $term_ids[] = $id;
+        }
+    }
+
+    return array_values( array_unique( $term_ids ) );
+}
+
+/**
  * Load ingredient rows from post meta ACF repeater format.
  *
  * @return array<int,array{ingredient_term_id:int|null,name:string,amount:string|null,unit:string}>

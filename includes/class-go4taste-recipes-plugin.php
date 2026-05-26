@@ -72,6 +72,7 @@ class Go4Taste_Recipes_Plugin {
         add_action( 'wp_ajax_g4t_upload_image', array( $this, 'proxy_upload_image' ) );
         add_action( 'wp_ajax_g4t_save_recipe_draft', array( $this, 'proxy_save_recipe_draft' ) );
         add_filter( 'heartbeat_received', array( $this, 'proxy_recipe_creator_heartbeat_received' ), 10, 2 );
+        add_action( 'acf/validate_save_post', array( $this, 'proxy_validate_recipe_creator_classification_taxonomies' ) );
         add_filter( 'acf/pre_save_post', array( $this, 'proxy_recipe_creator_force_pre_save_post' ), 10, 2 );
 
         add_filter( 'acf/load_value/key=field_ingredient_term_id', array( $this, 'proxy_normalize_acf_ingredient_term_value' ), 10, 3 );
@@ -127,6 +128,10 @@ class Go4Taste_Recipes_Plugin {
      */
     public function proxy_recipe_creator_force_pre_save_post( $post_id, array $form ) {
         return g4t_recipe_creator_force_pre_save_post( $post_id, $form );
+    }
+
+    public function proxy_validate_recipe_creator_classification_taxonomies(): void {
+        g4t_validate_recipe_creator_classification_taxonomies();
     }
 
     /**

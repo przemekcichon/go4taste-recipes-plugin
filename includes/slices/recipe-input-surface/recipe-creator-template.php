@@ -168,7 +168,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 1.6 · CZAS -->
       <section class="step step--center" data-screen-idx="6" hidden>
-        <div class="step__substep">6 z 6 · Ile to zajmie</div>
+        <div class="step__substep">6 z 7 · Ile to zajmie</div>
         <div class="field">
           <label class="field__label">Czas</label>
           <p class="field__hint">Czas całkowity policzymy automatycznie. Podaj wartości w godzinach i minutach.</p>
@@ -239,8 +239,35 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
         </div>
       </section>
 
+      <!-- 1.7 · TERMY TAKSONOMII -->
+      <section class="step step--center" data-screen-idx="7" hidden>
+        <div class="step__substep"><?php echo esc_html__( '7 z 7 · Klasyfikacja przepisu', 'go4taste-recipes-plugin' ); ?></div>
+        <div class="field">
+          <label class="field__label"><?php echo esc_html__( 'Wybierz klasyfikację przepisu', 'go4taste-recipes-plugin' ); ?></label>
+          <p class="field__hint"><?php echo esc_html__( 'Typ dania i zakres czasu przygotowania są wymagane. Cechy możesz dodać opcjonalnie.', 'go4taste-recipes-plugin' ); ?></p>
+
+          <div class="taxonomy-group">
+            <h3 class="taxonomy-group__title"><?php echo esc_html__( 'Typ dania', 'go4taste-recipes-plugin' ); ?> <span class="field__opt"><?php echo esc_html__( 'wymagane', 'go4taste-recipes-plugin' ); ?></span></h3>
+            <div id="taxonomy-mealtype-empty" class="taxonomy-empty" hidden><?php echo esc_html__( 'Termy nie zostały dodane. Dodaj termy w taksonomii Typy dania, aby kontynuować.', 'go4taste-recipes-plugin' ); ?></div>
+            <div id="taxonomy-mealtype-grid" class="taxonomy-grid" hidden></div>
+          </div>
+
+          <div class="taxonomy-group">
+            <h3 class="taxonomy-group__title"><?php echo esc_html__( 'Czas przygotowania', 'go4taste-recipes-plugin' ); ?> <span class="field__opt"><?php echo esc_html__( 'wymagane', 'go4taste-recipes-plugin' ); ?></span></h3>
+            <div id="taxonomy-preptime-empty" class="taxonomy-empty" hidden><?php echo esc_html__( 'Termy nie zostały dodane. Dodaj termy w taksonomii Czas przygotowania, aby kontynuować.', 'go4taste-recipes-plugin' ); ?></div>
+            <div id="taxonomy-preptime-grid" class="taxonomy-grid" hidden></div>
+          </div>
+
+          <div class="taxonomy-group">
+            <h3 class="taxonomy-group__title"><?php echo esc_html__( 'Cechy przepisu', 'go4taste-recipes-plugin' ); ?> <span class="field__opt"><?php echo esc_html__( 'opcjonalne', 'go4taste-recipes-plugin' ); ?></span></h3>
+            <div id="taxonomy-feature-empty" class="taxonomy-empty" hidden><?php echo esc_html__( 'Termy nie zostały dodane. Dodaj termy w taksonomii Cechy, aby mieć opcje wyboru.', 'go4taste-recipes-plugin' ); ?></div>
+            <div id="taxonomy-feature-grid" class="taxonomy-grid" hidden></div>
+          </div>
+        </div>
+      </section>
+
       <!-- ============== KROK 2: SKŁADNIKI ============== -->
-      <section class="step-intro" data-screen-idx="7" hidden>
+      <section class="step-intro" data-screen-idx="8" hidden>
         <div class="step-intro__text">
           <div class="step__eyebrow">Krok 2 z 6 · Składniki</div>
           <h1 class="step__title">Co znajdzie się na liście zakupów?</h1>
@@ -260,7 +287,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
         </div>
       </section>
 
-      <section class="step step--wide step--center" data-screen-idx="8" hidden>
+      <section class="step step--wide step--center" data-screen-idx="9" hidden>
         <div class="step__substep">1 z 2 · Zdjęcie</div>
         <!-- Zdjęcie składników -->
         <div class="field">
@@ -272,7 +299,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <!-- 2.2 · LISTA SKŁADNIKÓW -->
-      <section class="step step--wide" data-screen-idx="9" hidden>
+      <section class="step step--wide" data-screen-idx="10" hidden>
         <div class="step__substep">2 z 2 · Lista</div>
         <!-- Lista składników -->
         <div class="field">
@@ -291,7 +318,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <!-- ============== KROK 3: PRZYGOTOWANIE ============== -->
-      <section class="step-intro" data-screen-idx="10" hidden>
+      <section class="step-intro" data-screen-idx="11" hidden>
         <div class="step-intro__text">
           <div class="step__eyebrow">Krok 3 z 6 · Przygotowanie</div>
           <h1 class="step__title">Rozpisz przepis krok po kroku</h1>
@@ -313,7 +340,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
         </div>
       </section>
 
-      <section class="step step--wide" data-screen-idx="11" hidden>
+      <section class="step step--wide" data-screen-idx="12" hidden>
         <div class="repeater" id="prep-list"></div>
 
         <button type="button" class="rep-add" data-action="add-prep">
@@ -323,7 +350,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <!-- ============== KROK 4: WSKAZÓWKI ============== -->
-      <section class="step-intro" data-screen-idx="12" hidden>
+      <section class="step-intro" data-screen-idx="13" hidden>
         <div class="step-intro__text">
           <div class="step__eyebrow">Krok 4 z 6 · Wskazówki</div>
           <h1 class="step__title">Twoje sztuczki i triki</h1>
@@ -341,7 +368,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
         </div>
       </section>
 
-      <section class="step step--center" data-screen-idx="13" hidden>
+      <section class="step step--center" data-screen-idx="14" hidden>
         <div class="field">
           <label class="field__label">Ogólne wskazówki do przepisu</label>
           <p class="field__hint">Możesz zostawić to pole puste, ale dobre wskazówki znacząco podnoszą jakość przepisu.</p>
@@ -355,7 +382,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <!-- ============== KROK 5: ŹRÓDŁO ============== -->
-      <section class="step-intro" data-screen-idx="14" hidden>
+      <section class="step-intro" data-screen-idx="15" hidden>
         <div class="step-intro__text">
           <div class="step__eyebrow">Krok 5 z 6 · Źródło</div>
           <h1 class="step__title">Skąd pochodzi przepis?</h1>
@@ -375,7 +402,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
         </div>
       </section>
 
-      <section class="step step--center" data-screen-idx="15" hidden>
+      <section class="step step--center" data-screen-idx="16" hidden>
         <div class="source-card">
           <div class="field">
             <label class="field__label">Źródło · nazwa <span class="field__opt">opcjonalnie</span></label>
@@ -402,7 +429,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <!-- ============== KROK 6: PRODUKTY ============== -->
-      <section class="step-intro" data-screen-idx="16" hidden>
+      <section class="step-intro" data-screen-idx="17" hidden>
         <div class="step-intro__text">
           <div class="step__eyebrow">Krok 6 z 6 · Promowane produkty</div>
           <h1 class="step__title">Co polecasz do tego przepisu?</h1>
@@ -421,7 +448,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
         </div>
       </section>
 
-      <section class="step step--wide" data-screen-idx="17" hidden>
+      <section class="step step--wide" data-screen-idx="18" hidden>
         <div id="selected-strip" class="selected-strip" hidden></div>
 
         <div class="search-box">
@@ -435,7 +462,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <!-- ============== PODGLĄD ============== -->
-      <section class="step step--wide" data-screen-idx="18" hidden id="summary">
+      <section class="step step--wide" data-screen-idx="19" hidden id="summary">
         <header>
           <div class="step__eyebrow">Podgląd · ostatni krok</div>
           <h1 class="step__title">Wszystko gotowe?</h1>
@@ -446,7 +473,7 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <!-- ============== DONE ============== -->
-      <section class="step step--center center" data-screen-idx="19" hidden>
+      <section class="step step--center center" data-screen-idx="20" hidden>
         <div class="done-art">
           <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.4">
             <path d="M5 12c3 4 4 6 5 8 2-7 5-12 10-15"/>

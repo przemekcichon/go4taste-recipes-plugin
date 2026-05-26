@@ -249,4 +249,142 @@ class Test_Meta_Sync extends WP_UnitTestCase {
 
         $this->assertSame( 'publish', get_post_status( $this->post_id ) );
     }
+
+    /**
+     * Classification taxonomy validation should reject missing required selections.
+     */
+    public function test_recipe_creator_classification_taxonomy_validation_reports_missing_required_terms() {
+        $errors = g4t_get_recipe_creator_classification_taxonomy_validation_errors(
+            array(
+                G4T_MEAL_TYPE_TAXONOMY => array(),
+                G4T_PREP_TIME_TAXONOMY => null,
+                G4T_FEATURE_TAXONOMY   => array(),
+            )
+        );
+
+        $this->assertCount( 2, $errors );
+        $this->assertSame( 'g4t_meal_type_term_ids', $errors[0]['field'] );
+        $this->assertStringContainsString( 'Typ dania', $errors[0]['message'] );
+        $this->assertSame( 'g4t_prep_time_term_ids', $errors[1]['field'] );
+        $this->assertStringContainsString( 'Czas przygotowania', $errors[1]['message'] );
+    }
+
+    /**
+     * Missing hidden taxonomy fields should not clear existing term relations.
+     */
+    public function test_recipe_creator_force_pre_save_post_preserves_terms_when_fields_missing() {
+        g4t_register_flat_taxonomies( $this->plugin );
+
+        $meal_type = self::factory()->term->create(
+            array(
+                'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
+                'name'     => 'Sniadanie',
+            )
+        );
+        wp_set_object_terms( $this->post_id, array( $meal_type ), G4T_MEAL_TYPE_TAXONOMY, false );
+
+        $_POST['g4t_recipe_creator_action'] = 'update';
+
+        try {
+            g4t_recipe_creator_force_pre_save_post( $this->post_id, array() );
+        } finally {
+            unset( $_POST['g4t_recipe_creator_action'] );
+        }
+
+        $meal_assigned = wp_get_object_terms( $this->post_id, G4T_MEAL_TYPE_TAXONOMY, array( 'fields' => 'ids' ) );
+        $this->assertCount( 1, $meal_assigned );
+        $this->assertSame( $meal_type, (int) $meal_assigned[0] );
+    }
+
+    /**
+     * Classification taxonomy sync should enforce single/single/multi constraints.
+     */
+    public function test_sync_recipe_classification_taxonomies_enforces_selection_model() {
+        g4t_register_flat_taxonomies( $this->plugin );
+
+        $meal_type_a = self::factory()->term->create(
+            array(
+                'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
+                'name'     => 'Sniadanie',
+            )
+        );
+        $meal_type_b = self::factory()->term->create(
+            array(
+                'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
+                'name'     => 'Obiad',
+            )
+        );
+        $prep_time_a = self::factory()->term->create(
+            array(
+                'taxonomy' => G4T_PREP_TIME_TAXONOMY,
+                'name'     => 'Do 15 min',
+            )
+        );
+        $prep_time_b = self::factory()->term->create(
+            array(
+                'taxonomy' => G4T_PREP_TIME_TAXONOMY,
+                'name'     => '16-30 min',
+            )
+        );
+        $feature_a = self::factory()->term->create(
+            array(
+                'taxonomy' => G4T_FEATURE_TAXONOMY,
+                'name'     => 'Bez glutenu',
+            )
+        );
+        $feature_b = self::factory()->term->create(
+            array(
+                'taxonomy' => G4T_FEATURE_TAXONOMY,
+                'name'     => 'Wysokobialkowe',
+            )
+        );
+
+        g4t_sync_recipe_classification_taxonomies(
+            $this->post_id,
+            array(
+                G4T_MEAL_TYPE_TAXONOMY => array( $meal_type_a, $meal_type_b ),
+                G4T_PREP_TIME_TAXONOMY => array( $prep_time_a, $prep_time_b ),
+                G4T_FEATURE_TAXONOMY   => array( $feature_a, $feature_b ),
+            )
+        );
+
+        $meal_assigned = wp_get_object_terms( $this->post_id, G4T_MEAL_TYPE_TAXONOMY, array( 'fields' => 'ids' ) );
+        $prep_assigned = wp_get_object_terms( $this->post_id, G4T_PREP_TIME_TAXONOMY, array( 'fields' => 'ids' ) );
+        $feature_assigned = wp_get_object_terms( $this->post_id, G4T_FEATURE_TAXONOMY, array( 'fields' => 'ids' ) );
+
+        $this->assertCount( 1, $meal_assigned );
+        $this->assertSame( $meal_type_a, (int) $meal_assigned[0] );
+        $this->assertCount( 1, $prep_assigned );
+        $this->assertSame( $prep_time_a, (int) $prep_assigned[0] );
+        $this->assertCount( 2, $feature_assigned );
+        $this->assertContains( $feature_a, $feature_assigned );
+        $this->assertContains( $feature_b, $feature_assigned );
+    }
+
+    /**
+     * Classification taxonomy sync should clear relations for empty selections.
+     */
+    public function test_sync_recipe_classification_taxonomies_clears_empty_selections() {
+        g4t_register_flat_taxonomies( $this->plugin );
+
+        $meal_type = self::factory()->term->create(
+            array(
+                'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
+                'name'     => 'Sniadanie',
+            )
+        );
+        wp_set_object_terms( $this->post_id, array( $meal_type ), G4T_MEAL_TYPE_TAXONOMY, false );
+
+        g4t_sync_recipe_classification_taxonomies(
+            $this->post_id,
+            array(
+                G4T_MEAL_TYPE_TAXONOMY => array(),
+                G4T_PREP_TIME_TAXONOMY => array(),
+                G4T_FEATURE_TAXONOMY   => array(),
+            )
+        );
+
+        $meal_assigned = wp_get_object_terms( $this->post_id, G4T_MEAL_TYPE_TAXONOMY, array( 'fields' => 'ids' ) );
+        $this->assertCount( 0, $meal_assigned );
+    }
 }

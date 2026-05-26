@@ -33,6 +33,18 @@ window.INGREDIENT_TAXONOMY = Array.isArray(window.G4T_RECIPE_CREATOR_DATA?.ingre
   ? window.G4T_RECIPE_CREATOR_DATA.ingredientTaxonomy
   : G4T_STATIC_INGREDIENT_TAXONOMY;
 
+window.MEAL_TYPE_TAXONOMY = Array.isArray(window.G4T_RECIPE_CREATOR_DATA?.mealTypeTaxonomy)
+  ? window.G4T_RECIPE_CREATOR_DATA.mealTypeTaxonomy
+  : [];
+
+window.PREP_TIME_TAXONOMY = Array.isArray(window.G4T_RECIPE_CREATOR_DATA?.prepTimeTaxonomy)
+  ? window.G4T_RECIPE_CREATOR_DATA.prepTimeTaxonomy
+  : [];
+
+window.FEATURE_TAXONOMY = Array.isArray(window.G4T_RECIPE_CREATOR_DATA?.featureTaxonomy)
+  ? window.G4T_RECIPE_CREATOR_DATA.featureTaxonomy
+  : [];
+
 // Sugestie jednostek — pole jest wolnym tekstem, te wartości pojawią się tylko jako podpowiedzi w datalist.
 window.UNIT_SUGGESTIONS    = ['g', 'kg', 'ml', 'l', 'szt.', 'łyżka', 'łyżeczka', 'szklanka', 'szczypta', 'do smaku'];
 window.PORTION_UNIT_SUGGESTIONS = ['osób', 'porcji', 'sztuk', 'kawałków', 'słoików'];

@@ -116,6 +116,9 @@ function g4t_enqueue_recipe_creator_assets(): void {
 
     $creator_data = array(
         'ingredientTaxonomy' => g4t_get_ingredient_taxonomy_for_js(),
+        'mealTypeTaxonomy'   => g4t_get_classification_taxonomy_for_js( G4T_MEAL_TYPE_TAXONOMY ),
+        'prepTimeTaxonomy'   => g4t_get_classification_taxonomy_for_js( G4T_PREP_TIME_TAXONOMY ),
+        'featureTaxonomy'    => g4t_get_classification_taxonomy_for_js( G4T_FEATURE_TAXONOMY ),
         'ajaxUrl'            => admin_url( 'admin-ajax.php' ),
         'homeUrl'            => home_url( '/' ),
         'uploadNonce'        => wp_create_nonce( 'g4t_recipe_creator' ),
@@ -245,6 +248,132 @@ function g4t_get_ingredient_taxonomy_for_js(): array {
     }
 
     return $result;
+}
+
+/**
+ * Get classification taxonomy terms for JS-driven selector cards.
+ *
+ * @param string $taxonomy_key Taxonomy key.
+ * @return array<int,array{id:string,name:string,termId:int,heroIcon:array{id:int,url:string,alt:string}|null}>
+ */
+function g4t_get_classification_taxonomy_for_js( string $taxonomy_key ): array {
+    static $cache = array();
+
+    if ( '' === $taxonomy_key || ! taxonomy_exists( $taxonomy_key ) ) {
+        return array();
+    }
+
+    if ( isset( $cache[ $taxonomy_key ] ) && is_array( $cache[ $taxonomy_key ] ) ) {
+        return $cache[ $taxonomy_key ];
+    }
+
+    $terms = get_terms(
+        array(
+            'taxonomy'   => $taxonomy_key,
+            'hide_empty' => false,
+            'number'     => 9999,
+        )
+    );
+
+    if ( is_wp_error( $terms ) || empty( $terms ) ) {
+        $cache[ $taxonomy_key ] = array();
+        return $cache[ $taxonomy_key ];
+    }
+
+    $result = array();
+
+    foreach ( $terms as $term ) {
+        if ( ! ( $term instanceof WP_Term ) || (int) $term->term_id <= 0 ) {
+            continue;
+        }
+
+        $result[] = array(
+            'id'       => sanitize_key( (string) $term->slug ),
+            'name'     => sanitize_text_field( (string) $term->name ),
+            'termId'   => (int) $term->term_id,
+            'heroIcon' => g4t_get_taxonomy_hero_icon_for_js( (int) $term->term_id, (string) $term->name ),
+        );
+    }
+
+    $cache[ $taxonomy_key ] = $result;
+    return $cache[ $taxonomy_key ];
+}
+
+/**
+ * Get hero icon payload for taxonomy card rendering in creator UI.
+ *
+ * @param int $term_id Term ID.
+ * @param string $term_name Term name for alt fallback.
+ * @return array{id:int,url:string,alt:string}|null
+ */
+function g4t_get_taxonomy_hero_icon_for_js( int $term_id, string $term_name ): ?array {
+    static $icon_cache = array();
+
+    if ( $term_id <= 0 ) {
+        return null;
+    }
+
+    if ( isset( $icon_cache[ $term_id ] ) ) {
+        return is_array( $icon_cache[ $term_id ] ) ? $icon_cache[ $term_id ] : null;
+    }
+
+    if ( ! function_exists( 'get_field' ) ) {
+        $icon_cache[ $term_id ] = null;
+        return null;
+    }
+
+    $icon = get_field( 'hero_icon', 'term_' . $term_id );
+    if ( ! is_array( $icon ) ) {
+        $icon_cache[ $term_id ] = null;
+        return null;
+    }
+
+    $url = isset( $icon['url'] ) ? esc_url_raw( (string) $icon['url'] ) : '';
+    if ( '' === $url ) {
+        $icon_cache[ $term_id ] = null;
+        return null;
+    }
+
+    $payload = array(
+        'id'  => isset( $icon['ID'] ) && is_numeric( (string) $icon['ID'] ) ? (int) $icon['ID'] : 0,
+        'url' => $url,
+        'alt' => sanitize_text_field( $term_name ),
+    );
+
+    $icon_cache[ $term_id ] = $payload;
+    return $payload;
+}
+
+/**
+ * Get assigned term IDs for a post/taxonomy in a JS-friendly numeric array.
+ *
+ * @param int $post_id Post ID.
+ * @param string $taxonomy_key Taxonomy key.
+ * @return array<int,int>
+ */
+function g4t_get_post_term_ids_for_js( int $post_id, string $taxonomy_key ): array {
+    if ( $post_id <= 0 || '' === $taxonomy_key || ! taxonomy_exists( $taxonomy_key ) ) {
+        return array();
+    }
+
+    $terms = get_the_terms( $post_id, $taxonomy_key );
+    if ( is_wp_error( $terms ) || empty( $terms ) || ! is_array( $terms ) ) {
+        return array();
+    }
+
+    $term_ids = array();
+    foreach ( $terms as $term ) {
+        if ( ! ( $term instanceof WP_Term ) ) {
+            continue;
+        }
+
+        $id = (int) $term->term_id;
+        if ( $id > 0 ) {
+            $term_ids[] = $id;
+        }
+    }
+
+    return array_values( array_unique( $term_ids ) );
 }
 
 /**
@@ -450,6 +579,9 @@ function g4t_get_recipe_creator_initial_state( int $post_id ): array {
         'tips'             => (string) get_post_meta( $post_id, 'recipe_tips', true ),
         'sourceName'       => (string) get_post_meta( $post_id, 'recipe_source_label', true ),
         'sourceUrl'        => (string) get_post_meta( $post_id, 'recipe_source_url', true ),
+        'mealTypeTermIds'  => g4t_get_post_term_ids_for_js( $post_id, G4T_MEAL_TYPE_TAXONOMY ),
+        'prepTimeTermIds'  => g4t_get_post_term_ids_for_js( $post_id, G4T_PREP_TIME_TAXONOMY ),
+        'featureTermIds'   => g4t_get_post_term_ids_for_js( $post_id, G4T_FEATURE_TAXONOMY ),
         'products'         => $products,
     );
 }
@@ -907,6 +1039,15 @@ function g4t_creator_state_to_meta( array $state, int $post_id ): void {
         }
     }
     g4t_sync_steps_repeater_meta( $post_id, $steps );
+
+    g4t_sync_recipe_classification_taxonomies(
+        $post_id,
+        array(
+            G4T_MEAL_TYPE_TAXONOMY => is_array( $state['mealTypeTermIds'] ?? null ) ? $state['mealTypeTermIds'] : array(),
+            G4T_PREP_TIME_TAXONOMY => is_array( $state['prepTimeTermIds'] ?? null ) ? $state['prepTimeTermIds'] : array(),
+            G4T_FEATURE_TAXONOMY   => is_array( $state['featureTermIds'] ?? null ) ? $state['featureTermIds'] : array(),
+        )
+    );
 }
 
 /**

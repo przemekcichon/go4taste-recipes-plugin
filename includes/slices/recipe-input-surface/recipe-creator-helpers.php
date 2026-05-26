@@ -189,9 +189,16 @@ function g4t_render_recipe_creator_loading(): void {
  */
 function g4t_recipe_creator_force_pre_save_post( $post_id, array $form ) {
     $requested_action = g4t_get_recipe_creator_requested_action();
+    $submitted_taxonomies = g4t_get_submitted_recipe_classification_taxonomy_term_ids();
 
     if ( is_numeric( $post_id ) && in_array( $requested_action, array( 'update', 'publish' ), true ) ) {
-        g4t_clear_recipe_creator_user_draft_state( (int) $post_id );
+        $numeric_post_id = (int) $post_id;
+        g4t_clear_recipe_creator_user_draft_state( $numeric_post_id );
+        $taxonomy_term_ids = g4t_filter_present_recipe_classification_taxonomy_term_ids( $submitted_taxonomies );
+
+        if ( ! empty( $taxonomy_term_ids ) ) {
+            g4t_sync_recipe_classification_taxonomies( $numeric_post_id, $taxonomy_term_ids );
+        }
     }
 
     if ( 'new_post' !== $post_id ) {
@@ -224,7 +231,188 @@ function g4t_recipe_creator_force_pre_save_post( $post_id, array $form ) {
         return $post_id;
     }
 
-    return (int) $inserted;
+    $created_post_id = (int) $inserted;
+    $taxonomy_term_ids = g4t_filter_present_recipe_classification_taxonomy_term_ids( $submitted_taxonomies );
+    if ( ! empty( $taxonomy_term_ids ) ) {
+        g4t_sync_recipe_classification_taxonomies( $created_post_id, $taxonomy_term_ids );
+    }
+
+    return $created_post_id;
+}
+
+/**
+ * Validate recipe creator classification taxonomy state before ACF save.
+ *
+ * @return void
+ */
+function g4t_validate_recipe_creator_classification_taxonomies(): void {
+    if ( ! isset( $_POST['g4t_recipe_creator_action'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        return;
+    }
+
+    $submitted_taxonomies = g4t_get_submitted_recipe_classification_taxonomy_term_ids();
+    foreach ( g4t_get_recipe_creator_classification_taxonomy_validation_errors( $submitted_taxonomies ) as $error ) {
+        acf_add_validation_error( $error['field'], $error['message'] );
+    }
+}
+
+/**
+ * Get submitted classification taxonomy term IDs from creator hidden fields.
+ *
+ * Missing fields return null so callers can distinguish "not submitted" from
+ * "submitted but intentionally empty".
+ *
+ * @param string $field_name Request field name.
+ * @return array<int,int>|null
+ */
+function g4t_get_submitted_taxonomy_term_ids( string $field_name ): ?array {
+    if ( '' === $field_name ) {
+        return null;
+    }
+
+    $marker_name = $field_name . '_present';
+    if ( ! isset( $_POST[ $marker_name ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        return null;
+    }
+
+    if ( ! isset( $_POST[ $field_name ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        return array();
+    }
+
+    $raw = wp_unslash( $_POST[ $field_name ] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+    if ( ! is_array( $raw ) ) {
+        return array();
+    }
+
+    $term_ids = array();
+    foreach ( $raw as $value ) {
+        if ( ! is_numeric( (string) $value ) ) {
+            continue;
+        }
+
+        $term_id = (int) $value;
+        if ( $term_id > 0 ) {
+            $term_ids[] = $term_id;
+        }
+    }
+
+    return array_values( array_unique( $term_ids ) );
+}
+
+/**
+ * Read submitted taxonomy payload for all classification fields.
+ *
+ * @return array<string,array<int,int>|null>
+ */
+function g4t_get_submitted_recipe_classification_taxonomy_term_ids(): array {
+    return array(
+        G4T_MEAL_TYPE_TAXONOMY => g4t_get_submitted_taxonomy_term_ids( 'g4t_meal_type_term_ids' ),
+        G4T_PREP_TIME_TAXONOMY => g4t_get_submitted_taxonomy_term_ids( 'g4t_prep_time_term_ids' ),
+        G4T_FEATURE_TAXONOMY   => g4t_get_submitted_taxonomy_term_ids( 'g4t_feature_term_ids' ),
+    );
+}
+
+/**
+ * Filter out taxonomy fields that were not submitted.
+ *
+ * @param array<string,array<int,int>|null> $submitted_taxonomies Submitted taxonomy payload.
+ * @return array<string,array<int,int>>
+ */
+function g4t_filter_present_recipe_classification_taxonomy_term_ids( array $submitted_taxonomies ): array {
+    $taxonomy_term_ids = array();
+
+    foreach ( $submitted_taxonomies as $taxonomy_key => $term_ids ) {
+        if ( ! is_array( $term_ids ) ) {
+            continue;
+        }
+
+        $taxonomy_term_ids[ $taxonomy_key ] = $term_ids;
+    }
+
+    return $taxonomy_term_ids;
+}
+
+/**
+ * Build validation errors for creator classification taxonomies.
+ *
+ * @param array<string,array<int,int>|null> $submitted_taxonomies Submitted taxonomy payload.
+ * @return array<int,array{field:string,message:string}>
+ */
+function g4t_get_recipe_creator_classification_taxonomy_validation_errors( array $submitted_taxonomies ): array {
+    $rules = array(
+        G4T_MEAL_TYPE_TAXONOMY => array(
+            'field'    => 'g4t_meal_type_term_ids',
+            'label'    => __( 'Typ dania', 'go4taste-recipes-plugin' ),
+            'required' => true,
+        ),
+        G4T_PREP_TIME_TAXONOMY => array(
+            'field'    => 'g4t_prep_time_term_ids',
+            'label'    => __( 'Czas przygotowania', 'go4taste-recipes-plugin' ),
+            'required' => true,
+        ),
+        G4T_FEATURE_TAXONOMY   => array(
+            'field'    => 'g4t_feature_term_ids',
+            'label'    => __( 'Cechy przepisu', 'go4taste-recipes-plugin' ),
+            'required' => false,
+        ),
+    );
+
+    $errors = array();
+
+    foreach ( $rules as $taxonomy_key => $rule ) {
+        $selected_term_ids = $submitted_taxonomies[ $taxonomy_key ] ?? null;
+        if ( null === $selected_term_ids ) {
+            if ( ! empty( $rule['required'] ) ) {
+                $errors[] = array(
+                    'field'   => $rule['field'],
+                    'message' => sprintf(
+                        /* translators: %s: taxonomy label. */
+                        __( 'Wybierz dokładnie jeden %s.', 'go4taste-recipes-plugin' ),
+                        $rule['label']
+                    ),
+                );
+            }
+
+            continue;
+        }
+
+        $available_terms = get_terms(
+            array(
+                'taxonomy'   => $taxonomy_key,
+                'hide_empty' => false,
+                'number'     => 1,
+                'fields'     => 'ids',
+            )
+        );
+
+        if ( is_wp_error( $available_terms ) || empty( $available_terms ) ) {
+            if ( ! empty( $rule['required'] ) ) {
+                $errors[] = array(
+                    'field'   => $rule['field'],
+                    'message' => sprintf(
+                        /* translators: %s: taxonomy label. */
+                        __( 'Nie dodano jeszcze termów do taksonomii %s. Dodaj termy i spróbuj ponownie.', 'go4taste-recipes-plugin' ),
+                        $rule['label']
+                    ),
+                );
+            }
+
+            continue;
+        }
+
+        if ( ! empty( $rule['required'] ) && 1 !== count( $selected_term_ids ) ) {
+            $errors[] = array(
+                'field'   => $rule['field'],
+                'message' => sprintf(
+                    /* translators: %s: taxonomy label. */
+                    __( 'Wybierz dokładnie jeden %s.', 'go4taste-recipes-plugin' ),
+                    $rule['label']
+                ),
+            );
+        }
+    }
+
+    return $errors;
 }
 
 /**
