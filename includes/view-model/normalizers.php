@@ -165,3 +165,63 @@ function g4t_has_value( $value ): bool {
 
     return null !== $value && false !== $value;
 }
+
+/**
+ * Normalize mixed difficulty values to canonical key: easy|medium|hard.
+ *
+ * Handles legacy values such as "łatwy", "latwy", "łatwe d", etc.
+ *
+ * @param string $difficulty Raw difficulty value.
+ * @return string Canonical key or empty string when not recognized.
+ */
+function g4t_normalize_difficulty_key( string $difficulty ): string {
+    $raw = trim( sanitize_text_field( $difficulty ) );
+    if ( '' === $raw ) {
+        return '';
+    }
+
+    $value = strtolower( $raw );
+    if ( in_array( $value, array( 'easy', 'medium', 'hard' ), true ) ) {
+        return $value;
+    }
+
+    $ascii = strtolower( remove_accents( $value ) );
+
+    if ( false !== strpos( $ascii, 'easy' ) || false !== strpos( $ascii, 'latw' ) ) {
+        return 'easy';
+    }
+
+    if ( false !== strpos( $ascii, 'medium' ) || false !== strpos( $ascii, 'sred' ) ) {
+        return 'medium';
+    }
+
+    if ( false !== strpos( $ascii, 'hard' ) || false !== strpos( $ascii, 'trud' ) ) {
+        return 'hard';
+    }
+
+    return '';
+}
+
+/**
+ * Convert difficulty value/key to a Polish display label.
+ *
+ * @param string $difficulty Raw value or canonical key.
+ * @return string Human-readable Polish label or sanitized raw value.
+ */
+function g4t_get_difficulty_label( string $difficulty ): string {
+    $key = g4t_normalize_difficulty_key( $difficulty );
+
+    if ( 'easy' === $key ) {
+        return __( 'Łatwy', 'go4taste-recipes-plugin' );
+    }
+
+    if ( 'medium' === $key ) {
+        return __( 'Średni', 'go4taste-recipes-plugin' );
+    }
+
+    if ( 'hard' === $key ) {
+        return __( 'Trudny', 'go4taste-recipes-plugin' );
+    }
+
+    return trim( sanitize_text_field( $difficulty ) );
+}

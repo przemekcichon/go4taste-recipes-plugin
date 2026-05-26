@@ -3,7 +3,7 @@
  * ACF → Blocks Synchronization
  *
  * Syncs ACF field edits to Gutenberg blocks in post_content.
- * Fires on acf/save_post priority 5 (before block→meta sync at priority 20).
+ * Fires on acf/save_post after ACF has already written submitted values to meta.
  *
  * WHY this sync is needed:
  *
@@ -27,7 +27,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Sync ACF fields → Gutenberg blocks
  *
- * Priority 5 ensures this runs BEFORE g4t_sync_recipe_meta_from_blocks() at priority 20.
+ * This must run after ACF's own priority-10 meta write. The front creator submits
+ * fresh values only in $_POST['acf']; reading post_meta earlier would rebuild empty
+ * blocks from stale data and the subsequent save_post sync would wipe the recipe.
+ *
  * Performance optimization: sets transient to skip block parsing in meta-sync.
  *
  * WHY int|string type hint:
@@ -80,6 +83,14 @@ function g4t_sync_acf_to_blocks( int|string $post_id, Go4Taste_Recipes_Plugin $p
 		return;
 	}
 
+	// Featured image source of truth: always sync ACF field -> WP post thumbnail.
+	g4t_sync_post_thumbnail_from_acf_featured_image( $post_id );
+
+	// ACF writes the repeater rows first, but new ingredient terms are normally
+	// created during block->meta sync. Front creator saves skip that phase via the
+	// transient below, so we must materialize missing terms before rebuilding blocks.
+	g4t_sync_ingredient_taxonomy_from_existing_meta( $post_id );
+
 	// Build blocks from ACF using shared converters
 	$blocks = array(
 		g4t_build_hero_block_from_acf( $post_id ),
@@ -97,6 +108,17 @@ function g4t_sync_acf_to_blocks( int|string $post_id, Go4Taste_Recipes_Plugin $p
 	);
 
 	$post_content = implode( "\n", $blocks );
+	$requested_action = '';
+	// Only honour publish action when the request genuinely originates from the
+	// front recipe creator form (not from admin ACF meta boxes or other contexts).
+	// Guard: must be a non-admin, non-REST request with the creator action set.
+	if (
+		function_exists( 'g4t_get_recipe_creator_requested_action' )
+		&& ! is_admin()
+		&& ! ( defined( 'REST_REQUEST' ) && REST_REQUEST )
+	) {
+		$requested_action = g4t_get_recipe_creator_requested_action();
+	}
 
 	// Set flag to skip block→meta sync (performance optimization)
 	set_transient( "g4t_acf_save_{$post_id}", true, 60 );
@@ -104,12 +126,16 @@ function g4t_sync_acf_to_blocks( int|string $post_id, Go4Taste_Recipes_Plugin $p
 	// Disable block→meta sync to avoid loop
 	remove_action( 'save_post', array( $plugin, 'proxy_sync_meta' ), 20 );
 
-	$result = wp_update_post(
-		array(
-			'ID'           => $post_id,
-			'post_content' => $post_content,
-		)
+	$update_args = array(
+		'ID'           => $post_id,
+		'post_content' => $post_content,
 	);
+
+	if ( 'publish' === $requested_action ) {
+		$update_args['post_status'] = 'publish';
+	}
+
+	$result = wp_update_post( $update_args );
 
 	if ( is_wp_error( $result ) ) {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -125,6 +151,33 @@ function g4t_sync_acf_to_blocks( int|string $post_id, Go4Taste_Recipes_Plugin $p
 	add_action( 'save_post', array( $plugin, 'proxy_sync_meta' ), 20, 3 );
 
 	$running = false;
+}
+
+/**
+ * Sync WP post thumbnail from ACF featured image field.
+ *
+ * @param int $post_id Post ID.
+ * @return void
+ */
+function g4t_sync_post_thumbnail_from_acf_featured_image( int $post_id ): void {
+	$raw_featured = trim( (string) get_post_meta( $post_id, 'recipe_featured_image', true ) );
+
+	if ( '' === $raw_featured ) {
+		delete_post_thumbnail( $post_id );
+		return;
+	}
+
+	if ( ! ctype_digit( $raw_featured ) ) {
+		return;
+	}
+
+	$attachment_id = (int) $raw_featured;
+	if ( $attachment_id <= 0 ) {
+		delete_post_thumbnail( $post_id );
+		return;
+	}
+
+	set_post_thumbnail( $post_id, $attachment_id );
 }
 
 /**
@@ -210,7 +263,8 @@ function g4t_build_ingredients_block_from_acf( int $post_id ): string {
 	$items_json = wp_json_encode( $items, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES );
 
 	// Photo URL (outside repeater)
-	$photo_url = get_post_meta( $post_id, 'recipe_ingredients_photo_url', true );
+	$photo_meta = get_post_meta( $post_id, 'recipe_ingredients_photo_url', true );
+	$photo_url  = g4t_resolve_image_meta_to_url( $photo_meta );
 
 	$attrs = '"itemsList":' . $items_json;
 	if ( ! empty( $photo_url ) ) {

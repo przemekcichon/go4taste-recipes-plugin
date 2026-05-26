@@ -73,12 +73,17 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
         $ads_product_ids = g4t_get_ads_product_ids_from_acf( $post_id );
     }
 
+    $hero_image_url = get_the_post_thumbnail_url( $post_id, 'full' );
+
+    $difficulty_key   = (string) ( $data['difficulty'] ?? '' );
+    $difficulty_label = g4t_get_difficulty_label( $difficulty_key );
+
     return array(
         'id'    => $post_id,
         'hero'  => array(
             'title'   => get_the_title( $post_id ),
             'excerpt' => (string) ( $data['lead'] ?? '' ),
-            'image'   => get_the_post_thumbnail_url( $post_id, 'full' ),
+            'image'   => is_string( $hero_image_url ) ? $hero_image_url : '',
         ),
         'times' => array(
             'prep'  => (string) ( $data['time_prep'] ?? '' ),
@@ -86,7 +91,8 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
             'total' => (string) ( $data['time_total'] ?? '' ),
             'soak'  => (string) ( $data['time_soak'] ?? '' ),
         ),
-        'difficulty' => (string) ( $data['difficulty'] ?? '' ),
+        'difficulty'       => $difficulty_label,
+        'difficulty_key'   => $difficulty_key,
         'servings'   => array(
             'value' => $servings_value,
             'unit'  => (string) ( $data['servings_unit'] ?? '' ),
@@ -201,7 +207,7 @@ function g4t_get_recipe_acf_data( int $post_id ): array {
 
     return array(
         'lead'                  => (string) g4t_acf_field( 'recipe_lead', $post_id, '' ),
-        'difficulty'            => (string) g4t_acf_field( 'recipe_difficulty', $post_id, '' ),
+        'difficulty'            => g4t_normalize_difficulty_key( (string) g4t_acf_field( 'recipe_difficulty', $post_id, '' ) ),
         'servings_value'        => g4t_acf_field( 'recipe_servings_value', $post_id, null ),
         'servings_unit'         => (string) g4t_acf_field( 'recipe_servings_unit', $post_id, '' ),
         'time_prep'             => (string) g4t_acf_field( 'recipe_time_prep', $post_id, '' ),
@@ -261,7 +267,61 @@ function g4t_merge_recipe_data( array $primary, array $fallback ): array {
         }
     }
 
+    if ( isset( $result['steps'] ) && is_array( $result['steps'] ) && isset( $fallback['steps'] ) && is_array( $fallback['steps'] ) ) {
+        $result['steps'] = g4t_merge_step_images( $result['steps'], $fallback['steps'] );
+    }
+
     return $result;
+}
+
+/**
+ * Fill missing step images from fallback data while preserving block-authored text.
+ *
+ * @param array<int,mixed> $primary_steps Block-derived steps.
+ * @param array<int,mixed> $fallback_steps ACF/meta-derived steps.
+ * @return array<int,mixed>
+ */
+function g4t_merge_step_images( array $primary_steps, array $fallback_steps ): array {
+    $merged = array();
+
+    foreach ( $primary_steps as $index => $step ) {
+        if ( ! is_array( $step ) ) {
+            $merged[] = $step;
+            continue;
+        }
+
+        $fallback_step = $fallback_steps[ $index ] ?? null;
+        if ( ! is_array( $fallback_step ) ) {
+            $merged[] = $step;
+            continue;
+        }
+
+        $primary_image = isset( $step['imageUrl'] ) && is_scalar( $step['imageUrl'] )
+            ? trim( (string) $step['imageUrl'] )
+            : '';
+
+        $fallback_image = '';
+        if ( isset( $fallback_step['imageUrl'] ) && is_scalar( $fallback_step['imageUrl'] ) ) {
+            $fallback_image = trim( (string) $fallback_step['imageUrl'] );
+        } elseif ( isset( $fallback_step['images'] ) && is_array( $fallback_step['images'] ) && ! empty( $fallback_step['images'] ) ) {
+            $first_image = reset( $fallback_step['images'] );
+            $fallback_image = is_scalar( $first_image ) ? trim( (string) $first_image ) : '';
+        }
+
+        if ( '' === $primary_image && '' !== $fallback_image ) {
+            $resolved_url = esc_url_raw( $fallback_image );
+            if ( '' !== $resolved_url ) {
+                $step['imageUrl'] = $resolved_url;
+                if ( ! isset( $step['images'] ) || ! is_array( $step['images'] ) || empty( $step['images'] ) ) {
+                    $step['images'] = array( $resolved_url );
+                }
+            }
+        }
+
+        $merged[] = $step;
+    }
+
+    return $merged;
 }
 
 /**

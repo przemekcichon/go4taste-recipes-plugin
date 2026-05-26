@@ -44,6 +44,22 @@ Examples:
 - szczypta -> "szczypta"
 - "   " -> null
 
+## Difficulty field (additive change — v2.1)
+
+The view model now exposes two difficulty fields:
+
+| Field | Type | Example | Purpose |
+|---|---|---|---|
+| `difficulty` | `string` | `'Łatwy'` | Human-readable Polish label for display |
+| `difficulty_key` | `string` | `'easy'` | Canonical key (`easy`\|`medium`\|`hard`\|`''`) for CSS classes, logic |
+
+**Migration for existing templates:**
+
+- Templates using `{{ recipe.difficulty }}` for display labels: no change needed.
+- Templates using `{{ recipe.difficulty }}` as a CSS key (e.g. `class="difficulty--{{ recipe.difficulty }}"`) **must** switch to `{{ recipe.difficulty_key }}`.
+
+Both fields are always present (empty string when not set).
+
 ## Compatibility notes
 
 - Legacy numeric values stored in post_meta remain readable.

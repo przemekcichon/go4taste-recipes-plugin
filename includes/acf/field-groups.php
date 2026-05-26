@@ -134,6 +134,14 @@ function g4t_register_acf_fields( Go4Taste_Recipes_Plugin $plugin ): void {
                     'instructions' => 'Krótki opis przepisu (1-2 zdania)',
                 ),
                 array(
+                    'key'           => 'field_recipe_featured_image',
+                    'label'         => 'Featured Image (Main Recipe Photo)',
+                    'name'          => 'recipe_featured_image',
+                    'type'          => 'image',
+                    'return_format' => 'url',
+                    'instructions'  => 'Główne zdjęcie do przepisu (wyświetlane w hero)',
+                ),
+                array(
                     'key'           => 'field_recipe_difficulty',
                     'label'         => 'Difficulty',
                     'name'          => 'recipe_difficulty',

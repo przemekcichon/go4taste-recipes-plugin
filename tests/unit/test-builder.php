@@ -100,6 +100,38 @@ class Test_Builder extends WP_UnitTestCase {
     }
 
     /**
+     * Test merge recipe data fills missing step image from fallback data.
+     */
+    public function test_merge_recipe_data_fills_missing_step_image_from_fallback() {
+        $primary = array(
+            'steps' => array(
+                array(
+                    'title'       => 'Krok 1',
+                    'description' => 'Opis',
+                    'imageUrl'    => '',
+                    'images'      => array(),
+                ),
+            ),
+        );
+
+        $fallback = array(
+            'steps' => array(
+                array(
+                    'title'       => 'Krok 1 fallback',
+                    'description' => 'Opis fallback',
+                    'imageUrl'    => 'https://example.com/step.jpg',
+                ),
+            ),
+        );
+
+        $result = g4t_merge_recipe_data( $primary, $fallback );
+
+        $this->assertEquals( 'Krok 1', $result['steps'][0]['title'] );
+        $this->assertEquals( 'https://example.com/step.jpg', $result['steps'][0]['imageUrl'] );
+        $this->assertEquals( array( 'https://example.com/step.jpg' ), $result['steps'][0]['images'] );
+    }
+
+    /**
      * Test g4t_acf_field fallback to post meta.
      */
     public function test_acf_field_fallback() {

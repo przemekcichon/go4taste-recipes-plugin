@@ -15,6 +15,31 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Resolve image meta value to an absolute URL.
+ *
+ * ACF image fields are often stored as attachment IDs in raw post meta, while
+ * legacy/import paths may store direct URLs. This helper accepts both forms.
+ *
+ * @param mixed $value Raw meta value.
+ * @return string Resolved URL or empty string.
+ */
+function g4t_resolve_image_meta_to_url( $value ): string {
+	$raw = trim( (string) $value );
+	if ( '' === $raw ) {
+		return '';
+	}
+
+	if ( ctype_digit( $raw ) ) {
+		$attachment_url = wp_get_attachment_url( (int) $raw );
+		if ( is_string( $attachment_url ) && '' !== $attachment_url ) {
+			return esc_url_raw( $attachment_url );
+		}
+	}
+
+	return esc_url_raw( $raw );
+}
+
+/**
  * Convert hero meta keys to block attributes array
  *
  * @param int $post_id Post ID.
@@ -131,7 +156,7 @@ function g4t_convert_steps_meta_to_array( int $post_id ): array {
 			'heading'     => sanitize_text_field( (string) $heading ),
 			'description' => sanitize_textarea_field( (string) $description ),
 			'tip'         => sanitize_textarea_field( (string) ( $tip ?: '' ) ),
-			'imageUrl'    => esc_url_raw( (string) ( $image_url ?: '' ) ),
+			'imageUrl'    => g4t_resolve_image_meta_to_url( $image_url ),
 		);
 	}
 
