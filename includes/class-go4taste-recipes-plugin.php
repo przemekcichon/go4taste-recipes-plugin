@@ -26,18 +26,14 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-require_once __DIR__ . '/registration/post-types.php';
-require_once __DIR__ . '/registration/taxonomies.php';
-require_once __DIR__ . '/acf/field-groups.php';
-require_once __DIR__ . '/sync/meta-sync.php';
+require_once __DIR__ . '/slices/recipe-composition/index.php';
+require_once __DIR__ . '/slices/recipe-registration/index.php';
+require_once __DIR__ . '/slices/recipe-storage/index.php';
 require_once __DIR__ . '/view-model/normalizers.php';
 require_once __DIR__ . '/view-model/builder.php';
-require_once __DIR__ . '/admin/settings-page.php';
-require_once __DIR__ . '/integrations/facetwp.php';
-require_once __DIR__ . '/timber/context-filters.php';
-require_once __DIR__ . '/front/recipe-creator.php';
-require_once __DIR__ . '/front/recipe-creator-algolia.php';
-require_once __DIR__ . '/front/recipe-creator-helpers.php';
+require_once __DIR__ . '/slices/recipe-admin-config/index.php';
+require_once __DIR__ . '/slices/recipe-input-surface/index.php';
+require_once __DIR__ . '/slices/recipe-output-surface/index.php';
 
 class Go4Taste_Recipes_Plugin {
     public const OPTION_KEY = 'go4taste_recipes_options';
@@ -45,11 +41,6 @@ class Go4Taste_Recipes_Plugin {
     public const MODE_POST         = 'post';
     public const MODE_EXISTING_CPT = 'existing_cpt';
     public const MODE_RECIPES_CPT  = 'recipes_cpt';
-
-    /**
-     * @var array<string,mixed>|null
-     */
-    private ?array $cached_options = null;
 
     public function __construct() {
         add_action( 'init', array( $this, 'proxy_register_post_type' ) );
@@ -90,62 +81,18 @@ class Go4Taste_Recipes_Plugin {
      * @return array<string,mixed>
      */
     public function get_options(): array {
-        if ( null !== $this->cached_options ) {
-            return $this->cached_options;
-        }
-
-        $raw = get_option( self::OPTION_KEY, array() );
-        $raw = is_array( $raw ) ? $raw : array();
-
-        $defaults = array(
-            'source_mode'        => self::MODE_POST,
-            'existing_post_type' => 'post',
-            'creator_min_role'   => 'editor',
-            'creator_brand_mark' => 0,
-            'creator_brand_name' => '',
-            'creator_heartbeat_roles' => array(),
-        );
-
-        $this->cached_options = wp_parse_args( $raw, $defaults );
-
-        return $this->cached_options;
+        return g4t_get_recipe_options();
     }
 
     /**
      * @return array{mode:string,post_type:string,fallback_used:bool}
      */
     public function resolve_source_strategy(): array {
-        $options = $this->get_options();
-        $mode    = isset( $options['source_mode'] ) ? sanitize_key( (string) $options['source_mode'] ) : self::MODE_POST;
-
-        if ( ! in_array( $mode, array( self::MODE_POST, self::MODE_EXISTING_CPT, self::MODE_RECIPES_CPT ), true ) ) {
-            $mode = self::MODE_POST;
-        }
-
-        $fallback_used = false;
-        $post_type     = 'post';
-
-        if ( self::MODE_RECIPES_CPT === $mode ) {
-            $post_type = G4T_RECIPES_POST_TYPE;
-        } elseif ( self::MODE_EXISTING_CPT === $mode ) {
-            $candidate = isset( $options['existing_post_type'] ) ? sanitize_key( (string) $options['existing_post_type'] ) : '';
-            if ( '' === $candidate || ! post_type_exists( $candidate ) ) {
-                $post_type     = 'post';
-                $fallback_used = true;
-            } else {
-                $post_type = $candidate;
-            }
-        }
-
-        return array(
-            'mode'          => $mode,
-            'post_type'     => $post_type,
-            'fallback_used' => $fallback_used,
-        );
+        return g4t_get_source_strategy();
     }
 
     public function clear_options_cache(): void {
-        $this->cached_options = null;
+        g4t_clear_recipe_options_cache();
     }
 
     // -------------------------------------------------------------------------

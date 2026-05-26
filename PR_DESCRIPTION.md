@@ -1,68 +1,67 @@
-﻿# PR: Finalize meta-only recipe architecture and remove block-sync legacy
+﻿# PR: Migrate recipes plugin to vertical slices with compatibility adapters
 
-**Branch:** feat/meta-only-architecture-cleanup -> main
+**Branch:** feat/vertical-slices-migration -> main
 
 ## Motywacja
 
-Domkniecie migracji do modelu meta-only dla recipes pluginu.
+Domkniecie kolejnego etapu reorganizacji architektury pluginu z ukladu warstwowego
+na vertical slices, bez zmiany kontraktu danych i bez zmiany publicznych hookow.
 
-Wczesniejsza architektura block/sync zostawiala martwe moduly i niespny UX w adminie
-(Import Tools / Reverse Sync), mimo ze runtime juz dzialal w modelu creator + ACF/meta.
-
-Celem tej zmiany jest:
-1. Usuniecie legacy kodu block-era i fallbackow runtime.
-2. Ujednolicenie zapisu/odczytu recipe do jednego modelu danych (meta-only).
-3. Dostosowanie testow i dokumentacji do aktualnej architektury.
+Cel tej zmiany:
+1. Przeniesc logike do `includes/slices/{slice}/...`.
+2. Zostawic cienkie adaptery w starych lokalizacjach dla kompatybilnosci.
+3. Utrzymac niezmieniony runtime behavior i SCHEMA_CONTRACT_V2.
 
 ## Zakres zmian
 
-### Runtime i zapis danych
+### Nowe slices
 
-- Front creator zapisuje bezposrednio do post_meta (bez budowania block markup).
-- Featured image jest ustawiane bezposrednio przez post thumbnail.
-- View model builder dziala wylacznie na danych ACF/meta.
-- Gutenberg jest wylaczony dla skonfigurowanego recipe post type.
+- `includes/slices/recipe-composition/`
+- `includes/slices/recipe-read-model/`
+- `includes/slices/recipe-registration/`
+- `includes/slices/recipe-storage/`
+- `includes/slices/recipe-input-surface/`
+- `includes/slices/recipe-output-surface/`
+- `includes/slices/recipe-admin-config/`
 
-### Usuniete moduly legacy
+### Adaptery kompatybilnosci w starych sciezkach
 
-- includes/registration/blocks.php
-- includes/sync/acf-to-blocks.php
-- includes/sync/converters.php
-- includes/sync/detection.php
-- includes/admin/reverse-sync.php
+Nizsze warstwy (`includes/view-model/*`, `includes/registration/*`, `includes/sync/*`,
+`includes/front/*`, `includes/timber/*`, `includes/integrations/*`, `includes/admin/*`)
+zostaly zamienione na cienkie pliki `require_once` wskazujace na nowe slices.
 
-### Admin i UX
+### Orchestrator
 
-- Usuniety UI reverse sync z settings page (sekcja Import Tools i notice results).
+- `includes/class-go4taste-recipes-plugin.php` laduje teraz entrypointy slices.
+- Publiczne hooki, akcje AJAX i sygnatury callbackow pozostaja bez zmian.
 
-### Dokumentacja i instrukcje
+### Fixy w trakcie migracji
 
-- Zaktualizowane: README.md, CLAUDE.md, .github/copilot-instructions.md.
-- SCHEMA_CONTRACT_V2.md dopiete do aktualnego runtime (bez usunietych modulow).
-- SCHEMA_CONTRACT_V1.md oznaczony jako archival legacy reference.
-- Zaktualizowane prompty/komendy pomocnicze, aby nie odwolywaly sie do usunietego flow.
+- Naprawiony fatal na admin options page:
+  - input slice entrypoint przestal ladowac executable template files przy bootstrapie.
+- Naprawione znikajace etapy przygotowania na froncie:
+  - normalizer krokow obsluguje klucze ACF (`step_header`, `step_description`, `step_tip`, `step_image_url`).
 
 ### Testy
 
-- tests/unit/test-builder.php dostosowany do usuniecia merge-helperow.
-- Dodatkowe pokrycie dla ladowania repeaterow z meta-only.
+- Dodany test regresji dla normalizacji krokow ACF:
+  - `tests/unit/test-normalizers.php`
 
 ## Weryfikacja
 
-- Testy jednostkowe:
-  - .\\vendor\\bin\\phpunit tests/unit/test-builder.php tests/unit/test-normalizers.php
-  - wynik: EXIT=0
+- `vendor\\bin\\phpunit tests\\unit`
+- wynik: `EXIT=0`
 
 ## Ryzyko / kompatybilnosc
 
-- Zmiana celowo usuwa backward compatibility dla block-era workflow.
-- Srodowiska zalezne od starego block sync/reverse sync musza przejsc na model creator + ACF/meta.
-- Publiczny runtime recipe opiera sie teraz jednoznacznie na meta-only contract.
+- Ryzyko funkcjonalne niskie: zmiana ma charakter architektoniczny (relokacja kodu + adaptery).
+- Publiczne API pluginu (hooki/filtry/AJAX) pozostaje stabilne.
+- Adaptery pozostaja tymczasowo; ich cleanup planowany w kolejnym PR (Faza 6).
 
 ## Checklist
 
-- [x] Legacy block/sync modules usuniete
-- [x] Settings page oczyszczony z reverse sync UI
-- [x] Builder i runtime przejscie na meta-only
-- [x] Testy builder/normalizers przechodza
-- [x] Branch wypchniety i gotowy do PR
+- [x] Slices utworzone i podlaczone
+- [x] Legacy sciezki utrzymane przez adaptery
+- [x] Naprawiony fatal na options page
+- [x] Naprawione renderowanie etapow przygotowania
+- [x] Testy unit przechodza
