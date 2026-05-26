@@ -7,7 +7,7 @@ Ask the developer for the following before doing anything:
 3. **URL slug** — kebab-case (e.g. `recipe-cuisines`)
 4. **Hierarchical?** — yes or no
 5. **Show admin column?** — yes or no
-6. **Term-synced?** — automatically create/link terms from a block field?
+6. **Term-synced?** — automatically create/link terms from a creator field?
 
 ---
 
@@ -49,7 +49,7 @@ public function proxy_register_{taxonomy_key}_taxonomy(): void {
 }
 ```
 
-### Step 3 — `includes/sync/meta-sync.php` (term-synced only)
+### Step 3 — `includes/slices/recipe-input-surface/recipe-creator.php` (term-synced only)
 
 - Add `g4t_ensure_{taxonomy_key}_term( string $name ): ?int` following `g4t_ensure_ingredient_term()`.
 - Call it from the relevant block's parsing block inside `g4t_get_recipe_blocks_data()`.

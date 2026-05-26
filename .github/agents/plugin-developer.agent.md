@@ -15,7 +15,6 @@ Implement the feature the developer describes by following the correct sequence 
 
 | Task | Prompt file |
 |---|---|
-| Add a block | `.github/prompts/add-block.prompt.md` |
 | Add a taxonomy | `.github/prompts/add-taxonomy.prompt.md` |
 | Add an ACF field group | `.github/prompts/add-acf-field-group.prompt.md` |
 | Change the CPT | `.github/prompts/add-cpt.prompt.md` |
@@ -26,10 +25,9 @@ Implement the feature the developer describes by following the correct sequence 
 
 | Concern | Only in this file |
 |---|---|
-| `update_post_meta()` | `includes/sync/meta-sync.php` |
-| `register_block_type()` | `includes/registration/blocks.php` |
-| `acf_add_local_field_group()` | `includes/acf/field-groups.php` |
-| `register_taxonomy()` | `includes/registration/taxonomies.php` |
+| `update_post_meta()` | `includes/slices/recipe-storage/meta-sync.php` |
+| `acf_add_local_field_group()` | `includes/slices/recipe-storage/field-groups.php` |
+| `register_taxonomy()` | `includes/slices/recipe-registration/taxonomies.php` |
 | `add_action()` / `add_filter()` | `includes/class-go4taste-recipes-plugin.php` |
 
 ---

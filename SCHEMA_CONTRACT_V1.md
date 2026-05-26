@@ -1,6 +1,6 @@
-# GO4TASTE Recipes Plugin — Schema Contract v1
+# GO4TASTE Recipes Plugin — Schema Contract v1 [ARCHIVED]
 
-> Superseded by SCHEMA_CONTRACT_V2.md for current development. v1 is kept for historical compatibility reference.
+> **ARCHIVED** — This schema describes the block-editor-based recipe model from plugin v1.0. It is superceded by SCHEMA_CONTRACT_V2.md (meta-first, creator-based, current). v1 is retained for historical compatibility reference and import utilities only.
 
 **Last Updated:** Phase 1-3 (ACF field groups & sync flows added)  
 **Status:** Archived legacy reference (block-era model; not current runtime)

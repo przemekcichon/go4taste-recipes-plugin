@@ -35,31 +35,31 @@ This file is loaded automatically by Claude Code for every session in this direc
 ## Architecture — which file owns what
 
 ```
-includes/class-go4taste-recipes-plugin.php   Orchestrator: constants, options cache, resolve_source_strategy(), proxy methods
-includes/registration/post-types.php         g4t_register_recipe_post_type(), g4t_disable_block_editor_for_recipe_post_type()
-includes/registration/taxonomies.php         g4t_register_ingredient_taxonomy(), g4t_register_flat_taxonomies() + taxonomy constants
-includes/acf/field-groups.php                g4t_register_acf_fields() — all acf_add_local_field_group() calls
-includes/front/recipe-creator.php            Frontend creator save/load + g4t_creator_state_to_meta()
-includes/front/recipe-creator-helpers.php    Creator helpers aligned to resolve_source_strategy()
-includes/sync/meta-sync.php                  Repeater/taxonomy utilities
-includes/view-model/normalizers.php          g4t_normalize_ingredients_list(), steps, images, g4t_has_value()
-includes/view-model/builder.php              g4t_build_single_recipe_view_model(), g4t_get_recipe_acf_data() (meta-only runtime)
-includes/admin/settings-page.php             g4t_register_settings(), g4t_render_options_page(), g4t_sanitize_options()
-includes/timber/context-filters.php          g4t_filter_single_context(), archive, home, debug helpers
+includes/class-go4taste-recipes-plugin.php        Orchestrator: constants, options cache, resolve_source_strategy(), proxy methods
+includes/slices/recipe-registration/post-types.php         g4t_register_recipe_post_type(), g4t_disable_block_editor_for_recipe_post_type()
+includes/slices/recipe-registration/taxonomies.php         g4t_register_ingredient_taxonomy(), g4t_register_flat_taxonomies() + taxonomy constants
+includes/slices/recipe-storage/field-groups.php            g4t_register_acf_fields() — all acf_add_local_field_group() calls
+includes/slices/recipe-input-surface/recipe-creator.php    Frontend creator save/load + g4t_creator_state_to_meta()
+includes/slices/recipe-input-surface/helpers.php           Creator helpers aligned to resolve_source_strategy()
+includes/slices/recipe-storage/meta-sync.php               Repeater/taxonomy utilities
+includes/slices/recipe-read-model/normalizers.php          g4t_normalize_ingredients_list(), steps, images, g4t_has_value()
+includes/slices/recipe-read-model/builder.php              g4t_build_single_recipe_view_model(), g4t_get_recipe_acf_data() (meta-only runtime)
+includes/slices/recipe-admin-config/settings-page.php      g4t_register_settings(), g4t_render_options_page(), g4t_sanitize_options()
+includes/slices/recipe-display/context-filters.php         g4t_filter_single_context(), archive, home, debug helpers
 ```
 
 ### Hard constraints — never violate these
 
 | Concern | Only in this file |
 |---|---|
-| Creator save → recipe meta writes | `includes/front/recipe-creator.php` |
-| Repeater/taxonomy sync helpers | `includes/sync/meta-sync.php` |
-| `acf_add_local_field_group()` | `includes/acf/field-groups.php` |
-| `register_taxonomy()` | `includes/registration/taxonomies.php` |
+| Creator save → recipe meta writes | `includes/slices/recipe-input-surface/recipe-creator.php` |
+| Repeater/taxonomy sync helpers | `includes/slices/recipe-storage/meta-sync.php` |
+| `acf_add_local_field_group()` | `includes/slices/recipe-storage/field-groups.php` |
+| `register_taxonomy()` | `includes/slices/recipe-registration/taxonomies.php` |
 | `add_action()` / `add_filter()` | `includes/class-go4taste-recipes-plugin.php` |
-| View model shape | `includes/view-model/builder.php` |
-| Data normalisation | `includes/view-model/normalizers.php` |
-| Timber context enrichment | `includes/timber/context-filters.php` |
+| View model shape | `includes/slices/recipe-read-model/builder.php` |
+| Data normalisation | `includes/slices/recipe-read-model/normalizers.php` |
+| Timber context enrichment | `includes/slices/recipe-display/context-filters.php` |
 
 ---
 
@@ -87,17 +87,17 @@ includes/timber/context-filters.php          g4t_filter_single_context(), archiv
 
 ## How to add a new recipe field
 
-1. `includes/acf/field-groups.php` — add/update ACF field definition.
-2. `includes/front/recipe-creator.php` — map creator state ↔ meta save/load.
-3. `includes/view-model/builder.php` — include field in view model mapping.
+1. `includes/slices/recipe-storage/field-groups.php` — add/update ACF field definition.
+2. `includes/slices/recipe-input-surface/recipe-creator.php` — map creator state ↔ meta save/load.
+3. `includes/slices/recipe-read-model/builder.php` — include field in view model mapping.
 4. `SCHEMA_CONTRACT_V2.md` — update contract docs if view-model shape changes.
 
 ## How to add a taxonomy
 
 See `.claude/commands/add-taxonomy.md`. Summary:
 
-1. `includes/registration/taxonomies.php` — add entry + PHP constant
-2. If term-synced: `includes/sync/meta-sync.php` + `includes/class-go4taste-recipes-plugin.php`
+1. `includes/slices/recipe-registration/taxonomies.php` — add entry + PHP constant
+2. If term-synced: `includes/slices/recipe-storage/meta-sync.php` + `includes/class-go4taste-recipes-plugin.php`
 3. `SCHEMA_CONTRACT_V1.md` — document
 
 ---

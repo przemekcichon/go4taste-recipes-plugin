@@ -34,25 +34,25 @@ This file is automatically read by GitHub Copilot for every file in this reposit
 ## Architecture — which file owns what
 
 ```
-includes/class-go4taste-recipes-plugin.php   Orchestrator: constants, options cache, proxy methods only
-includes/registration/post-types.php         CPT registration + Gutenberg disable for recipe post type
-includes/registration/taxonomies.php         Taxonomy registration + G4T_*_TAXONOMY constants
-includes/acf/field-groups.php                All acf_add_local_field_group() calls
-includes/front/recipe-creator.php            Frontend creator save/load + state→meta mapping
-includes/front/recipe-creator-helpers.php    Creator helpers aligned to resolve_source_strategy()
-includes/sync/meta-sync.php                  Repeater/taxonomy utilities
-includes/view-model/normalizers.php          Pure data normalisation helpers
-includes/view-model/builder.php              View model builder (meta-first)
-includes/admin/settings-page.php             Admin settings page
-includes/timber/context-filters.php          Timber context filters + debug helpers
+includes/class-go4taste-recipes-plugin.php        Orchestrator: constants, options cache, proxy methods only
+includes/slices/recipe-registration/post-types.php          CPT registration + Gutenberg disable for recipe post type
+includes/slices/recipe-registration/taxonomies.php          Taxonomy registration + G4T_*_TAXONOMY constants
+includes/slices/recipe-storage/field-groups.php             All acf_add_local_field_group() calls
+includes/slices/recipe-input-surface/recipe-creator.php     Frontend creator save/load + state→meta mapping
+includes/slices/recipe-input-surface/helpers.php            Creator helpers aligned to resolve_source_strategy()
+includes/slices/recipe-storage/meta-sync.php                Repeater/taxonomy utilities
+includes/slices/recipe-read-model/normalizers.php           Pure data normalisation helpers
+includes/slices/recipe-read-model/builder.php               View model builder (meta-first)
+includes/slices/recipe-admin-config/settings-page.php       Admin settings page
+includes/slices/recipe-display/context-filters.php          Timber context filters + debug helpers
 ```
 
 ### Hard constraints
 
-- Creator save → recipe meta writes only in `includes/front/recipe-creator.php`
-- Repeater/taxonomy sync helpers in `includes/sync/meta-sync.php`
-- `acf_add_local_field_group()` only in `includes/acf/field-groups.php`
-- `register_taxonomy()` only in `includes/registration/taxonomies.php`
+- Creator save → recipe meta writes only in `includes/slices/recipe-input-surface/recipe-creator.php`
+- Repeater/taxonomy sync helpers in `includes/slices/recipe-storage/meta-sync.php`
+- `acf_add_local_field_group()` only in `includes/slices/recipe-storage/field-groups.php`
+- `register_taxonomy()` only in `includes/slices/recipe-registration/taxonomies.php`
 - `add_action()` / `add_filter()` only in `includes/class-go4taste-recipes-plugin.php`
 
 ---
@@ -70,9 +70,9 @@ includes/timber/context-filters.php          Timber context filters + debug help
 
 ## How to add a new recipe field
 
-1. `includes/acf/field-groups.php` — add/update ACF field definition
-2. `includes/front/recipe-creator.php` — map creator state save/load for the field
-3. `includes/view-model/builder.php` — include field in recipe view model mapping
+1. `includes/slices/recipe-storage/field-groups.php` — add/update ACF field definition
+2. `includes/slices/recipe-input-surface/recipe-creator.php` — map creator state save/load for the field
+3. `includes/slices/recipe-read-model/builder.php` — include field in recipe view model mapping
 4. `SCHEMA_CONTRACT_V2.md` — document shape changes when applicable
 
 ## How to add a taxonomy

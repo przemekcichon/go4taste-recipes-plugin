@@ -12,7 +12,7 @@ Ask the developer for:
 3. **URL slug** — kebab-case (e.g. `recipe-cuisines`)
 4. **Hierarchical?** — yes or no
 5. **Show admin column?** — yes or no
-6. **Term-synced?** — should saving a block automatically create/link terms? If yes, which block field drives it?
+6. **Term-synced?** — should saving a creator field automatically create/link terms? If yes, which creator field drives it?
 
 ---
 
@@ -54,10 +54,10 @@ public function proxy_register_{taxonomy_key}_taxonomy(): void {
 }
 ```
 
-### 3. `includes/sync/meta-sync.php` (term-synced only)
+### 3. `includes/slices/recipe-input-surface/recipe-creator.php` (term-synced only)
 
-- Add `g4t_ensure_{taxonomy_key}_term( string $name ): ?int` following `g4t_ensure_ingredient_term()`.
-- Call it from the relevant block's `if` block inside `g4t_get_recipe_blocks_data()`, or add a dedicated sync function following the `g4t_sync_ingredients_repeater_meta()` pattern.
+- Add `g4t_ensure_{taxonomy_key}_term( string $name ): ?int` helper in `includes/slices/recipe-storage/meta-sync.php` following `g4t_ensure_ingredient_term()` pattern.
+- Call it from the creator field save path when the user selects or creates a term.
 
 ### 4. `SCHEMA_CONTRACT_V1.md`
 
