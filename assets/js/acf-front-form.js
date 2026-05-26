@@ -5,32 +5,47 @@
   'use strict';
 
   // ============================================================
-  // SCREENS  —  linear flow: intro 1 → form 1 (5 podstron) → intro 2 → form 2 → ... → review → done
+  // SCREENS  —  linear flow: intro 1 → form 1 (podstrony) → intro 2 → form 2 → ... → review → done
   // Każdy screen typu 'form' może mieć własną funkcję validate(data) → null | error message.
   // ============================================================
   const SCREENS = [
     { kind:'intro', step:0 },  // 0
-    // Krok 1 podzielony na 6 podstron: tytuł, wstęp, featured image, trudność, porcje, czas
+    // Krok 1 podzielony na 7 podstron: tytuł, wstęp, featured image, trudność, porcje, czas, termy
     { kind:'form',  step:0, validate: d => (!d.title || d.title.trim().length < 3) ? 'Tytuł musi mieć co najmniej 3 znaki.' : null }, // 1
     { kind:'form',  step:0, validate: d => (!d.lead || d.lead.trim().length < 20) ? 'Wstęp musi mieć co najmniej 20 znaków.' : null }, // 2
     { kind:'form',  step:0 }, // 3  (featured image — opcjonalnie)
     { kind:'form',  step:0, validate: d => !d.difficulty ? 'Wybierz poziom trudności.' : null },                               // 4
     { kind:'form',  step:0, validate: d => (!d.portions || d.portions < 1) ? 'Podaj liczbę porcji.' : null },                   // 5
     { kind:'form',  step:0, validate: d => !(d.timePrep > 0 || d.timeCook > 0) ? 'Podaj przynajmniej czas przygotowania lub gotowania.' : null }, // 6
-    { kind:'intro', step:1 },  // 7
+    { kind:'form',  step:0, validate: d => {
+      if (!Array.isArray(window.MEAL_TYPE_TAXONOMY) || window.MEAL_TYPE_TAXONOMY.length === 0) {
+        return 'Brak termów w taksonomii Typy dania. Dodaj termy i spróbuj ponownie.';
+      }
+      if (!Array.isArray(window.PREP_TIME_TAXONOMY) || window.PREP_TIME_TAXONOMY.length === 0) {
+        return 'Brak termów w taksonomii Czas przygotowania. Dodaj termy i spróbuj ponownie.';
+      }
+      if (!Array.isArray(d.mealTypeTermIds) || d.mealTypeTermIds.length !== 1) {
+        return 'Wybierz dokładnie jeden typ dania.';
+      }
+      if (!Array.isArray(d.prepTimeTermIds) || d.prepTimeTermIds.length !== 1) {
+        return 'Wybierz dokładnie jeden zakres czasu przygotowania.';
+      }
+      return null;
+    } }, // 7
+    { kind:'intro', step:1 },  // 8
     // Krok 2 podzielony na 2 podstrony: zdjęcie (opcjonalne), lista
-    { kind:'form',  step:1 },  // 8  (zdjęcie składników — opcjonalne)
-    { kind:'form',  step:1, validate: d => d.ingredients.some(r => r.name && r.amount) ? null : 'Dodaj co najmniej jeden składnik z ilością.' },  // 9
-    { kind:'intro', step:2 },  // 10
-    { kind:'form',  step:2, validate: d => d.steps.some(r => (r.heading||'').trim() && (r.body||'').trim()) ? null : 'Dodaj co najmniej jeden krok przygotowania (nagłówek + opis).' }, // 11
-    { kind:'intro', step:3 },  // 12
-    { kind:'form',  step:3 },  // 13  (opcjonalne)
-    { kind:'intro', step:4 },  // 14
-    { kind:'form',  step:4 },  // 15  (opcjonalne)
-    { kind:'intro', step:5 },  // 16
-    { kind:'form',  step:5 },  // 17  (opcjonalne)
-    { kind:'review'         }, // 18
-    { kind:'done'           }, // 19
+    { kind:'form',  step:1 },  // 9  (zdjęcie składników — opcjonalne)
+    { kind:'form',  step:1, validate: d => d.ingredients.some(r => r.name && r.amount) ? null : 'Dodaj co najmniej jeden składnik z ilością.' },  // 10
+    { kind:'intro', step:2 },  // 11
+    { kind:'form',  step:2, validate: d => d.steps.some(r => (r.heading||'').trim() && (r.body||'').trim()) ? null : 'Dodaj co najmniej jeden krok przygotowania (nagłówek + opis).' }, // 12
+    { kind:'intro', step:3 },  // 13
+    { kind:'form',  step:3 },  // 14  (opcjonalne)
+    { kind:'intro', step:4 },  // 15
+    { kind:'form',  step:4 },  // 16  (opcjonalne)
+    { kind:'intro', step:5 },  // 17
+    { kind:'form',  step:5 },  // 18  (opcjonalne)
+    { kind:'review'         }, // 19
+    { kind:'done'           }, // 20
   ];
   const TOTAL_FORM_STEPS = 6;
   const STEP_TITLES = ['Podstawy', 'Składniki', 'Przygotowanie', 'Wskazówki', 'Źródło', 'Promowane produkty'];
@@ -51,6 +66,9 @@
       portions: 4,
       portionUnit: 'osób',
       timePrep: 0, timeCook: 0, timeSoak: 0,
+      mealTypeTermIds: [],
+      prepTimeTermIds: [],
+      featureTermIds: [],
       ingredientsPhoto: null,
       ingredients: [mkIng()],
       steps: [mkPrep()],
@@ -317,6 +335,7 @@
     bindAllBindings();
     setupCounters();
     setupTimeInputs();
+    setupTaxonomySelectors();
     setupDifficultyChoices();
     setupPortionStepper();
     setupIngredientsPhotoSlot();
@@ -399,12 +418,12 @@
 
     bindDoneViewPostLink();
     applyDoneScreenCopy();
-    showScreen(19);
+    showScreen(20);
 
     function applyDoneScreenCopy() {
       if (!isEditMode) return;
-      const titleEl = document.querySelector('[data-screen-idx="19"] .step__title');
-      const ledeEl  = document.querySelector('[data-screen-idx="19"] .step__lede');
+      const titleEl = document.querySelector('[data-screen-idx="20"] .step__title');
+      const ledeEl  = document.querySelector('[data-screen-idx="20"] .step__lede');
       if (titleEl) titleEl.textContent = 'Przepis został zaktualizowany';
       if (ledeEl)  ledeEl.textContent  = 'Zmiany zostały zapisane. Możesz wrócić do edycji lub zobaczyć przepis.';
     }
@@ -463,6 +482,12 @@
       const num = Number(value);
       return Number.isFinite(num) ? num : fallback;
     };
+    const asIntArray = (value) => {
+      if (!Array.isArray(value)) return [];
+      return [...new Set(value
+        .map((item) => Number(item))
+        .filter((num) => Number.isInteger(num) && num > 0))];
+    };
 
     const normalizedProducts = Array.isArray(initial.products)
       ? initial.products
@@ -486,6 +511,9 @@
       timePrep: Math.max(0, asNumber(initial.timePrep, state.data.timePrep)),
       timeCook: Math.max(0, asNumber(initial.timeCook, state.data.timeCook)),
       timeSoak: Math.max(0, asNumber(initial.timeSoak, state.data.timeSoak)),
+      mealTypeTermIds: asIntArray(initial.mealTypeTermIds),
+      prepTimeTermIds: asIntArray(initial.prepTimeTermIds),
+      featureTermIds: asIntArray(initial.featureTermIds),
       ingredientsPhoto: initial.ingredientsPhoto || null,
       ingredients: Array.isArray(initial.ingredients) && initial.ingredients.length > 0
         ? initial.ingredients.map((row, idx) => ({
@@ -588,6 +616,123 @@
     document.getElementById('total-m').value = t % 60;
   }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // ============================================================
+  // TAXONOMY SELECTORS  —  Step 1.7
+  // ============================================================
+  function setupTaxonomySelectors() {
+    renderTaxonomySelectors();
+  }
+
+  function renderTaxonomySelectors() {
+    renderTaxonomyGroup({
+      terms: Array.isArray(window.MEAL_TYPE_TAXONOMY) ? window.MEAL_TYPE_TAXONOMY : [],
+      selectedIds: state.data.mealTypeTermIds,
+      emptyId: 'taxonomy-mealtype-empty',
+      gridId: 'taxonomy-mealtype-grid',
+      single: true,
+      iconKind: 'meal',
+      onChange: (next) => {
+        state.data.mealTypeTermIds = next;
+        afterChange();
+      },
+    });
+
+    renderTaxonomyGroup({
+      terms: Array.isArray(window.PREP_TIME_TAXONOMY) ? window.PREP_TIME_TAXONOMY : [],
+      selectedIds: state.data.prepTimeTermIds,
+      emptyId: 'taxonomy-preptime-empty',
+      gridId: 'taxonomy-preptime-grid',
+      single: true,
+      iconKind: 'time',
+      onChange: (next) => {
+        state.data.prepTimeTermIds = next;
+        afterChange();
+      },
+    });
+
+    renderTaxonomyGroup({
+      terms: Array.isArray(window.FEATURE_TAXONOMY) ? window.FEATURE_TAXONOMY : [],
+      selectedIds: state.data.featureTermIds,
+      emptyId: 'taxonomy-feature-empty',
+      gridId: 'taxonomy-feature-grid',
+      single: false,
+      iconKind: 'feature',
+      onChange: (next) => {
+        state.data.featureTermIds = next;
+        afterChange();
+      },
+    });
+  }
+
+  function renderTaxonomyGroup({ terms, selectedIds, emptyId, gridId, single, iconKind, onChange }) {
+    const emptyNode = document.getElementById(emptyId);
+    const gridNode = document.getElementById(gridId);
+    if (!emptyNode || !gridNode) return;
+
+    const normalizedSelected = Array.isArray(selectedIds)
+      ? selectedIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0)
+      : [];
+
+    if (!Array.isArray(terms) || terms.length === 0) {
+      emptyNode.hidden = false;
+      gridNode.hidden = true;
+      gridNode.innerHTML = '';
+      return;
+    }
+
+    emptyNode.hidden = true;
+    gridNode.hidden = false;
+    gridNode.innerHTML = '';
+
+    terms.forEach((term) => {
+      const termId = Number(term && term.termId);
+      if (!Number.isInteger(termId) || termId <= 0) return;
+
+      const selected = normalizedSelected.includes(termId);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `taxonomy-choice${selected ? ' is-selected' : ''}`;
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+
+      const label = term && term.name ? String(term.name) : `Term #${termId}`;
+      const iconHtml = getTaxonomyIconHtml(term && term.heroIcon ? term.heroIcon : null, iconKind, label);
+      button.innerHTML = `<span class="taxonomy-choice__icon">${iconHtml}</span><span class="taxonomy-choice__label">${escapeHtml(label)}</span>`;
+
+      button.addEventListener('click', () => {
+        let next = [];
+        if (single) {
+          next = selected ? [] : [termId];
+        } else {
+          next = selected
+            ? normalizedSelected.filter((id) => id !== termId)
+            : [...normalizedSelected, termId];
+        }
+        onChange(next);
+        renderTaxonomySelectors();
+      });
+
+      gridNode.appendChild(button);
+    });
+  }
+
+  function getTaxonomyIconHtml(heroIcon, iconKind, fallbackAlt) {
+    if (heroIcon && typeof heroIcon === 'object' && typeof heroIcon.url === 'string' && heroIcon.url.trim() !== '') {
+      const alt = typeof heroIcon.alt === 'string' && heroIcon.alt.trim() !== '' ? heroIcon.alt : fallbackAlt;
+      return `<img src="${escapeHtml(heroIcon.url)}" alt="${escapeHtml(alt)}" loading="lazy"/>`;
+    }
+
+    if (iconKind === 'meal') {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5v8M7 5v8M4 9h3M11 5v14M16 7h4v12M16 12h4"/></svg>';
+    }
+    if (iconKind === 'time') {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M8 3h8"/></svg>';
+    }
+
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.2 6.4 20.2l1.1-6.2L3 9.6l6.2-.9Z"/></svg>';
+  }
 
   // ============================================================
   // INGREDIENTS PHOTO  —  toggleable placeholder dropzone
@@ -1120,6 +1265,12 @@
     appendField(form, 'acf[_post_title]', (state.data.title || '').trim());
     appendField(form, 'post_title', (state.data.title || '').trim());
     appendAcfPayload(form, payload);
+    appendField(form, 'g4t_meal_type_term_ids_present', '1');
+    appendField(form, 'g4t_meal_type_term_ids', Array.isArray(state.data.mealTypeTermIds) ? state.data.mealTypeTermIds : []);
+    appendField(form, 'g4t_prep_time_term_ids_present', '1');
+    appendField(form, 'g4t_prep_time_term_ids', Array.isArray(state.data.prepTimeTermIds) ? state.data.prepTimeTermIds : []);
+    appendField(form, 'g4t_feature_term_ids_present', '1');
+    appendField(form, 'g4t_feature_term_ids', Array.isArray(state.data.featureTermIds) ? state.data.featureTermIds : []);
 
     form.submit();
   }
@@ -1246,6 +1397,9 @@
     };
     const total = d.timePrep + d.timeCook + d.timeSoak;
     const diffLabel = { easy: 'Łatwy', medium: 'Średni', hard: 'Trudny' }[d.difficulty] || '—';
+    const mealTypeNames = mapSelectedTermNames(d.mealTypeTermIds, window.MEAL_TYPE_TAXONOMY);
+    const prepTimeNames = mapSelectedTermNames(d.prepTimeTermIds, window.PREP_TIME_TAXONOMY);
+    const featureNames = mapSelectedTermNames(d.featureTermIds, window.FEATURE_TAXONOMY);
 
     // Hero
     const hero = document.createElement('div');
@@ -1292,6 +1446,9 @@
       ${row('Gotowanie',     fmt(d.timeCook))}
       ${row('Namoczenie',    fmt(d.timeSoak))}
       ${row('Razem',         `<strong>${fmt(total)}</strong>`)}
+      ${row('Typ dania',     mealTypeNames.length ? escapeHtml(mealTypeNames.join(', ')) : '<em class="muted">—</em>')}
+      ${row('Czas przygotowania', prepTimeNames.length ? escapeHtml(prepTimeNames.join(', ')) : '<em class="muted">—</em>')}
+      ${row('Cechy',         featureNames.length ? escapeHtml(featureNames.join(', ')) : '<em class="muted">—</em>')}
     `);
 
     // 2. Składniki
@@ -1577,6 +1734,7 @@
     state.data = {
       title: '', lead: '', image: null, difficulty: '', portions: 4, portionUnit: 'osób',
       timePrep: 0, timeCook: 0, timeSoak: 0,
+      mealTypeTermIds: [], prepTimeTermIds: [], featureTermIds: [],
       ingredientsPhoto: null,
       ingredients: [mkIng()], steps: [mkPrep()],
       tips: '', sourceName: '', sourceUrl: '', products: [],
@@ -1593,6 +1751,7 @@
     document.querySelectorAll('.choice').forEach(c => c.setAttribute('aria-pressed', 'false'));
     document.getElementById('product-search').value = '';
     renderIngredientsPhotoSlot();
+    renderTaxonomySelectors();
     renderIngredients();
     renderPrepSteps();
     renderProducts();
@@ -1621,6 +1780,21 @@
   // ============================================================
   // UTILS
   // ============================================================
+  function mapSelectedTermNames(selectedIds, taxonomyTerms) {
+    if (!Array.isArray(selectedIds) || !Array.isArray(taxonomyTerms)) {
+      return [];
+    }
+
+    return selectedIds
+      .map((termId) => Number(termId))
+      .filter((termId) => Number.isInteger(termId) && termId > 0)
+      .map((termId) => {
+        const term = taxonomyTerms.find((item) => Number(item && item.termId) === termId);
+        return term && term.name ? String(term.name) : '';
+      })
+      .filter((name) => name.trim() !== '');
+  }
+
   function fillDatalist(selector, items) {
     const dl = document.querySelector(selector);
     items.forEach(v => {

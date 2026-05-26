@@ -486,6 +486,90 @@ html, body {
 .choice__title { font: 600 16px var(--sans); }
 .choice__desc { font: 400 13px var(--sans); color: var(--ink-2); }
 
+/* Taxonomy selectors */
+.taxonomy-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+}
+.taxonomy-group:first-of-type { margin-top: 0; }
+.taxonomy-group__title {
+  margin: 0;
+  font: 600 16px var(--sans);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.taxonomy-empty {
+  border: 1px dashed var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  font: 500 13px var(--sans);
+  line-height: 1.45;
+}
+.taxonomy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+.taxonomy-choice {
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elev);
+  border-radius: var(--r-md);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+  color: inherit;
+  font: inherit;
+}
+.taxonomy-choice:hover { border-color: var(--ink); }
+.taxonomy-choice:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px oklch(0.42 0.06 130 / 0.18);
+}
+.taxonomy-choice.is-selected {
+  border-color: var(--ink);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.taxonomy-choice__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.taxonomy-choice__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.taxonomy-choice__icon svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+}
+.taxonomy-choice__label {
+  font: 600 14px var(--sans);
+  line-height: 1.3;
+}
+
 /* Number stepper */
 .stepper {
   display: inline-flex; align-items: center; gap: 12px;
