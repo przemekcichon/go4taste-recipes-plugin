@@ -17,11 +17,12 @@ Work through every item. Report each finding with: **file + line**, **rule viola
 
 ### 1. File ownership
 
-- Is `update_post_meta()` called anywhere outside `includes/slices/recipe-storage/meta-sync.php`?
-- Is `acf_add_local_field_group()` called anywhere outside `includes/slices/recipe-storage/field-groups.php`?
-- Is `register_taxonomy()` called anywhere outside `includes/slices/recipe-registration/taxonomies.php`?
-- Are `add_action()` / `add_filter()` calls outside `includes/class-go4taste-recipes-plugin.php`?
-- Is there any logic (not just hook registration or `resolve_source_strategy()`) in `class-go4taste-recipes-plugin.php`?
+- Is `update_post_meta()` called outside the owning feature slice (primarily `features/frontend-creator/*` for creator writes and sync)?
+- Is `acf_add_local_field_group()` called anywhere outside `features/frontend-creator/acf-fields.php`?
+- Is `register_taxonomy()` called anywhere outside `core/domain/recipe-taxonomies.php`?
+- Are feature business hooks (`add_action()` / `add_filter()`) registered outside `features/*/index.php`?
+- Are core domain hooks (`init`, `use_block_editor_for_post_type`) registered outside `core/domain/index.php`?
+- Is there any business logic outside owning core/features files (e.g. misplaced helpers in bootstrap/entry files)?
 
 ### 2. PHP conventions
 
@@ -29,12 +30,12 @@ Work through every item. Report each finding with: **file + line**, **rule viola
 - Does every user-facing string use `__( 'text', 'go4taste-recipes-plugin' )`?
 - Is every input sanitised before storage?
 - Is every output escaped before echo?
-- Are there anonymous functions in `add_action()` / `add_filter()` calls? (Not allowed — use proxy methods.)
+- Are there anonymous functions in `add_action()` / `add_filter()` calls? (Not allowed.)
 - Are there raw SQL queries without `$wpdb->prepare()`?
 
 ### 3. Schema contract
 
-- Did the view model shape in `includes/slices/recipe-read-model/builder.php` change?
+- Did the view model shape in `features/recipe-display/view-model-builder.php` change?
   - If yes: is `SCHEMA_CONTRACT_V2.md` updated?
   - Is the change additive (new nullable field — patch bump) or non-additive (rename / type / nullability — major bump required)?
   - If non-additive: is there a migration document? If not, block the change.
@@ -52,7 +53,7 @@ Work through every item. Report each finding with: **file + line**, **rule viola
 
 ### 6. Test coverage
 
-- Does new behaviour in `includes/slices/recipe-storage/meta-sync.php` or `includes/slices/recipe-read-model/builder.php` have PHPUnit unit tests?
+- Does new behaviour in `features/frontend-creator/creator-meta-sync.php` or `features/recipe-display/view-model-builder.php` have PHPUnit unit tests?
 - Does any new hook-based behaviour have WordPress integration tests?
 - Are there tests for empty input, null, and missing block edge cases?
 

@@ -16,23 +16,23 @@ Ask the developer for:
 
 ## Steps to perform
 
-### 1. `includes/slices/recipe-registration/post-types.php`
+### 1. `core/domain/recipe-pt.php`
 
 To change the CPT key: update `G4T_RECIPES_POST_TYPE` constant value and update `g4t_register_recipe_post_type()` labels/rewrite slug.
 
 To change admin settings: update post type args (supports, taxonomies, menu position, etc.) in `g4t_register_recipe_post_type()`.
 
-### 2. `includes/slices/recipe-registration/taxonomies.php`
+### 2. `core/domain/recipe-taxonomies.php`
 
 Taxonomy functions already read `$plugin->resolve_source_strategy()` — no change needed unless the CPT key is hardcoded anywhere. Verify `G4T_RECIPES_POST_TYPE` is used consistently.
 
-### 3. `includes/slices/recipe-admin-config/settings-page.php`
+### 3. `features/admin-settings/settings-page.php`
 
 If adding a new source mode: add the new option to `g4t_render_source_mode_field()` and validate it in `g4t_sanitize_options()` alongside `MODE_POST`, `MODE_EXISTING_CPT`, `MODE_RECIPES_CPT`.
 
 If renaming a mode constant: update `Go4Taste_Recipes_Plugin::MODE_RECIPES_CPT` in the class and all references in `g4t_should_use_archive_recipe_template()`.
 
-### 4. `includes/slices/recipe-display/context-filters.php`
+### 4. `features/recipe-display/timber-context.php`
 
 If the CPT needs different listing behavior: update `g4t_filter_home_query_args()` (posts per page, order). If the archive slug differs from `G4T_RECIPES_POST_TYPE`, update `g4t_should_use_archive_recipe_template()`.
 

@@ -1,210 +1,78 @@
 # go4taste-recipes-plugin
 
-WordPress plugin for recipe content structure and editor experience used in go4taste.pl.
+WordPress plugin that provides recipe domain data, a frontend creator workflow, and normalized read models for theme rendering.
 
-## Features
+## 🏗️ Architecture Philosophy: True Vertical Slices (VSA) & Co-location
 
-- Structured recipe data via ACF/meta keys (hero, ingredients, steps, tips, source)
-- Frontend Recipe Creator as the primary authoring surface
-- ACF meta boxes available in wp-admin for inspection and admin edits
-- Gutenberg disabled for the configured recipe post type
-- Ingredient taxonomy auto-sync from recipe ingredient repeater rows
-- Additional classification taxonomies (meal type, prep time, features)
-- Timber view model integration (meta-only runtime)
-- Configurable source post type (post / existing CPT / dedicated recipe CPT)
+This project strictly follows a **True Vertical Slices Architecture** with **Co-location** of assets. 
+We prioritize *business features* over *technical layers*. 
 
-## Testing
+- **No Horizontal Layers:** We do not group files by their technical purpose (no global `controllers`, `models`, or `assets/js` folders).
+- **Co-location:** PHP, JS, CSS, and Test files that belong to the same business feature live side-by-side in the exact same folder.
+- **Autonomy:** Each feature slice is 100% self-contained. It registers its own hooks, handles its own validations, and manages its own assets.
 
-### Requirements
+## 📂 Directory Structure
 
-- PHPUnit 9+
-- WordPress test suite
+```text
+go4taste-recipes-plugin/
+├── core/                                    # Shared foundations (Read-Only for Features)
+│   ├── class-plugin-bootstrap.php           # Initializes core runtime and plugin instance
+│   └── domain/                              # Global domain definitions
+│       ├── recipe-pt.php                    # Reads settings & registers target Post Type (or uses default 'post')
+│       └── recipe-taxonomies.php            # Registers global taxonomies (ingredients, prep time)
+│
+├── features/                                # TRUE VERTICAL SLICES (Business Functions)
+│   ├── frontend-creator/                    # Feature: User adding a recipe via frontend
+│   │   ├── acf-fields.php                   # Local ACF field definitions for the creator
+│   │   ├── creator-form.php                 # UI rendering and save logic
+│   │   ├── creator.js                       # JS strictly for this form
+│   │   ├── creator.css                      # CSS strictly for this form
+│   │   └── creator.test.php                 # Tests for the creator flow
+│   │
+│   ├── recipe-display/                      # Feature: Rendering a single recipe
+│   │   ├── view-model-builder.php           # Logic for reading/normalizing recipe data
+│   │   └── timber-context.php               # Timber context injection
+│   │
+│   ├── archive-filtering/                   # Feature: Filtering recipes on archives
+│   │   └── facetwp-integration.php          # FacetWP specific logic
+│   │
+│   ├── admin-settings/                      # Feature: Plugin configuration in wp-admin
+│   │   ├── settings-page.php                # UI for selecting target Post Type
+│   │   └── settings-logic.php               # Saving/reading options from wp_options
+│   │
+│   └── admin-promoted-products/             # Isolated Algolia/promoted products parking-plan slice
+│       └── algolia-products.php             # AJAX save handler for selected promoted product IDs
+│
+├── .claude/                                 # AI assistant architecture guardrails
+├── tests/                                   # Global test bootstrap (Unit tests live inside features/)
+└── go4taste-recipes-plugin.php              # Plugin entrypoint (loads feature slices + core bootstrap)
+```
+## **🤖 Hard Constraints & Golden Rules for AI Agents**
 
-### Setup
+When editing or refactoring this project, **AI agents must strictly adhere to the following rules:**
 
+1. **The Core Dependency Rule:** Files inside `features/` can import/use functions from `core/`. However, `core/` must **never** depend on anything inside `features/`.  
+2. **Feature Isolation:** A feature (e.g., `frontend-creator`) must **never** import or directly call code from another feature (e.g., `recipe-display`). If two features need the same logic, it belongs in `core/` or should be duplicated locally (AHA \- Avoid Hasty Abstractions).  
+3. **No Central Orchestrator for Logic:** Do not use `class-plugin-bootstrap.php` to register business logic hooks (`add_action`, `add_filter`). Each feature must hook into WordPress from within its own directory (e.g., inside `creator-form.php`).  
+4. **Asset Co-location:** If a feature requires specific JavaScript or CSS, create it inside the feature's folder. Enqueue it using `plugins_url( 'filename.js', __FILE__ )` from the feature's PHP file. Do not put it in a global `assets/` folder.  
+5. **Algolia Exclusion:** Legacy Algolia integration for promoted products is scoped out of the main recipe workflow. If implemented, it must reside in its own isolated slice (e.g., `features/admin-promoted-products/`).
+
+## **🔄 Dynamic Post Type Strategy**
+
+The plugin does not force a specific Custom Post Type.
+
+* `features/admin-settings/` provides the UI to select the desired Post Type (e.g., standard 'post' or custom 'recipe').  
+* `core/domain/recipe-pt.php` reads this setting, registers the CPT if necessary, and provides a global helper `get_target_recipe_post_type()` for all other features to use.
+
+## **🧪 Testing**
+
+Domyślny `phpunit` uruchamia testy z `features/` i `core/domain/` (zgodnie z `phpunit.xml`).
+
+Unit tests are co-located with their features. Example focused test runs:
 ```bash
-# Install WordPress test suite
-bin/install-wp-tests.sh wordpress_test root '' localhost latest
-
-# Run tests
 phpunit
+phpunit features/frontend-creator/creator-meta-sync.test.php
+phpunit features/recipe-display/view-model-builder.test.php
+phpunit features/archive-filtering/facetwp-integration.test.php
+phpunit features/admin-settings/settings-page.test.php
 ```
-
-### Running specific test suites
-
-```bash
-# Test normalizers
-phpunit tests/unit/test-normalizers.php
-
-# Test meta sync
-phpunit tests/unit/test-meta-sync.php
-
-# Test view model builder
-phpunit tests/unit/test-builder.php
-
-# Test all modules
-phpunit tests/unit
-```
-
-## Architecture
-
-```
-includes/
-├── class-go4taste-recipes-plugin.php   # Orchestrator (proxy methods only)
-├── registration/
-│   ├── post-types.php                  # CPT registration + block editor disable rule
-│   ├── taxonomies.php                  # Taxonomy registration
-├── acf/
-│   └── field-groups.php                # ACF field group definitions
-├── front/
-│   ├── recipe-creator.php              # Frontend creator logic (save/load meta)
-│   ├── recipe-creator-helpers.php      # Creator helper utilities
-│   ├── recipe-creator-page.php         # Template loader + acf_form bridge
-│   └── recipe-creator-template.php     # Creator markup shell
-├── sync/
-│   └── meta-sync.php                   # Repeater/taxonomy utilities
-├── view-model/
-│   ├── normalizers.php                 # Data normalization helpers
-│   └── builder.php                     # View model builder (meta-first)
-├── timber/
-│   └── context-filters.php             # Timber context filters
-└── admin/
-    └── settings-page.php               # Admin settings UI
-
-tests/
-├── bootstrap.php                       # PHPUnit bootstrap
-└── unit/
-    ├── test-normalizers.php            # Normalizers tests
-    ├── test-post-types.php             # CPT registration tests
-    ├── test-taxonomies.php             # Taxonomy tests
-    ├── test-meta-sync.php              # Legacy parser + repeater utilities tests
-    ├── test-builder.php                # View model builder tests
-    ├── test-context-filters.php        # Timber integration tests
-    └── test-settings-page.php          # Settings page tests
-```
-
-## Editing Model
-
-The plugin now uses a single canonical editing model:
-
-1. **Frontend Recipe Creator** — primary authoring surface
-2. **ACF Meta Boxes in wp-admin** — backend field view/editor for administrators
-
-Gutenberg blocks are not used for recipe authoring. The block editor is disabled
-for the configured recipe post type (derived from plugin source strategy).
-
-### Data Flow
-
-- Creator save path writes directly to `post_meta`.
-- Featured image is set directly via `set_post_thumbnail()`.
-- Ingredient repeater writes immediately sync ingredient taxonomy terms.
-- View model builder reads ACF/meta only.
-
-### ACF Field Groups
-
-Four ACF field groups registered for recipe content:
-
-- **group_recipe_hero**: 8 simple fields (lead, difficulty, servings, times)
-- **group_recipe_notes**: 3 fields (tips, source label, source URL)
-- **group_recipe_ingredients**: Flat repeater (ingredient_term_id, name, amount, unit) + photo URL
-- **group_recipe_steps**: Nested repeater (groups > steps > step_text)
-
-See [SCHEMA_CONTRACT_V2.md](SCHEMA_CONTRACT_V2.md) for the active view-model contract.
-
-### Testing Current Editing Flow
-
-1. Open frontend recipe creator page.
-2. Save a new draft and verify values are present in ACF/meta keys.
-3. Verify featured image appears as post thumbnail.
-4. Verify ingredient taxonomy terms reflect ingredient repeater rows.
-5. Open single recipe page and verify rendering from recipe view model.
-
-## Release Checklist
-
-Before each production deployment:
-
-1. Confirm repository is clean: `git status`.
-2. Pull latest changes: `git pull --ff-only`.
-3. **Run test suite**: `phpunit` to verify all modules pass.
-4. Smoke test critical flows in local WP:
-  - recipe creator save/edit,
-  - wp-admin ACF metabox visibility,
-   - single recipe rendering,
-   - archive listing rendering.
-5. Push release commit to `main`.
-6. Deploy plugin directory to `wp-content/plugins/go4taste-recipes-plugin/`.
-7. Activate or refresh plugin on target WordPress instance.
-8. Verify one recipe in wp-admin editor and one recipe page on frontend.
-
-## Release Notes Template
-
-Use this template for each new tag/release:
-
-```md
-# go4taste-recipes-plugin vX.Y.Z
-
-Release date: YYYY-MM-DD
-Tag: vX.Y.Z
-
-## Summary
-- Short description of the release purpose.
-
-## Added
-- New feature A
-
-## Changed
-- Updated behavior A
-
-## Fixed
-- Bug fix A
-
-## Deployment Notes
-- Plugin path: wp-content/plugins/go4taste-recipes-plugin/
-- Smoke test: editor blocks, single recipe page, archive page.
-
-## Rollback
-- Roll back to previous tag: `git checkout <previous-tag>`
-```
-
-## Release Notes
-
-### go4taste-recipes-plugin v1.1.0
-
-Release date: 2026-05-26
-Tag: v1.1.0
-
-#### Summary
-- Migrated recipe editing from block-based dual UI to meta-first creator workflow.
-
-#### Changed
-- Frontend creator now saves directly to ACF/meta keys.
-- Featured image is written directly as post thumbnail.
-- Ingredient taxonomy sync now runs from meta-only save path.
-- View model builder switched to meta-only reads.
-- Gutenberg is disabled for the configured recipe post type.
-
-#### Removed
-- Recipe block registration and block template lock workflow.
-- ACF→blocks and blocks→meta sync modules.
-- Reverse-sync admin action and related legacy sync helpers.
-
-### go4taste-recipes-plugin v1.0.0
-
-Release date: 2026-05-10
-Tag: v1.0.0
-
-#### Summary
-- First public repository baseline for the plugin.
-
-#### Added
-- Initial plugin codebase import (`assets/`, `includes/`, main plugin bootstrap).
-- Schema contract documentation in `SCHEMA_CONTRACT_V1.md`.
-- Repository defaults for line ending normalization via `.gitattributes`.
-- Operational documentation in `README.md` with release checklist and template.
-
-#### Deployment Notes
-- Plugin path: `wp-content/plugins/go4taste-recipes-plugin/`
-- Smoke test: editor blocks, single recipe page, archive page.
-
-#### Rollback
-- Roll back to pre-release baseline by checking out commit `867ae1f`.

@@ -1,8 +1,6 @@
 <?php
 /**
- * Recipe options service.
- *
- * Provides a shared, testable options cache for the plugin.
+ * Core domain: recipe options service.
  *
  * @package Go4Taste_Recipes_Plugin
  */

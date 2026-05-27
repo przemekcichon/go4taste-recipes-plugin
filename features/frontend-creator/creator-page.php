@@ -84,7 +84,7 @@ if ( 'new_post' !== $post_id && ! $can_edit ) {
 }
 
 // Include markup template (6-step wizard)
-require_once plugin_dir_path( __FILE__ ) . 'recipe-creator-template.php';
+require_once plugin_dir_path( __FILE__ ) . 'creator-template.php';
 
 // ACF form (handles submission, nonce validation, post saving)
 if ( $can_create ) {

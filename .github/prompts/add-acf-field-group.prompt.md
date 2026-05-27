@@ -17,7 +17,7 @@ Ask the developer for:
 
 ## Steps to perform
 
-### 1. `includes/slices/recipe-storage/field-groups.php`
+### 1. `features/frontend-creator/acf-fields.php`
 
 Add a new `acf_add_local_field_group()` call inside `g4t_register_acf_fields()`:
 
@@ -47,11 +47,11 @@ acf_add_local_field_group( array(
 ) );
 ```
 
-### 2. `includes/slices/recipe-input-surface/recipe-creator.php` (if creator-exposed)
+### 2. `features/frontend-creator/creator-form.php` (if creator-exposed)
 
 If the field is editable in the frontend creator form, add a mapping in `g4t_creator_state_to_meta()` for this field (map creator state key → ACF meta key). Update `g4t_recipe_creator_validate_form_data()` to add any custom validation.
 
-### 3. `includes/slices/recipe-read-model/builder.php`
+### 3. `features/recipe-display/view-model-builder.php`
 
 In `g4t_get_recipe_acf_data()`, add:
 ```php

@@ -10,7 +10,7 @@ Ask the developer for the following before doing anything:
 
 ## Execute these steps in order
 
-### Step 1 — `includes/acf/field-groups.php`
+### Step 1 — `features/frontend-creator/acf-fields.php`
 
 Add a new `acf_add_local_field_group()` call inside `g4t_register_acf_fields()`:
 
@@ -40,7 +40,7 @@ acf_add_local_field_group( array(
 ) );
 ```
 
-### Step 2 — `includes/view-model/builder.php`
+### Step 2 — `features/recipe-display/view-model-builder.php`
 
 In `g4t_get_recipe_acf_data()`, add:
 ```php
@@ -54,7 +54,7 @@ In `g4t_build_single_recipe_view_model()`, add:
 
 For repeaters: follow the `recipe_ads_products` pattern in `g4t_build_single_recipe_view_model()` — call `g4t_acf_field()`, loop rows, extract sub-field values.
 
-### Step 3 — `SCHEMA_CONTRACT_V1.md`
+### Step 3 — `SCHEMA_CONTRACT_V2.md`
 
 Document: field name, type, nullable/non-nullable, default, ACF-only or block-synced.
 
