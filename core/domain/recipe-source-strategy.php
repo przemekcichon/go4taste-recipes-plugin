@@ -1,6 +1,6 @@
 <?php
 /**
- * Recipe source strategy factory.
+ * Core domain: recipe source strategy.
  *
  * @package Go4Taste_Recipes_Plugin
  */

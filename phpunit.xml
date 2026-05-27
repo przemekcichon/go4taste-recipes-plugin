@@ -13,12 +13,14 @@
 >
     <testsuites>
         <testsuite name="go4taste-recipes-plugin">
-            <directory>tests/unit</directory>
+            <directory>features</directory>
+            <directory>core/domain</directory>
         </testsuite>
     </testsuites>
     <filter>
         <whitelist>
-            <directory>includes</directory>
+            <directory>features</directory>
+            <directory>core</directory>
         </whitelist>
     </filter>
 </phpunit>

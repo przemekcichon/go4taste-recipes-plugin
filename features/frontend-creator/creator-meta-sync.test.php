@@ -182,12 +182,12 @@ class Test_Meta_Sync extends WP_UnitTestCase {
     }
 
     /**
-     * Front creator ACF save must rebuild blocks only after ACF writes post meta.
+     * Legacy orchestrator proxy hook must not be registered in feature-owned architecture.
      */
-    public function test_acf_to_blocks_hook_runs_after_acf_meta_save() {
+    public function test_legacy_proxy_acf_save_hook_is_not_registered() {
         $priority = has_action( 'acf/save_post', array( $this->plugin, 'proxy_sync_acf_to_blocks' ) );
 
-        $this->assertSame( 20, $priority );
+        $this->assertFalse( $priority );
     }
 
     /**

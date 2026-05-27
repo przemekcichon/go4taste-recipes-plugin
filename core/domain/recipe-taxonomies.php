@@ -1,12 +1,6 @@
 <?php
 /**
- * GO4TASTE Recipes Plugin — Taxonomy Registration
- *
- * Registers two types of taxonomy:
- *  1. Ingredient taxonomy — term-synced. Block editor creates/links terms automatically
- *     on post save (see sync/meta-sync.php). Used for the main recipe ingredient list.
- *  2. Classification taxonomies — standard flat taxonomies for filtering and
- *     categorisation (meal type, prep time range, recipe features).
+ * Core domain: recipe taxonomies.
  *
  * @package Go4Taste_Recipes_Plugin
  */
@@ -15,27 +9,21 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'G4T_INGREDIENT_TAXONOMY',  'recipe_ingredient' );
-define( 'G4T_MEAL_TYPE_TAXONOMY',   'recipe_meal_type' );
-define( 'G4T_PREP_TIME_TAXONOMY',   'recipe_prep_time_range' );
-define( 'G4T_FEATURE_TAXONOMY',     'recipe_feature' );
+if ( ! defined( 'G4T_INGREDIENT_TAXONOMY' ) ) {
+    define( 'G4T_INGREDIENT_TAXONOMY', 'recipe_ingredient' );
+}
+if ( ! defined( 'G4T_MEAL_TYPE_TAXONOMY' ) ) {
+    define( 'G4T_MEAL_TYPE_TAXONOMY', 'recipe_meal_type' );
+}
+if ( ! defined( 'G4T_PREP_TIME_TAXONOMY' ) ) {
+    define( 'G4T_PREP_TIME_TAXONOMY', 'recipe_prep_time_range' );
+}
+if ( ! defined( 'G4T_FEATURE_TAXONOMY' ) ) {
+    define( 'G4T_FEATURE_TAXONOMY', 'recipe_feature' );
+}
 
 /**
- * Register the primary term-synced ingredient taxonomy.
- *
- * WHY the 'taxonomy_exists' guard:
- *
- * When source_mode = 'existing_cpt', this plugin attaches its taxonomies to a CPT
- * it does not own. If that CPT's plugin also registers this taxonomy (unlikely but
- * possible), WordPress would throw a notice. The guard checks for the existing
- * taxonomy and calls register_taxonomy_for_object_type() instead — this associates
- * the taxonomy with our post type without re-declaring it. This pattern is safe to
- * use even if the taxonomy is first registered by a completely different plugin.
- *
- * WHY show_admin_column = false:
- * Ingredient assignment is managed entirely via the block editor. Showing a column
- * in wp-admin post list would be redundant and potentially confusing since the
- * taxonomy is auto-synced from repeater data, not manually assigned.
+ * Register primary ingredient taxonomy.
  */
 function g4t_register_ingredient_taxonomy( Go4Taste_Recipes_Plugin $plugin ): void {
     $strategy  = g4t_get_source_strategy();
@@ -67,17 +55,7 @@ function g4t_register_ingredient_taxonomy( Go4Taste_Recipes_Plugin $plugin ): vo
 }
 
 /**
- * Register classification taxonomies (flat, for filtering and categorisation).
- *
- * Add, remove, or rename entries in $taxonomies to match your domain.
- * The common settings (public, flat, REST-exposed, admin column) are merged in
- * via array_merge() so you only need to declare what differs per taxonomy.
- *
- * WHY show_admin_column = true for classification taxonomies:
- * Unlike ingredients (which are auto-synced), these taxonomies are manually assigned
- * by editors. Showing them in the post list makes filtering and bulk editing easier.
- *
- * @param Go4Taste_Recipes_Plugin $plugin Plugin instance for context.
+ * Register classification taxonomies.
  */
 function g4t_register_flat_taxonomies( Go4Taste_Recipes_Plugin $plugin ): void {
     $strategy  = g4t_get_source_strategy();

@@ -55,7 +55,7 @@ function g4t_load_recipe_creator_template( string $template ): string {
  * @return string Absolute path to recipe-creator-page.php
  */
 function g4t_get_recipe_creator_page_path(): string {
-    return GO4TASTE_RECIPES_PLUGIN_PATH . 'includes/slices/recipe-input-surface/recipe-creator-page.php';
+    return GO4TASTE_RECIPES_PLUGIN_PATH . 'features/frontend-creator/creator-page.php';
 }
 
 /**
@@ -91,7 +91,7 @@ function g4t_enqueue_recipe_creator_assets(): void {
     // CSS: Main form styles (fonts, layout, components)
     wp_enqueue_style(
         'g4t-acf-front-form',
-        $plugin_url . 'assets/css/acf-front-form.css',
+        $plugin_url . 'features/frontend-creator/creator.css',
         array( 'g4t-acf-front-form-fonts' ),
         $version
     );
@@ -99,7 +99,7 @@ function g4t_enqueue_recipe_creator_assets(): void {
     // Custom element for image upload (must be loaded before vanilla app script).
     wp_enqueue_script(
         'g4t-image-slot',
-        $plugin_url . 'assets/js/acf-image-slot.js',
+        $plugin_url . 'features/frontend-creator/image-slot.js',
         array(),
         $version,
         true
@@ -108,7 +108,7 @@ function g4t_enqueue_recipe_creator_assets(): void {
     // Static data used by the vanilla prototype app.
     wp_enqueue_script(
         'g4t-acf-front-form-data',
-        $plugin_url . 'assets/js/acf-front-form-data.js',
+        $plugin_url . 'features/frontend-creator/creator-data.js',
         array(),
         $version,
         true
@@ -151,7 +151,7 @@ function g4t_enqueue_recipe_creator_assets(): void {
     // Main vanilla app logic.
     wp_enqueue_script(
         'g4t-acf-front-form',
-        $plugin_url . 'assets/js/acf-front-form.js',
+        $plugin_url . 'features/frontend-creator/creator.js',
         array( 'g4t-image-slot', 'g4t-acf-front-form-data' ),
         $version,
         true
