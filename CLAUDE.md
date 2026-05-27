@@ -35,31 +35,42 @@ This file is loaded automatically by Claude Code for every session in this direc
 ## Architecture — which file owns what
 
 ```
-includes/class-go4taste-recipes-plugin.php        Orchestrator: constants, options cache, resolve_source_strategy(), proxy methods
-includes/slices/recipe-registration/post-types.php         g4t_register_recipe_post_type(), g4t_disable_block_editor_for_recipe_post_type()
-includes/slices/recipe-registration/taxonomies.php         g4t_register_ingredient_taxonomy(), g4t_register_flat_taxonomies() + taxonomy constants
-includes/slices/recipe-storage/field-groups.php            g4t_register_acf_fields() — all acf_add_local_field_group() calls
-includes/slices/recipe-input-surface/recipe-creator.php    Frontend creator save/load + g4t_creator_state_to_meta()
-includes/slices/recipe-input-surface/helpers.php           Creator helpers aligned to resolve_source_strategy()
-includes/slices/recipe-storage/meta-sync.php               Repeater/taxonomy utilities
-includes/slices/recipe-read-model/normalizers.php          g4t_normalize_ingredients_list(), steps, images, g4t_has_value()
-includes/slices/recipe-read-model/builder.php              g4t_build_single_recipe_view_model(), g4t_get_recipe_acf_data() (meta-only runtime)
-includes/slices/recipe-admin-config/settings-page.php      g4t_register_settings(), g4t_render_options_page(), g4t_sanitize_options()
-includes/slices/recipe-display/context-filters.php         g4t_filter_single_context(), archive, home, debug helpers
+go4taste-recipes-plugin.php                       Entry point: loads feature indexes and core bootstrap
+core/class-plugin-bootstrap.php                   Core bootstrap + plugin context instance
+core/domain/index.php                             Core domain hook registration (init + block editor filter)
+core/domain/recipe-pt.php                         g4t_register_recipe_post_type(), g4t_disable_block_editor_for_recipe_post_type()
+core/domain/recipe-taxonomies.php                 g4t_register_ingredient_taxonomy(), g4t_register_flat_taxonomies() + taxonomy constants
+core/domain/recipe-options.php                    options cache helpers
+core/domain/recipe-source-strategy.php            resolve source strategy
+features/frontend-creator/index.php               feature-local hook registration for creator flow
+features/frontend-creator/creator-form.php        creator form rendering + save draft/upload/heartbeat logic
+features/frontend-creator/creator-meta-sync.php   repeater/taxonomy utilities
+features/frontend-creator/acf-fields.php          g4t_register_acf_fields() and ACF groups
+features/recipe-display/index.php                 context filter hook registration
+features/recipe-display/view-model-builder.php    g4t_build_single_recipe_view_model(), g4t_get_recipe_acf_data()
+features/recipe-display/normalizers.php           g4t_normalize_ingredients_list(), steps, images, g4t_has_value()
+features/recipe-display/timber-context.php        g4t_filter_single_context(), archive, home, debug helpers
+features/archive-filtering/index.php              FacetWP hook registration
+features/archive-filtering/facetwp-integration.php FacetWP integration callbacks
+features/admin-settings/index.php                 admin settings hook registration
+features/admin-settings/settings-page.php         g4t_register_settings(), g4t_render_options_page(), g4t_sanitize_options()
+features/admin-promoted-products/index.php        promoted products AJAX hook registration
+features/admin-promoted-products/algolia-products.php promoted products save handler
 ```
 
 ### Hard constraints — never violate these
 
 | Concern | Only in this file |
 |---|---|
-| Creator save → recipe meta writes | `includes/slices/recipe-input-surface/recipe-creator.php` |
-| Repeater/taxonomy sync helpers | `includes/slices/recipe-storage/meta-sync.php` |
-| `acf_add_local_field_group()` | `includes/slices/recipe-storage/field-groups.php` |
-| `register_taxonomy()` | `includes/slices/recipe-registration/taxonomies.php` |
-| `add_action()` / `add_filter()` | `includes/class-go4taste-recipes-plugin.php` |
-| View model shape | `includes/slices/recipe-read-model/builder.php` |
-| Data normalisation | `includes/slices/recipe-read-model/normalizers.php` |
-| Timber context enrichment | `includes/slices/recipe-display/context-filters.php` |
+| Creator save → recipe meta writes | `features/frontend-creator/creator-form.php` |
+| Repeater/taxonomy sync helpers | `features/frontend-creator/creator-meta-sync.php` |
+| `acf_add_local_field_group()` | `features/frontend-creator/acf-fields.php` |
+| `register_taxonomy()` | `core/domain/recipe-taxonomies.php` |
+| Core domain hooks (`init` / block editor filter) | `core/domain/index.php` |
+| Feature business hooks (`add_action()` / `add_filter()`) | `features/*/index.php` |
+| View model shape | `features/recipe-display/view-model-builder.php` |
+| Data normalisation | `features/recipe-display/normalizers.php` |
+| Timber context enrichment | `features/recipe-display/timber-context.php` |
 
 ---
 
@@ -79,25 +90,25 @@ includes/slices/recipe-display/context-filters.php         g4t_filter_single_con
 - All user-facing strings: `__( 'text', 'go4taste-recipes-plugin' )`.
 - Input sanitisation: `sanitize_text_field()`, `sanitize_key()`, `esc_url_raw()`.
 - Output escaping: `esc_html()`, `esc_attr()`, `esc_url()`.
-- No anonymous functions in `add_action()` / `add_filter()` calls — use proxy methods on the class.
-- No logic in the orchestrator class — only hook registration and `resolve_source_strategy()`.
-- New hook registrations go in `__construct()` as `add_action('hook', array($this, 'proxy_method'))`.
+- No anonymous functions in `add_action()` / `add_filter()` calls.
+- `Go4Taste_Recipes_Plugin` is a compatibility context class (constants + options/strategy accessors), not a hook orchestrator.
+- New business hooks must be registered in feature indexes (`features/*/index.php`) or `core/domain/index.php` for domain-level hooks.
 
 ---
 
 ## How to add a new recipe field
 
-1. `includes/slices/recipe-storage/field-groups.php` — add/update ACF field definition.
-2. `includes/slices/recipe-input-surface/recipe-creator.php` — map creator state ↔ meta save/load.
-3. `includes/slices/recipe-read-model/builder.php` — include field in view model mapping.
+1. `features/frontend-creator/acf-fields.php` — add/update ACF field definition.
+2. `features/frontend-creator/creator-form.php` — map creator state ↔ meta save/load.
+3. `features/recipe-display/view-model-builder.php` — include field in view model mapping.
 4. `SCHEMA_CONTRACT_V2.md` — update contract docs if view-model shape changes.
 
 ## How to add a taxonomy
 
 See `.claude/commands/add-taxonomy.md`. Summary:
 
-1. `includes/slices/recipe-registration/taxonomies.php` — add entry + PHP constant
-2. If term-synced: `includes/slices/recipe-storage/meta-sync.php` + `includes/class-go4taste-recipes-plugin.php`
+1. `core/domain/recipe-taxonomies.php` — add entry + PHP constant
+2. If term-synced: `features/frontend-creator/creator-meta-sync.php` + relevant feature index registration
 3. `SCHEMA_CONTRACT_V1.md` — document
 
 ---

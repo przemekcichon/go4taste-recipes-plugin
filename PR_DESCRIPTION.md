@@ -19,7 +19,7 @@ Cel tej zmiany:
 
 ### 1) Dynamiczne wypelnienie segmentu progress
 
-Plik: `assets/js/acf-front-form.js`
+Plik: `features/frontend-creator/creator.js`
 
 - Dodane funkcje pomocnicze:
   - `clamp01(value)`
@@ -34,7 +34,7 @@ Plik: `assets/js/acf-front-form.js`
 
 ### 2) CSS progress oparty o zmienne
 
-Plik: `assets/css/acf-front-form.css`
+Plik: `features/frontend-creator/creator.css`
 
 - `grid-template-columns` dla `.progress` korzysta z `--progress-steps` (fallback `6`).
 - `@keyframes fillSeg` konczy animacje na `scaleX(var(--progress-fill-scale, 0.5))`
@@ -43,8 +43,8 @@ Plik: `assets/css/acf-front-form.css`
 ### 3) Usuniecie etykiet substep z UI
 
 Pliki:
-- `includes/slices/recipe-input-surface/recipe-creator-template.php`
-- `assets/css/acf-front-form.css`
+- `features/frontend-creator/creator-template.php`
+- `features/frontend-creator/creator.css`
 
 - Usuniete wszystkie elementy `<div class="step__substep">...</div>` w krokach formularza.
 - Usuniete nieuzywane style `.step__substep` i `.step--center > .step__substep`.

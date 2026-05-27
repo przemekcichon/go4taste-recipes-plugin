@@ -68,7 +68,7 @@ Both fields are always present (empty string when not set).
 
 ## Related files
 
-- includes/acf/field-groups.php
-- includes/view-model/normalizers.php
-- includes/sync/meta-sync.php
-- includes/view-model/builder.php
+- features/frontend-creator/acf-fields.php
+- features/recipe-display/normalizers.php
+- features/frontend-creator/creator-meta-sync.php
+- features/recipe-display/view-model-builder.php

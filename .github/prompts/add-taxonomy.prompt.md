@@ -18,7 +18,7 @@ Ask the developer for:
 
 ## Steps to perform
 
-### 1. `includes/registration/taxonomies.php`
+### 1. `core/domain/recipe-taxonomies.php`
 
 Add a PHP constant at the top of the file:
 ```php
@@ -42,21 +42,13 @@ G4T_{TAXONOMY_UPPER}_TAXONOMY => array(
 
 **Term-synced taxonomy**: create a dedicated `g4t_register_{taxonomy_key}_taxonomy()` function following the `g4t_register_ingredient_taxonomy()` pattern (with `taxonomy_exists` guard and `register_taxonomy_for_object_type()` fallback).
 
-### 2. `includes/class-go4taste-recipes-plugin.php` (term-synced only)
+### 2. `core/domain/index.php` (term-synced only)
 
-Add a proxy method and an `add_action( 'init', ... )` call in `__construct()`:
+Register the taxonomy boot callback on `init` in core domain hooks while keeping taxonomy registration logic in `core/domain/recipe-taxonomies.php`.
 
-```php
-add_action( 'init', array( $this, 'proxy_register_{taxonomy_key}_taxonomy' ) );
-// ...
-public function proxy_register_{taxonomy_key}_taxonomy(): void {
-    g4t_register_{taxonomy_key}_taxonomy( $this );
-}
-```
+### 3. `features/frontend-creator/creator-meta-sync.php` (term-synced only)
 
-### 3. `includes/slices/recipe-input-surface/recipe-creator.php` (term-synced only)
-
-- Add `g4t_ensure_{taxonomy_key}_term( string $name ): ?int` helper in `includes/slices/recipe-storage/meta-sync.php` following `g4t_ensure_ingredient_term()` pattern.
+- Add `g4t_ensure_{taxonomy_key}_term( string $name ): ?int` helper in `features/frontend-creator/creator-meta-sync.php` following `g4t_ensure_ingredient_term()` pattern.
 - Call it from the creator field save path when the user selects or creates a term.
 
 ### 4. `SCHEMA_CONTRACT_V1.md`

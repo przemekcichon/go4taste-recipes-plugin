@@ -13,7 +13,7 @@ Ask the developer for the following before doing anything:
 
 ## Execute these steps in order
 
-### Step 1 — `includes/registration/taxonomies.php`
+### Step 1 — `core/domain/recipe-taxonomies.php`
 
 Add a PHP constant at the top of the file:
 ```php
@@ -37,19 +37,11 @@ G4T_{TAXONOMY_UPPER}_TAXONOMY => array(
 
 **Term-synced taxonomy**: create a dedicated `g4t_register_{taxonomy_key}_taxonomy()` function following the `g4t_register_ingredient_taxonomy()` pattern (with `taxonomy_exists` guard).
 
-### Step 2 — `includes/class-go4taste-recipes-plugin.php` (term-synced only)
+### Step 2 — `core/domain/index.php` (term-synced only)
 
-Add a proxy method and `add_action` in `__construct()`:
+Register the taxonomy boot callback in core domain hooks (`init`) and keep the registration function in `core/domain/recipe-taxonomies.php`.
 
-```php
-add_action( 'init', array( $this, 'proxy_register_{taxonomy_key}_taxonomy' ) );
-// ...
-public function proxy_register_{taxonomy_key}_taxonomy(): void {
-    g4t_register_{taxonomy_key}_taxonomy( $this );
-}
-```
-
-### Step 3 — `includes/slices/recipe-input-surface/recipe-creator.php` (term-synced only)
+### Step 3 — `features/frontend-creator/creator-meta-sync.php` (term-synced only)
 
 - Add `g4t_ensure_{taxonomy_key}_term( string $name ): ?int` following `g4t_ensure_ingredient_term()`.
 - Call it from the relevant block's parsing block inside `g4t_get_recipe_blocks_data()`.
