@@ -193,21 +193,13 @@ html, body {
 }
 .step--wide { max-width: 900px; }
 /* Pojedyncze, krótkie kroki — pole formularza (field__label + opis + input)
-   wyśrodkowane pionowo w obszarze stage. Etykieta podkroku (step__substep)
-   zostaje wyciągnięta na górę i nie wpływa na obliczanie centrowania —
-   field__label wyznacza górną krawędź centrowanego bloku. Nie używamy
-   tego dla kroków-repeaterów (składniki, kroki przepisu, produkty, podgląd). */
+   wyśrodkowane pionowo w obszarze stage. Nie używamy tego dla
+   kroków-repeaterów (składniki, kroki przepisu, produkty, podgląd). */
 .step--center {
   align-self: stretch;
   justify-self: center;
   justify-content: center;
   position: relative;
-}
-.step--center > .step__substep {
-  position: absolute;
-  top: 0;
-  left: 0;
-  white-space: nowrap;
 }
 .step--center > header {
   position: absolute;
@@ -260,7 +252,7 @@ html, body {
 }
 .progress {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(var(--progress-steps, 6), 1fr);
   gap: 6px;
   padding: 14px 32px 0;
 }
@@ -282,7 +274,7 @@ html, body {
 }
 @keyframes fillSeg {
   from { transform: scaleX(0); }
-  to   { transform: scaleX(0.55); }
+  to   { transform: scaleX(var(--progress-fill-scale, 0.5)); }
 }
 
 .footer__nav {
@@ -1089,13 +1081,6 @@ body[data-type="display"] {
   animation: stepIn .4s cubic-bezier(.2,.7,.2,1) both;
 }
 
-/* Mała etykieta nad polem — pokazuje sub-step w obrębie kroku (np. „1 z 4 · Krótki opis") */
-.step__substep {
-  font: 500 12px var(--sans);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
 .step-intro__text {
   display: flex;
   flex-direction: column;

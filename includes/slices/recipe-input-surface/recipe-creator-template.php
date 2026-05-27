@@ -77,7 +77,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 1.1 · TYTUŁ -->
       <section class="step step--center" data-screen-idx="1" hidden>
-        <div class="step__substep">1 z 6 · Tytuł</div>
         <div class="field">
           <label class="field__label" for="title">Tytuł przepisu</label>
           <p class="field__hint">Krótki, konkretny — taki, jaki pojawi się na liście przepisów. Np. „Kremowa zupa z brokułów i porów".</p>
@@ -93,7 +92,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 1.2 · LEAD -->
       <section class="step step--center" data-screen-idx="2" hidden>
-        <div class="step__substep">2 z 6 · Krótki opis</div>
         <div class="field">
           <label class="field__label" for="lead">Wstęp / opis (lead)</label>
           <p class="field__hint">2–4 zdania, które pojawią się pod tytułem przepisu. Krótko opisz danie i kontekst.</p>
@@ -108,7 +106,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 1.3 · GŁÓWNE ZDJĘCIE -->
       <section class="step step--center" data-screen-idx="3" hidden>
-        <div class="step__substep">3 z 6 · Główne zdjęcie</div>
         <div class="field">
           <label class="field__label">Główne zdjęcie przepisu <span class="field__opt">opcjonalnie</span></label>
           <p class="field__hint">Najpiękniejsze zdjęcie Twojego dania. Ten obraz pojawi się w hero obszarze, na liście przepisów i w wynikach wyszukiwania.</p>
@@ -118,7 +115,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 1.4 · TRUDNOŚĆ -->
       <section class="step step--center" data-screen-idx="4" hidden>
-        <div class="step__substep">4 z 6 · Dla kogo</div>
         <div class="field">
           <label class="field__label">Poziom trudności</label>
           <p class="field__hint">Pomóż czytelnikowi zdecydować, czy przepis jest dla niego.</p>
@@ -144,7 +140,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 1.5 · PORCJE -->
       <section class="step step--center" data-screen-idx="5" hidden>
-        <div class="step__substep">5 z 6 · Wielkość przepisu</div>
         <div class="field">
           <label class="field__label">Porcje</label>
           <p class="field__hint">Ile porcji wychodzi z tego przepisu i w jakiej jednostce.</p>
@@ -168,7 +163,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 1.6 · CZAS -->
       <section class="step step--center" data-screen-idx="6" hidden>
-        <div class="step__substep">6 z 7 · Ile to zajmie</div>
         <div class="field">
           <label class="field__label">Czas</label>
           <p class="field__hint">Czas całkowity policzymy automatycznie. Podaj wartości w godzinach i minutach.</p>
@@ -241,7 +235,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 1.7 · TERMY TAKSONOMII -->
       <section class="step step--center" data-screen-idx="7" hidden>
-        <div class="step__substep"><?php echo esc_html__( '7 z 7 · Klasyfikacja przepisu', 'go4taste-recipes-plugin' ); ?></div>
         <div class="field">
           <label class="field__label"><?php echo esc_html__( 'Wybierz klasyfikację przepisu', 'go4taste-recipes-plugin' ); ?></label>
           <p class="field__hint"><?php echo esc_html__( 'Typ dania i zakres czasu przygotowania są wymagane. Cechy możesz dodać opcjonalnie.', 'go4taste-recipes-plugin' ); ?></p>
@@ -288,7 +281,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <section class="step step--wide step--center" data-screen-idx="9" hidden>
-        <div class="step__substep">1 z 2 · Zdjęcie</div>
         <!-- Zdjęcie składników -->
         <div class="field">
           <div class="field__label">Zdjęcie składników <span class="field__opt">opcjonalnie</span></div>
@@ -300,7 +292,6 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 2.2 · LISTA SKŁADNIKÓW -->
       <section class="step step--wide" data-screen-idx="10" hidden>
-        <div class="step__substep">2 z 2 · Lista</div>
         <!-- Lista składników -->
         <div class="field">
           <div class="field__label">Lista składników</div>
