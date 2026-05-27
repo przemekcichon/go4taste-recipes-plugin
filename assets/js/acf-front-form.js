@@ -51,6 +51,61 @@
   const STEP_TITLES = ['Podstawy', 'Składniki', 'Przygotowanie', 'Wskazówki', 'Źródło', 'Promowane produkty'];
   const formScreenForStep = step => SCREENS.findIndex(s => s.kind === 'form' && s.step === step);
 
+  function clamp01(value) {
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
+  }
+
+  function getFormSubstepTotal(step) {
+    return SCREENS.filter(screen => screen.kind === 'form' && screen.step === step).length;
+  }
+
+  function getCurrentFormSubstepPosition(screenIdx) {
+    const currentScreen = SCREENS[screenIdx];
+    if (!currentScreen || currentScreen.kind !== 'form') return 0;
+
+    let position = 0;
+    for (let i = 0; i <= screenIdx; i += 1) {
+      const screen = SCREENS[i];
+      if (screen.kind === 'form' && screen.step === currentScreen.step) {
+        position += 1;
+      }
+    }
+
+    return position;
+  }
+
+  function getActiveStepFillScale(screenIdx) {
+    const screen = SCREENS[screenIdx];
+    if (!screen) return 0;
+
+    if (screen.kind !== 'intro' && screen.kind !== 'form') {
+      return 1;
+    }
+
+    const step = Number(screen.step);
+    if (!Number.isInteger(step) || step < 0) {
+      return 0;
+    }
+
+    if (screen.kind === 'intro') {
+      return 0;
+    }
+
+    const totalSubsteps = getFormSubstepTotal(step);
+    if (totalSubsteps <= 0) {
+      return 0;
+    }
+
+    const currentPosition = getCurrentFormSubstepPosition(screenIdx);
+    if (currentPosition <= 0) {
+      return 0;
+    }
+
+    return clamp01(currentPosition / totalSubsteps);
+  }
+
   // ============================================================
   // STATE
   // ============================================================
@@ -322,6 +377,7 @@
 
     // Progress bar segments
     const progress = document.getElementById('progress');
+    progress.style.setProperty('--progress-steps', String(TOTAL_FORM_STEPS));
     for (let i = 0; i < TOTAL_FORM_STEPS; i++) {
       const seg = document.createElement('div');
       seg.className = 'progress__seg';
@@ -1165,6 +1221,7 @@
   function showScreen(idx) {
     idx = Math.max(0, Math.min(SCREENS.length - 1, idx));
     const screen = SCREENS[idx];
+    const activeFillScale = getActiveStepFillScale(idx);
 
     // Visibility
     document.querySelectorAll('[data-screen-idx]').forEach(el => {
@@ -1174,9 +1231,13 @@
     // Progress bar
     document.querySelectorAll('.progress__seg').forEach((seg, i) => {
       seg.classList.remove('is-done', 'is-active');
+      seg.style.removeProperty('--progress-fill-scale');
       if (screen.kind === 'intro' || screen.kind === 'form') {
         if (i < screen.step) seg.classList.add('is-done');
-        if (i === screen.step) seg.classList.add('is-active');
+        if (i === screen.step) {
+          seg.classList.add('is-active');
+          seg.style.setProperty('--progress-fill-scale', activeFillScale.toFixed(4));
+        }
       } else {
         // review / done  —  wszystkie zakończone
         seg.classList.add('is-done');
