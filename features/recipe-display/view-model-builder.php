@@ -57,6 +57,18 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
 
     $ads_product_ids = g4t_get_ads_product_ids_from_acf( $post_id );
 
+    // Phase 3: delegate product fetching to go4taste-ads shared resolver when available.
+    // Falls back to legacy g4t_fetch_ads_products() for recipes not yet migrated to the
+    // _g4t_a_recipe_bottom_product_ids storage key (ACF repeater data still in old keys).
+    if ( function_exists( 'g4t_recipe_bottom_strip_get_products_for_post' ) ) {
+        $ads_products = g4t_recipe_bottom_strip_get_products_for_post( $post_id );
+        if ( empty( $ads_products ) && ! empty( $ads_product_ids ) ) {
+            $ads_products = g4t_fetch_ads_products( $ads_product_ids, $post_id );
+        }
+    } else {
+        $ads_products = g4t_fetch_ads_products( $ads_product_ids, $post_id );
+    }
+
     $hero_image_url = get_the_post_thumbnail_url( $post_id, 'full' );
 
     $difficulty_key   = (string) ( $data['difficulty'] ?? '' );
@@ -95,8 +107,8 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
         ),
         'ads' => array(
             'bottom_product_ids' => $ads_product_ids,
-            'products'           => g4t_fetch_ads_products( $ads_product_ids, $post_id ),
-            'enabled'            => ! empty( $ads_product_ids ),
+            'products'           => $ads_products,
+            'enabled'            => ! empty( $ads_products ),
         ),
     );
 }
