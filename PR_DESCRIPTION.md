@@ -1,70 +1,53 @@
-﻿# PR: Dynamiczny pasek postepu po podkrokach + usuniecie etykiet substep
+﻿# PR: Ads Phase 3 — Delegacja pobierania produktów do wspólnego resolvera go4taste-ads
 
-**Branch:** feature/dynamic-progress-substeps -> main
+**Branch:** feature/ads-phase3-shared-resolver → main
 
 ## Motywacja
 
-W kreatorze przepisu aktywny segment paska postepu byl zawsze wypelniany do stalej wartosci (~55%),
-niezaleznie od liczby podkrokow i aktualnej pozycji uzytkownika w kroku.
-
-Dodatkowo widok formularza pokazywal osobne etykiety typu `x z y · ...` (`step__substep`),
-co dublowalo informacje wizualne po stronie paska postepu.
-
-Cel tej zmiany:
-1. Urealnic wypelnienie aktywnego segmentu na podstawie rzeczywistego podkroku.
-2. Zachowac dotychczasowa semantyke `is-active` i `is-done`.
-3. Usunac etykiety `step__substep` ze wszystkich krokow formularza.
+`g4t_build_single_recipe_view_model()` zawierał własną kopię logiki pobierania produktów reklamowych
+(`g4t_fetch_ads_products()`), która bezpośrednio wywołuje PrestaShop API przez instancję klasy
+`Go4Taste_Ads`. Taka duplikacja logiki oznacza:
+- dwa miejsca do aktualizacji przy zmianie kształtu danych produktu,
+- brak korzystania ze wspólnego normalizatora `g4t_ads_normalize_product_item()`,
+- brak możliwości filtrowania payloadu przez hooki `go4taste/ads/placement_product_item` i `go4taste/ads/resolve_placement_payload`.
 
 ## Zakres zmian
 
-### 1) Dynamiczne wypelnienie segmentu progress
+### Plik: `features/recipe-display/view-model-builder.php`
 
-Plik: `features/frontend-creator/creator.js`
+- `g4t_build_single_recipe_view_model()` teraz wywołuje `g4t_recipe_bottom_strip_get_products_for_post($post_id)` gdy go4taste-ads jest aktywne (guard `function_exists()`).
+- Podwójny fallback dla wstecznej kompatybilności:
+  1. Gdy go4taste-ads nieaktywne → lokalne `g4t_fetch_ads_products()`.
+  2. Gdy nowy klucz `_g4t_a_recipe_bottom_product_ids` pusty, ale stare dane ACF repeatera istnieją → `g4t_fetch_ads_products()` (istniejące przepisy bez migracji renderują się poprawnie).
+- `ads.enabled` teraz bazuje na faktycznie załadowanych produktach, nie tylko na obecności ID w ACF meta.
+- `g4t_fetch_ads_products()` **nie usunięta** — zachowana jako legacy fallback.
 
-- Dodane funkcje pomocnicze:
-  - `clamp01(value)`
-  - `getFormSubstepTotal(step)`
-  - `getCurrentFormSubstepPosition(screenIdx)`
-  - `getActiveStepFillScale(screenIdx)`
-- W `showScreen(idx)`:
-  - dla kazdego segmentu czyszczone jest poprzednie `--progress-fill-scale`,
-  - aktywny segment dostaje nowa wartosc `--progress-fill-scale` wyliczana z podkroku.
-- Intro nie liczy sie do substepu (`0%` wypelnienia aktywnego segmentu).
-- Dla ekranow innych niz `intro/form` (review/done) semantyka pozostaje bez zmian (wszystkie `is-done`).
+## Kontekst architektoniczny
 
-### 2) CSS progress oparty o zmienne
+Zmiana jest częścią **Phase 3** planu rozszerzalności go4taste-ads (`feature/banner-extensibility`).
 
-Plik: `features/frontend-creator/creator.css`
-
-- `grid-template-columns` dla `.progress` korzysta z `--progress-steps` (fallback `6`).
-- `@keyframes fillSeg` konczy animacje na `scaleX(var(--progress-fill-scale, 0.5))`
-  zamiast stalego `scaleX(0.55)`.
-
-### 3) Usuniecie etykiet substep z UI
-
-Pliki:
-- `features/frontend-creator/creator-template.php`
-- `features/frontend-creator/creator.css`
-
-- Usuniete wszystkie elementy `<div class="step__substep">...</div>` w krokach formularza.
-- Usuniete nieuzywane style `.step__substep` i `.step--center > .step__substep`.
+Funkcja `g4t_recipe_bottom_strip_get_products_for_post()` pochodzi z nowego slice'a
+`features/recipe-bottom-strip/helpers.php` w pluginie go4taste-ads. Czyta klucz
+`_g4t_a_recipe_bottom_product_ids` (kontrakt JSON array) i używa wspólnego
+`g4t_ads_build_placement_payload()` do normalizacji produktów.
 
 ## Weryfikacja
 
-- Walidacja edytowanych plikow: brak bledow (JS/CSS/PHP) w Problems.
-- Sprawdzenie wyszukiwania: brak wystapien `step__substep` po zmianie.
-- Kontrola diff: zmiany ograniczone do 3 plikow.
+- Brak błędów w `view-model-builder.php` (walidacja Problems).
+- Kształt `ads.products` w view modelu jest identyczny jak poprzednio — Twig konsumuje `recipe_data.ads.products` bez zmian.
+- Istniejące przepisy z danymi w ACF repeaterze (`recipe_ads_products`) renderują się poprawnie przez fallback.
 
-## Ryzyko / kompatybilnosc
+## Ryzyko / kompatybilność
 
-- Ryzyko niskie/srednie: zmiana dotyczy warstwy UI kreatora (JS + CSS + template).
-- Brak zmian w modelu danych, ACF schema, hookach backendowych i zapisie recipe meta.
-- Potencjalny obszar uwagi: wizualny odbior animacji na roznych urzadzeniach i przy szybkim przechodzeniu Wstecz/Dalej.
+- Ryzyko niskie: zmiana dotyczy tylko warstwy pobierania danych w view model builderze.
+- Brak zmian w Twig, ACF schema, hookach backendowych, zapisie recipe meta.
+- Soft dependency na go4taste-ads — plugin jest opcjonalny, fallback zawsze działa.
 
 ## Checklist
 
-- [x] Aktywny segment progress zalezy od aktualnego podkroku
-- [x] Intro nie liczy sie do podkroku (0%)
-- [x] Zachowane `is-active` i `is-done`
-- [x] Usuniete etykiety `step__substep` z formularza
-- [x] Usuniete martwe style CSS zwiazane z `step__substep`
+- [x] Guard `function_exists('g4t_recipe_bottom_strip_get_products_for_post')`
+- [x] Fallback 1: go4taste-ads nieaktywne → `g4t_fetch_ads_products()`
+- [x] Fallback 2: nowy klucz pusty + stare ACF dane → `g4t_fetch_ads_products()`
+- [x] `ads.enabled` odzwierciedla faktycznie załadowane produkty
+- [x] `g4t_fetch_ads_products()` zachowana (nie usunięta)
+- [x] Brak zmian w kształcie view modelu (Twig kompatybilny)
