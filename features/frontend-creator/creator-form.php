@@ -411,21 +411,37 @@ function g4t_get_algolia_credentials_for_js(): array {
 function g4t_get_recipe_creator_ads_picker_config(): array {
     $credentials = g4t_get_algolia_credentials_for_js();
     if ( empty( $credentials['appId'] ) || empty( $credentials['apiKey'] ) ) {
-        return array( 'enabled' => false );
+        return array(
+            'enabled'         => false,
+            'context'         => 'recipe_creator',
+            'variant'         => 'creator',
+            'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
+            'fallbackMessage' => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
+        );
     }
 
     $ads_plugin_entry = WP_PLUGIN_DIR . '/go4taste-ads/go4taste-ads.php';
     if ( ! file_exists( $ads_plugin_entry ) ) {
-        return array( 'enabled' => false );
+        return array(
+            'enabled'         => false,
+            'context'         => 'recipe_creator',
+            'variant'         => 'creator',
+            'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
+            'fallbackMessage' => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
+        );
     }
 
     return array(
-        'enabled'   => true,
-        'appId'     => sanitize_text_field( (string) $credentials['appId'] ),
-        'apiKey'    => sanitize_text_field( (string) $credentials['apiKey'] ),
-        'indexName' => sanitize_text_field( (string) ( $credentials['indexName'] ?? 'go4taste_product_list' ) ),
-        'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-        'nonce'     => wp_create_nonce( 'g4t_ad_preview_nonce' ),
+        'enabled'         => true,
+        'appId'           => sanitize_text_field( (string) $credentials['appId'] ),
+        'apiKey'          => sanitize_text_field( (string) $credentials['apiKey'] ),
+        'indexName'       => sanitize_text_field( (string) ( $credentials['indexName'] ?? 'go4taste_product_list' ) ),
+        'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
+        'nonce'           => wp_create_nonce( 'g4t_ad_preview_nonce' ),
+        'context'         => 'recipe_creator',
+        'variant'         => 'creator',
+        'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
+        'fallbackMessage'  => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
     );
 }
 

@@ -1157,9 +1157,37 @@
     adapter.dataset.g4tPickerContext = String(pickerConfig.context || '');
     adapter.dataset.g4tPickerVariant = String(pickerConfig.variant || '');
     adapter.dataset.g4tPickerMetadata = JSON.stringify(metadata);
+    adapter.dataset.g4tPickerSurfaceLabel = String(pickerConfig.surfaceLabel || '');
+    adapter.dataset.g4tPickerFallbackMessage = String(pickerConfig.fallbackMessage || '');
 
     if (pickerConfig.variant) {
       adapter.classList.add(`${variantClassPrefix}${pickerConfig.variant}`);
+    }
+  }
+
+  function updateAdsPickerStatusUI(pickerConfig, isRuntimeEnabled) {
+    const title = document.getElementById('g4t-recipe-ads-picker-title');
+    const meta = document.getElementById('g4t-recipe-ads-picker-meta');
+    const fallbackNote = document.getElementById('g4t-recipe-ads-picker-fallback-note');
+
+    if (title && pickerConfig.surfaceLabel) {
+      title.textContent = String(pickerConfig.surfaceLabel);
+    }
+
+    if (meta) {
+      const contextLabel = pickerConfig.context ? `Kontrakt: ${pickerConfig.context}` : 'Kontrakt: recipe_creator';
+      const variantLabel = pickerConfig.variant ? `wariant: ${pickerConfig.variant}` : 'wariant: creator';
+      meta.textContent = `Ten krok używa ${contextLabel}, ${variantLabel}. Jeśli wspólny picker jest niedostępny, poniżej pozostaje lokalna lista produktów.`;
+    }
+
+    if (fallbackNote) {
+      if (isRuntimeEnabled) {
+        fallbackNote.hidden = true;
+        fallbackNote.textContent = '';
+      } else {
+        fallbackNote.hidden = false;
+        fallbackNote.textContent = pickerConfig.fallbackMessage || 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.';
+      }
     }
   }
 
@@ -1174,8 +1202,10 @@
 
   function setupProductSearch() {
     const pickerConfig = getAdsPickerRuntimeContract();
+    const runtimeEnabled = pickerConfig.enabled && typeof window.G4TAdsPicker === 'function';
+    updateAdsPickerStatusUI(pickerConfig, runtimeEnabled);
 
-    if (pickerConfig.enabled && typeof window.G4TAdsPicker === 'function') {
+    if (runtimeEnabled) {
       const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
       const fallbackSearch = document.querySelector('.search-box');
       if (adapter) {
@@ -1242,6 +1272,15 @@
     const searchInput = document.getElementById('product-search');
     if (!searchInput) {
       return;
+    }
+
+    const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
+    if (adapter) {
+      adapter.hidden = true;
+    }
+    const fallbackSearch = document.querySelector('.search-box');
+    if (fallbackSearch) {
+      fallbackSearch.hidden = false;
     }
 
     searchInput.addEventListener('input', (e) => {

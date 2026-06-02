@@ -7,7 +7,7 @@
 | Stage | Status | Description |
 |---|---|---|
 | Stage 1: Creator adapter contract | ✅ Done | Pass context/variant metadata from creator to shared picker runtime |
-| Stage 2: Creator UI integration | 🔲 Next | Apply creator-specific picker section and fallback handling |
+| Stage 2: Creator UI integration | ✅ Done | Apply creator-specific picker section and fallback handling |
 | Stage 3: Meta persistence alignment | 🔲 Next | Keep `_g4t_a_recipe_bottom_product_ids` JSON contract as source of truth |
 | Stage 4: Compatibility behavior | 🔲 Next | Preserve legacy fallback to `recipe_ads_products` in edit mode |
 | Stage 5: Docs + QA checklist | 🔲 Next | Update PR docs and verify creator flow end-to-end |
