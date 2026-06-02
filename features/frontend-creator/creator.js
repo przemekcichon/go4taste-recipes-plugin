@@ -137,6 +137,11 @@
   const creatorData = getCreatorData();
   const isHeartbeatEnabled = !!creatorData.heartbeatEnabled;
   let autosavePostId = Number(creatorData.editPostId || 0) || 0;
+  let productSourceMode = 'local';
+  let algoliaIndex = null;
+  let productSearchTimer = null;
+  let productRequestSeq = 0;
+  let visibleProducts = [];
 
   function mkIng()  { return { id: rid('ing'),  name:'', termId:null, amount:'', unit:'', hint:'' }; }
   function mkPrep() { return { id: rid('prep'), heading:'', body:'', hint:'', photo:null }; }
@@ -1177,7 +1182,7 @@
     if (meta) {
       const contextLabel = pickerConfig.context ? `Kontrakt: ${pickerConfig.context}` : 'Kontrakt: recipe_creator';
       const variantLabel = pickerConfig.variant ? `wariant: ${pickerConfig.variant}` : 'wariant: creator';
-      meta.textContent = `Ten krok używa ${contextLabel}, ${variantLabel}. Jeśli wspólny picker jest niedostępny, poniżej pozostaje lokalna lista produktów.`;
+      meta.textContent = `Ten krok używa ${contextLabel}, ${variantLabel}. Lista produktów jest renderowana natywnie w kreatorze.`;
     }
 
     if (fallbackNote) {
@@ -1191,6 +1196,108 @@
     }
   }
 
+  function normalizeProductRecord(raw) {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const id = String(raw.id || raw.objectID || '').trim();
+    if (!id) {
+      return null;
+    }
+
+    const title = String(raw.title || raw.name || `Produkt #${id}`);
+    const category = String(raw.cat || raw.category || '');
+    const sku = String(raw.sku || raw.reference || id);
+    const priceValue = raw.price ?? raw.formatted_price ?? raw.formattedPrice ?? '';
+
+    return {
+      id,
+      title,
+      cat: category,
+      sku,
+      price: String(priceValue || ''),
+    };
+  }
+
+  function getLocalProductsCatalog() {
+    if (!Array.isArray(window.PRODUCTS)) {
+      return [];
+    }
+
+    return window.PRODUCTS
+      .map((item) => normalizeProductRecord(item))
+      .filter(Boolean);
+  }
+
+  async function fetchAlgoliaProducts(query, pickerConfig) {
+    if (!algoliaIndex || !pickerConfig) {
+      return [];
+    }
+
+    const response = await algoliaIndex.search(String(query || ''), {
+      hitsPerPage: Number(pickerConfig.hitsPerPage || 12),
+    });
+
+    if (!response || !Array.isArray(response.hits)) {
+      return [];
+    }
+
+    return response.hits
+      .map((hit) => normalizeProductRecord(hit))
+      .filter(Boolean);
+  }
+
+  function renderProductLoadingState() {
+    const list = document.getElementById('product-list');
+    if (!list) {
+      return;
+    }
+
+    list.innerHTML = '';
+    const loading = document.createElement('div');
+    loading.style.cssText = 'padding:20px; text-align:center; color:var(--ink-2); border:1px dashed var(--line); border-radius:var(--r-md);';
+    loading.textContent = 'Ładowanie produktów...';
+    list.appendChild(loading);
+  }
+
+  async function refreshProductResults(query, pickerConfig) {
+    const requestId = ++productRequestSeq;
+
+    if (productSourceMode === 'algolia') {
+      try {
+        renderProductLoadingState();
+        const algoliaResults = await fetchAlgoliaProducts(query, pickerConfig);
+        if (requestId !== productRequestSeq) {
+          return;
+        }
+        visibleProducts = algoliaResults;
+        showError(null);
+      } catch (error) {
+        if (requestId !== productRequestSeq) {
+          return;
+        }
+        productSourceMode = 'local';
+        visibleProducts = getLocalProductsCatalog();
+        showError('Nie udało się pobrać produktów z Algolii. Pokazujemy listę lokalną.');
+      }
+
+      renderProducts();
+      return;
+    }
+
+    const q = String(query || '').trim().toLowerCase();
+    const localCatalog = getLocalProductsCatalog();
+    visibleProducts = !q
+      ? localCatalog
+      : localCatalog.filter((p) =>
+          String(p.title || '').toLowerCase().includes(q)
+          || String(p.cat || '').toLowerCase().includes(q)
+          || String(p.sku || '').toLowerCase().includes(q)
+        );
+    renderProducts();
+  }
+
   function syncAdsPickerAdapterContract() {
     const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
     if (!adapter) {
@@ -1202,71 +1309,21 @@
 
   function setupProductSearch() {
     const pickerConfig = getAdsPickerRuntimeContract();
-    const runtimeEnabled = pickerConfig.enabled && typeof window.G4TAdsPicker === 'function';
+    const runtimeEnabled = !!(
+      pickerConfig.enabled
+      && pickerConfig.appId
+      && pickerConfig.apiKey
+      && window.algoliasearch
+    );
     updateAdsPickerStatusUI(pickerConfig, runtimeEnabled);
 
+    productSourceMode = runtimeEnabled ? 'algolia' : 'local';
+
     if (runtimeEnabled) {
-      const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
-      const fallbackSearch = document.querySelector('.search-box');
-      if (adapter) {
-        adapter.hidden = false;
-        applyAdsPickerAdapterContract(adapter, pickerConfig);
-      }
-      if (fallbackSearch) {
-        fallbackSearch.hidden = true;
-      }
-
-      window.G4TAdsPicker({
-        hiddenFieldSelector: '#g4t-recipe-ads-picked-id',
-        searchBoxSelector: '#g4t-recipe-ads-searchbox',
-        selectedContainerSelector: '#g4t-recipe-ads-selected',
-        previewContainerSelector: '#g4t-recipe-ads-preview',
-        algoliaAppId: pickerConfig.appId || '',
-        algoliaApiKey: pickerConfig.apiKey || '',
-        indexName: pickerConfig.indexName || 'go4taste_product_list',
-        ajaxUrl: pickerConfig.ajaxUrl || '',
-        nonce: pickerConfig.nonce || '',
-        postId: autosavePostId || 0,
-        context: pickerConfig.context || 'recipe_creator',
-        variant: pickerConfig.variant || 'creator',
-        metadata: pickerConfig.metadata || {},
-      });
-
-      const addButton = document.getElementById('g4t-recipe-ads-add');
-      if (addButton) {
-        addButton.addEventListener('click', () => {
-          const hiddenField = document.getElementById('g4t-recipe-ads-picked-id');
-          const pickedId = hiddenField ? String(hiddenField.value || '').trim() : '';
-          if (!pickedId) {
-            showError('Wybierz produkt z wyszukiwarki, zanim go dodasz.');
-            return;
-          }
-
-          const alreadySelected = state.data.products.some((item) => String(item.id) === pickedId);
-          if (alreadySelected) {
-            showError('Ten produkt jest już na liście wybranych.');
-            return;
-          }
-
-          const matchedProduct = Array.isArray(window.PRODUCTS)
-            ? window.PRODUCTS.find((item) => String(item.id) === pickedId)
-            : null;
-
-          state.data.products.push(matchedProduct || {
-            id: pickedId,
-            title: `Produkt #${pickedId}`,
-            cat: '',
-            sku: '',
-            price: '',
-          });
-
-          showError(null);
-          renderProducts();
-          afterChange();
-        });
-      }
-
-      return;
+      const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
+      algoliaIndex = searchClient.initIndex(pickerConfig.indexName || 'go4taste_product_list');
+    } else {
+      algoliaIndex = null;
     }
 
     const searchInput = document.getElementById('product-search');
@@ -1276,6 +1333,7 @@
 
     const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
     if (adapter) {
+      applyAdsPickerAdapterContract(adapter, pickerConfig);
       adapter.hidden = true;
     }
     const fallbackSearch = document.querySelector('.search-box');
@@ -1283,29 +1341,34 @@
       fallbackSearch.hidden = false;
     }
 
+    searchInput.value = '';
+
     searchInput.addEventListener('input', (e) => {
-      state.productQuery = e.target.value;
-      renderProducts();
+      state.productQuery = String(e.target.value || '');
+
+      if (productSearchTimer) {
+        clearTimeout(productSearchTimer);
+      }
+
+      productSearchTimer = setTimeout(() => {
+        refreshProductResults(state.productQuery, pickerConfig);
+      }, Number(pickerConfig.searchDebounceMs || 260));
     });
+
+    refreshProductResults('', pickerConfig);
   }
 
   function renderProducts() {
     const list = document.getElementById('product-list');
     list.innerHTML = '';
-    const allProducts = Array.isArray(window.PRODUCTS) ? window.PRODUCTS : [];
-    const q = state.productQuery.trim().toLowerCase();
-    const filtered = !q
-      ? allProducts
-      : allProducts.filter(p =>
-          String(p.title || '').toLowerCase().includes(q) ||
-          String(p.cat || '').toLowerCase().includes(q) ||
-          String(p.sku || '').toLowerCase().includes(q)
-        );
+    const filtered = Array.isArray(visibleProducts) ? visibleProducts : [];
 
     if (filtered.length === 0) {
       const empty = document.createElement('div');
       empty.style.cssText = 'padding:28px; text-align:center; color:var(--ink-2); border:1px dashed var(--line); border-radius:var(--r-md);';
-      empty.textContent = `Brak wyników dla „${state.productQuery}". Spróbuj inaczej.`;
+      empty.textContent = state.productQuery.trim()
+        ? `Brak wyników dla „${state.productQuery}". Spróbuj inaczej.`
+        : 'Brak produktów do wyświetlenia.';
       list.appendChild(empty);
     } else {
       filtered.forEach((p, i) => list.appendChild(productRow(p, i)));
@@ -1358,10 +1421,11 @@
     label.className = 'selected-strip__label';
     label.textContent = `Wybrane (${state.data.products.length}):`;
     strip.appendChild(label);
-    state.data.products.forEach(p => {
+    state.data.products.forEach((p, index) => {
+      const title = String((p && p.title) || '').trim() || `Produkt #${String((p && p.id) || '').trim()}`;
       const chip = document.createElement('span');
       chip.className = 'chip';
-      chip.innerHTML = `${escapeHtml(p.title)}<button type="button" class="chip__x" aria-label="Usuń">×</button>`;
+      chip.innerHTML = `${escapeHtml(`${index + 1}. ${title}`)}<button type="button" class="chip__x" aria-label="Usuń">×</button>`;
       chip.querySelector('.chip__x').addEventListener('click', (e) => { e.stopPropagation(); toggleProduct(p); });
       strip.appendChild(chip);
     });

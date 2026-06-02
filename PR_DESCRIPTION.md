@@ -6,9 +6,9 @@
 
 | Stage | Status | Description |
 |---|---|---|
-| Stage 1: Algolia list in existing `product-list` | 🔲 Next | Replace dummy/local-only list with Algolia-backed results rendered in current creator cards |
-| Stage 2: Search bridge via existing `.search-box` | 🔲 Next | Use existing creator search input as the only query source (no `.ais-SearchBox-input` in UI flow) |
-| Stage 3: Preview in existing `selected-strip` | 🔲 Next | Keep current strip component and render chips with index + product name |
+| Stage 1: Algolia list in existing `product-list` | ✅ Done | Replace dummy/local-only list with Algolia-backed results rendered in current creator cards |
+| Stage 2: Search bridge via existing `.search-box` | ✅ Done | Use existing creator search input as the only query source (no `.ais-SearchBox-input` in UI flow) |
+| Stage 3: Preview in existing `selected-strip` | ✅ Done | Keep current strip component and render chips with index + product name |
 | Stage 4: Persistence + compatibility guard | ✅ Done | Keep `_g4t_a_recipe_bottom_product_ids` JSON contract and legacy `recipe_ads_products` fallback |
 | Stage 5: Docs + QA checklist | 🔲 Next | Confirm behavior on create/edit, mobile/desktop, and no regressions in summary/save |
 
