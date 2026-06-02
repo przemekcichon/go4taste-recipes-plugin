@@ -553,10 +553,24 @@
     const normalizedProducts = Array.isArray(initial.products)
       ? initial.products
           .map((item) => {
-            const id = asNumber(item && item.id, 0);
-            if (!id) return null;
-            const match = Array.isArray(window.PRODUCTS) ? window.PRODUCTS.find((p) => Number(p.id) === id) : null;
-            return match || { id, title: `Produkt #${id}`, cat: '', sku: '', price: '' };
+            const normalized = normalizeProductRecord(item);
+            if (normalized) {
+              return normalized;
+            }
+
+            const fallbackId = String(item && item.id ? item.id : '').trim();
+            if (!fallbackId) {
+              return null;
+            }
+
+            return {
+              id: fallbackId,
+              title: `Produkt #${fallbackId}`,
+              cat: '',
+              sku: fallbackId,
+              price: '',
+              image: '',
+            };
           })
           .filter(Boolean)
       : [];
@@ -1206,20 +1220,46 @@
       return null;
     }
 
-    const title = String(raw.title || raw.name || `Produkt #${id}`);
-    const category = String(raw.cat || raw.category || '');
-    const sku = String(raw.sku || raw.reference || id);
-    const priceValue = raw.price ?? raw.formatted_price ?? raw.formattedPrice ?? '';
-    const imageValue = raw.image
-      || raw.image_url
-      || raw.imageUrl
-      || raw.thumbnail
-      || raw.thumb
-      || raw.photo
-      || raw.picture
-      || raw.main_image
-      || raw.main_image_url
-      || (raw.image && typeof raw.image === 'object' ? raw.image.url : '');
+    const title = String(raw.title || raw.name || raw.product_name || `Produkt #${id}`);
+    const category = String(raw.cat || raw.category || raw.category_name || '');
+    const sku = String(raw.sku || raw.reference || raw.product_reference || id);
+    const priceValue = raw.price ?? raw.formatted_price ?? raw.formattedPrice ?? raw.display_price ?? '';
+
+    const resolveImageUrl = (candidate) => {
+      if (!candidate) {
+        return '';
+      }
+
+      if (typeof candidate === 'string') {
+        return candidate.trim();
+      }
+
+      if (typeof candidate === 'object') {
+        const nested = candidate.url || candidate.src || candidate.image_url || candidate.imageUrl || candidate.thumbnail || candidate.thumb;
+        return typeof nested === 'string' ? nested.trim() : '';
+      }
+
+      return '';
+    };
+
+    const imageValue = resolveImageUrl(raw.image)
+      || resolveImageUrl(raw.image_url)
+      || resolveImageUrl(raw.imageUrl)
+      || resolveImageUrl(raw.thumbnail)
+      || resolveImageUrl(raw.thumb)
+      || resolveImageUrl(raw.photo)
+      || resolveImageUrl(raw.picture)
+      || resolveImageUrl(raw.main_image)
+      || resolveImageUrl(raw.main_image_url)
+      || resolveImageUrl(raw.cover)
+      || resolveImageUrl(raw.images)
+      || resolveImageUrl(raw.media)
+      || resolveImageUrl(raw.default_image)
+      || resolveImageUrl(raw.featured_image)
+      || resolveImageUrl(raw.small_image)
+      || resolveImageUrl(raw.smallImage)
+      || resolveImageUrl(raw.product_image)
+      || resolveImageUrl(raw.productImage);
 
     return {
       id,
@@ -1553,6 +1593,10 @@
       image.style.height = '100%';
       image.style.objectFit = 'cover';
       image.style.display = 'block';
+      image.addEventListener('error', () => {
+        thumb.innerHTML = '';
+        thumb.appendChild(placeholderImg(i, ''));
+      });
       thumb.appendChild(image);
     } else {
       thumb.appendChild(placeholderImg(i, ''));
