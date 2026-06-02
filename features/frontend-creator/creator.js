@@ -1105,16 +1105,82 @@
   // ============================================================
   // PRODUCTS  —  search + multi-select
   // ============================================================
-  function setupProductSearch() {
-    const pickerConfig = creatorData && creatorData.adsPicker && creatorData.adsPicker.enabled
-      ? creatorData.adsPicker
-      : null;
+  function normalizePickerToken(value, fallbackValue) {
+    const normalized = String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-');
 
-    if (pickerConfig && typeof window.G4TAdsPicker === 'function') {
+    return normalized || fallbackValue;
+  }
+
+  function getAdsPickerRuntimeContract() {
+    const baseConfig = creatorData && creatorData.adsPicker && typeof creatorData.adsPicker === 'object'
+      ? creatorData.adsPicker
+      : {};
+    const rawMetadata = baseConfig.metadata && typeof baseConfig.metadata === 'object'
+      ? baseConfig.metadata
+      : {};
+    const currentPostId = Number(autosavePostId || creatorData.editPostId || 0);
+
+    return {
+      ...baseConfig,
+      enabled: !!baseConfig.enabled,
+      context: normalizePickerToken(baseConfig.context, 'recipe_creator'),
+      variant: normalizePickerToken(baseConfig.variant, 'creator'),
+      metadata: {
+        ...rawMetadata,
+        surface: 'frontend_creator',
+        step: 'promoted_products',
+        editMode: !!creatorData.editMode,
+        postId: Number.isFinite(currentPostId) && currentPostId > 0 ? currentPostId : 0,
+      },
+    };
+  }
+
+  function applyAdsPickerAdapterContract(adapter, pickerConfig) {
+    if (!adapter || !pickerConfig) {
+      return;
+    }
+
+    const variantClassPrefix = 'g4t-recipe-ads-picker--variant-';
+    const metadata = pickerConfig.metadata && typeof pickerConfig.metadata === 'object'
+      ? pickerConfig.metadata
+      : {};
+
+    Array.from(adapter.classList).forEach((className) => {
+      if (className.indexOf(variantClassPrefix) === 0) {
+        adapter.classList.remove(className);
+      }
+    });
+
+    adapter.dataset.g4tPickerContext = String(pickerConfig.context || '');
+    adapter.dataset.g4tPickerVariant = String(pickerConfig.variant || '');
+    adapter.dataset.g4tPickerMetadata = JSON.stringify(metadata);
+
+    if (pickerConfig.variant) {
+      adapter.classList.add(`${variantClassPrefix}${pickerConfig.variant}`);
+    }
+  }
+
+  function syncAdsPickerAdapterContract() {
+    const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
+    if (!adapter) {
+      return;
+    }
+
+    applyAdsPickerAdapterContract(adapter, getAdsPickerRuntimeContract());
+  }
+
+  function setupProductSearch() {
+    const pickerConfig = getAdsPickerRuntimeContract();
+
+    if (pickerConfig.enabled && typeof window.G4TAdsPicker === 'function') {
       const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
       const fallbackSearch = document.querySelector('.search-box');
       if (adapter) {
         adapter.hidden = false;
+        applyAdsPickerAdapterContract(adapter, pickerConfig);
       }
       if (fallbackSearch) {
         fallbackSearch.hidden = true;
@@ -1131,6 +1197,9 @@
         ajaxUrl: pickerConfig.ajaxUrl || '',
         nonce: pickerConfig.nonce || '',
         postId: autosavePostId || 0,
+        context: pickerConfig.context || 'recipe_creator',
+        variant: pickerConfig.variant || 'creator',
+        metadata: pickerConfig.metadata || {},
       });
 
       const addButton = document.getElementById('g4t-recipe-ads-add');
@@ -1719,6 +1788,7 @@
         if (nextPostId > 0) {
           autosavePostId = nextPostId;
           setPreviewButtonState(autosavePostId);
+          syncAdsPickerAdapterContract();
         }
         const savedAt = String(result.savedAt || '');
         renderAutosaveBadge(`Wersja robocza zapisana${savedAt ? ` · ${savedAt}` : ''}`, true);
@@ -1763,6 +1833,7 @@
     if (nextPostId > 0) {
       autosavePostId = nextPostId;
       setPreviewButtonState(autosavePostId);
+      syncAdsPickerAdapterContract();
     }
 
     const savedAt = String(result.savedAt || '');
