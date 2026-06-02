@@ -1106,7 +1106,76 @@
   // PRODUCTS  —  search + multi-select
   // ============================================================
   function setupProductSearch() {
-    document.getElementById('product-search').addEventListener('input', (e) => {
+    const pickerConfig = creatorData && creatorData.adsPicker && creatorData.adsPicker.enabled
+      ? creatorData.adsPicker
+      : null;
+
+    if (pickerConfig && typeof window.G4TAdsPicker === 'function') {
+      const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
+      const fallbackSearch = document.querySelector('.search-box');
+      if (adapter) {
+        adapter.hidden = false;
+      }
+      if (fallbackSearch) {
+        fallbackSearch.hidden = true;
+      }
+
+      window.G4TAdsPicker({
+        hiddenFieldSelector: '#g4t-recipe-ads-picked-id',
+        searchBoxSelector: '#g4t-recipe-ads-searchbox',
+        selectedContainerSelector: '#g4t-recipe-ads-selected',
+        previewContainerSelector: '#g4t-recipe-ads-preview',
+        algoliaAppId: pickerConfig.appId || '',
+        algoliaApiKey: pickerConfig.apiKey || '',
+        indexName: pickerConfig.indexName || 'go4taste_product_list',
+        ajaxUrl: pickerConfig.ajaxUrl || '',
+        nonce: pickerConfig.nonce || '',
+        postId: autosavePostId || 0,
+      });
+
+      const addButton = document.getElementById('g4t-recipe-ads-add');
+      if (addButton) {
+        addButton.addEventListener('click', () => {
+          const hiddenField = document.getElementById('g4t-recipe-ads-picked-id');
+          const pickedId = hiddenField ? String(hiddenField.value || '').trim() : '';
+          if (!pickedId) {
+            showError('Wybierz produkt z wyszukiwarki, zanim go dodasz.');
+            return;
+          }
+
+          const alreadySelected = state.data.products.some((item) => String(item.id) === pickedId);
+          if (alreadySelected) {
+            showError('Ten produkt jest już na liście wybranych.');
+            return;
+          }
+
+          const matchedProduct = Array.isArray(window.PRODUCTS)
+            ? window.PRODUCTS.find((item) => String(item.id) === pickedId)
+            : null;
+
+          state.data.products.push(matchedProduct || {
+            id: pickedId,
+            title: `Produkt #${pickedId}`,
+            cat: '',
+            sku: '',
+            price: '',
+          });
+
+          showError(null);
+          renderProducts();
+          afterChange();
+        });
+      }
+
+      return;
+    }
+
+    const searchInput = document.getElementById('product-search');
+    if (!searchInput) {
+      return;
+    }
+
+    searchInput.addEventListener('input', (e) => {
       state.productQuery = e.target.value;
       renderProducts();
     });
@@ -1115,13 +1184,14 @@
   function renderProducts() {
     const list = document.getElementById('product-list');
     list.innerHTML = '';
+    const allProducts = Array.isArray(window.PRODUCTS) ? window.PRODUCTS : [];
     const q = state.productQuery.trim().toLowerCase();
     const filtered = !q
-      ? window.PRODUCTS
-      : window.PRODUCTS.filter(p =>
-          p.title.toLowerCase().includes(q) ||
-          p.cat.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q)
+      ? allProducts
+      : allProducts.filter(p =>
+          String(p.title || '').toLowerCase().includes(q) ||
+          String(p.cat || '').toLowerCase().includes(q) ||
+          String(p.sku || '').toLowerCase().includes(q)
         );
 
     if (filtered.length === 0) {
@@ -1136,7 +1206,7 @@
   }
 
   function productRow(p, i) {
-    const selected = state.data.products.some(s => s.id === p.id);
+    const selected = state.data.products.some(s => String(s.id) === String(p.id));
     const row = document.createElement('div');
     row.className = 'product-row' + (selected ? ' is-selected' : '');
     row.setAttribute('role', 'button');
@@ -1164,7 +1234,7 @@
   }
 
   function toggleProduct(p) {
-    const idx = state.data.products.findIndex(s => s.id === p.id);
+    const idx = state.data.products.findIndex(s => String(s.id) === String(p.id));
     if (idx >= 0) state.data.products.splice(idx, 1);
     else state.data.products.push(p);
     renderProducts();
