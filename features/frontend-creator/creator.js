@@ -1210,6 +1210,16 @@
     const category = String(raw.cat || raw.category || '');
     const sku = String(raw.sku || raw.reference || id);
     const priceValue = raw.price ?? raw.formatted_price ?? raw.formattedPrice ?? '';
+    const imageValue = raw.image
+      || raw.image_url
+      || raw.imageUrl
+      || raw.thumbnail
+      || raw.thumb
+      || raw.photo
+      || raw.picture
+      || raw.main_image
+      || raw.main_image_url
+      || (raw.image && typeof raw.image === 'object' ? raw.image.url : '');
 
     return {
       id,
@@ -1217,7 +1227,145 @@
       cat: category,
       sku,
       price: String(priceValue || ''),
+      image: String(imageValue || ''),
     };
+  }
+
+  function mergeVisibleWithSelectedProducts(items) {
+    const visible = Array.isArray(items) ? items : [];
+    if (state.productQuery.trim()) {
+      return visible;
+    }
+
+    const merged = [];
+    const seen = new Set();
+
+    state.data.products.forEach((product) => {
+      const normalized = normalizeProductRecord(product);
+      if (!normalized) {
+        return;
+      }
+      if (seen.has(normalized.id)) {
+        return;
+      }
+      seen.add(normalized.id);
+      merged.push(normalized);
+    });
+
+    visible.forEach((product) => {
+      const normalized = normalizeProductRecord(product);
+      if (!normalized) {
+        return;
+      }
+      if (seen.has(normalized.id)) {
+        return;
+      }
+      seen.add(normalized.id);
+      merged.push(normalized);
+    });
+
+    return merged;
+  }
+
+  function mergeProductDetails(baseProduct, incomingProduct) {
+    const base = normalizeProductRecord(baseProduct) || { id: String(baseProduct && baseProduct.id ? baseProduct.id : ''), title: '', cat: '', sku: '', price: '', image: '' };
+    const incoming = normalizeProductRecord(incomingProduct);
+    if (!incoming) {
+      return base;
+    }
+
+    return {
+      id: incoming.id || base.id,
+      title: incoming.title || base.title || `Produkt #${incoming.id || base.id}`,
+      cat: incoming.cat || base.cat || '',
+      sku: incoming.sku || base.sku || '',
+      price: incoming.price || base.price || '',
+      image: incoming.image || base.image || '',
+    };
+  }
+
+  function hydrateSelectedProductsFromLocalCatalog() {
+    const localCatalog = getLocalProductsCatalog();
+    if (!Array.isArray(localCatalog) || localCatalog.length === 0) {
+      return;
+    }
+
+    const byId = new Map(localCatalog.map((product) => [String(product.id), product]));
+    let hasChanges = false;
+
+    state.data.products = state.data.products.map((product) => {
+      const id = String(product && product.id ? product.id : '').trim();
+      if (!id) {
+        return product;
+      }
+
+      const fromLocal = byId.get(id);
+      if (!fromLocal) {
+        return product;
+      }
+
+      hasChanges = true;
+      return mergeProductDetails(product, fromLocal);
+    });
+
+    if (hasChanges) {
+      renderSelectedStrip();
+    }
+  }
+
+  async function hydrateSelectedProductsFromAlgolia() {
+    if (!algoliaIndex || !Array.isArray(state.data.products) || state.data.products.length === 0) {
+      return;
+    }
+
+    const ids = [...new Set(state.data.products
+      .map((product) => String(product && product.id ? product.id : '').trim())
+      .filter((id) => id.length > 0))];
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    const requests = ids.map((id) => algoliaIndex.getObject(id));
+    const settled = await Promise.allSettled(requests);
+    const byId = new Map();
+
+    settled.forEach((item) => {
+      if (item.status !== 'fulfilled') {
+        return;
+      }
+
+      const normalized = normalizeProductRecord(item.value);
+      if (!normalized) {
+        return;
+      }
+
+      byId.set(String(normalized.id), normalized);
+    });
+
+    if (byId.size === 0) {
+      return;
+    }
+
+    let hasChanges = false;
+    state.data.products = state.data.products.map((product) => {
+      const id = String(product && product.id ? product.id : '').trim();
+      if (!id) {
+        return product;
+      }
+
+      const fromAlgolia = byId.get(id);
+      if (!fromAlgolia) {
+        return product;
+      }
+
+      hasChanges = true;
+      return mergeProductDetails(product, fromAlgolia);
+    });
+
+    if (hasChanges) {
+      renderProducts();
+    }
   }
 
   function getLocalProductsCatalog() {
@@ -1322,8 +1470,12 @@
     if (runtimeEnabled) {
       const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
       algoliaIndex = searchClient.initIndex(pickerConfig.indexName || 'go4taste_product_list');
+      hydrateSelectedProductsFromAlgolia().catch(() => {
+        // If selected IDs cannot be hydrated from Algolia, keep current fallback labels.
+      });
     } else {
       algoliaIndex = null;
+      hydrateSelectedProductsFromLocalCatalog();
     }
 
     const searchInput = document.getElementById('product-search');
@@ -1361,7 +1513,7 @@
   function renderProducts() {
     const list = document.getElementById('product-list');
     list.innerHTML = '';
-    const filtered = Array.isArray(visibleProducts) ? visibleProducts : [];
+    const filtered = mergeVisibleWithSelectedProducts(Array.isArray(visibleProducts) ? visibleProducts : []);
 
     if (filtered.length === 0) {
       const empty = document.createElement('div');
@@ -1391,7 +1543,20 @@
       <div class="product-row__check"></div>
     `;
     const thumb = row.querySelector('.product-row__thumb');
-    thumb.appendChild(placeholderImg(i, ''));
+    const imageUrl = String((p && p.image) || '').trim();
+    if (imageUrl) {
+      const image = document.createElement('img');
+      image.src = imageUrl;
+      image.alt = String((p && p.title) || 'Produkt');
+      image.loading = 'lazy';
+      image.style.width = '100%';
+      image.style.height = '100%';
+      image.style.objectFit = 'cover';
+      image.style.display = 'block';
+      thumb.appendChild(image);
+    } else {
+      thumb.appendChild(placeholderImg(i, ''));
+    }
     const cam = document.createElement('span');
     cam.className = 'product-row__thumb-icon';
     cam.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
