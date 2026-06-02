@@ -24,6 +24,7 @@ function g4t_bootstrap_frontend_creator_feature(): void {
     add_filter( 'heartbeat_received', 'g4t_frontend_creator_heartbeat_received', 10, 2 );
     add_action( 'acf/validate_save_post', 'g4t_frontend_creator_validate_classification_taxonomies' );
     add_filter( 'acf/pre_save_post', 'g4t_frontend_creator_force_pre_save_post', 10, 2 );
+    add_action( 'acf/save_post', 'g4t_frontend_creator_sync_recipe_bottom_strip_meta_after_acf_save', 20 );
     add_filter( 'acf/load_value/key=field_ingredient_term_id', 'g4t_frontend_creator_normalize_acf_ingredient_term_value', 10, 3 );
     add_filter( 'acf/update_value/key=field_ingredient_term_id', 'g4t_frontend_creator_normalize_acf_ingredient_term_value', 10, 3 );
 }
@@ -62,6 +63,14 @@ function g4t_frontend_creator_validate_classification_taxonomies(): void {
 
 function g4t_frontend_creator_force_pre_save_post( $post_id, array $form ) {
     return g4t_recipe_creator_force_pre_save_post( $post_id, $form );
+}
+
+function g4t_frontend_creator_sync_recipe_bottom_strip_meta_after_acf_save( $post_id ): void {
+    if ( ! is_numeric( $post_id ) ) {
+        return;
+    }
+
+    g4t_recipe_creator_sync_recipe_bottom_strip_meta_after_acf_save( (int) $post_id );
 }
 
 function g4t_frontend_creator_normalize_acf_ingredient_term_value( $value, $post_id, array $field ) {

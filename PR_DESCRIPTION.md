@@ -1,70 +1,81 @@
-﻿# PR: Dynamiczny pasek postepu po podkrokach + usuniecie etykiet substep
+﻿# PR: Ads Phase 3+4 — Wspólny resolver + adapter pickera w frontend creator
 
-**Branch:** feature/dynamic-progress-substeps -> main
+**Branch:** feature/ads-phase3-shared-resolver → main
 
 ## Motywacja
 
-W kreatorze przepisu aktywny segment paska postepu byl zawsze wypelniany do stalej wartosci (~55%),
-niezaleznie od liczby podkrokow i aktualnej pozycji uzytkownika w kroku.
+W recipes-plugin były dwa osobne problemy:
+- Phase 3: lokalna duplikacja pobierania produktów reklamowych w view modelu (`g4t_fetch_ads_products()`),
+- Phase 4: brak zapisu nowego kontraktu `_g4t_a_recipe_bottom_product_ids` z kreatora przepisu.
 
-Dodatkowo widok formularza pokazywal osobne etykiety typu `x z y · ...` (`step__substep`),
-co dublowalo informacje wizualne po stronie paska postepu.
-
-Cel tej zmiany:
-1. Urealnic wypelnienie aktywnego segmentu na podstawie rzeczywistego podkroku.
-2. Zachowac dotychczasowa semantyke `is-active` i `is-done`.
-3. Usunac etykiety `step__substep` ze wszystkich krokow formularza.
+Celem jest pełna zgodność recipes-plugin z nową architekturą go4taste-ads bez zmiany kształtu danych konsumowanych przez Twig.
 
 ## Zakres zmian
 
-### 1) Dynamiczne wypelnienie segmentu progress
+### 1) Phase 3 — delegacja pobierania do shared resolvera ads
 
-Plik: `features/frontend-creator/creator.js`
+Plik: `features/recipe-display/view-model-builder.php`
 
-- Dodane funkcje pomocnicze:
-  - `clamp01(value)`
-  - `getFormSubstepTotal(step)`
-  - `getCurrentFormSubstepPosition(screenIdx)`
-  - `getActiveStepFillScale(screenIdx)`
-- W `showScreen(idx)`:
-  - dla kazdego segmentu czyszczone jest poprzednie `--progress-fill-scale`,
-  - aktywny segment dostaje nowa wartosc `--progress-fill-scale` wyliczana z podkroku.
-- Intro nie liczy sie do substepu (`0%` wypelnienia aktywnego segmentu).
-- Dla ekranow innych niz `intro/form` (review/done) semantyka pozostaje bez zmian (wszystkie `is-done`).
+- `g4t_build_single_recipe_view_model()` wywołuje `g4t_recipe_bottom_strip_get_products_for_post($post_id)` gdy go4taste-ads jest aktywne (`function_exists()`).
+- Zachowane fallbacki kompatybilności:
+  1. go4taste-ads nieaktywne → lokalne `g4t_fetch_ads_products()`,
+  2. nowy key pusty + legacy ACF repeater istnieje → `g4t_fetch_ads_products()`.
+- `ads.enabled` bazuje na faktycznie załadowanych produktach.
+- `g4t_fetch_ads_products()` pozostaje jako legacy fallback.
 
-### 2) CSS progress oparty o zmienne
-
-Plik: `features/frontend-creator/creator.css`
-
-- `grid-template-columns` dla `.progress` korzysta z `--progress-steps` (fallback `6`).
-- `@keyframes fillSeg` konczy animacje na `scaleX(var(--progress-fill-scale, 0.5))`
-  zamiast stalego `scaleX(0.55)`.
-
-### 3) Usuniecie etykiet substep z UI
+### 2) Phase 4 — adapter pickera i zapis JSON key
 
 Pliki:
+- `features/frontend-creator/index.php`
+- `features/frontend-creator/creator-form.php`
 - `features/frontend-creator/creator-template.php`
-- `features/frontend-creator/creator.css`
+- `features/frontend-creator/creator.js`
 
-- Usuniete wszystkie elementy `<div class="step__substep">...</div>` w krokach formularza.
-- Usuniete nieuzywane style `.step__substep` i `.step--center > .step__substep`.
+Co zostało dodane:
+- Adapter pickera w kroku 6 kreatora (`G4TAdsPicker`) z fallbackiem do lokalnej listy produktów.
+- Enqueue assets pickera (`picker-ui.js`, `instantsearch.js`, `algoliasearch`) na stronie kreatora.
+- Zapis `_g4t_a_recipe_bottom_product_ids` jako JSON array of strings.
+- Odczyt nowego key w trybie edycji + fallback do legacy `recipe_ads_products`.
+- Sync po `acf/save_post` dla utrzymania nowego key po submit.
+- Usunięcie błędnego gate'a blokującego picker (`function_exists('go4taste_ads_get_options')`).
+
+## Kontekst architektoniczny
+
+Zmiany domykają integrację recipes-plugin z planem rozszerzalności ads:
+- Phase 3 (read-model delegation),
+- Phase 4 (creator save adapter, bez modyfikacji ads core).
+
+Kontrakt danych pozostaje spójny: `_g4t_a_recipe_bottom_product_ids` przechowuje JSON array string IDs.
 
 ## Weryfikacja
 
-- Walidacja edytowanych plikow: brak bledow (JS/CSS/PHP) w Problems.
-- Sprawdzenie wyszukiwania: brak wystapien `step__substep` po zmianie.
-- Kontrola diff: zmiany ograniczone do 3 plikow.
+- Brak błędów Problems dla zmienionych plików.
+- Lint PHP przechodzi dla zmienionych plików creator.
+- Kształt `ads.products` w view modelu pozostaje kompatybilny z Twig.
+- Krok 6 kreatora ładuje picker Algolii, jeśli ustawione są poprawne opcje ads; fallback lokalny działa gdy picker niedostępny.
 
-## Ryzyko / kompatybilnosc
+## Ryzyko / kompatybilność
 
-- Ryzyko niskie/srednie: zmiana dotyczy warstwy UI kreatora (JS + CSS + template).
-- Brak zmian w modelu danych, ACF schema, hookach backendowych i zapisie recipe meta.
-- Potencjalny obszar uwagi: wizualny odbior animacji na roznych urzadzeniach i przy szybkim przechodzeniu Wstecz/Dalej.
+- Ryzyko niskie/średnie: zmiany obejmują view model + frontend creator.
+- Kompatybilność wsteczna zachowana dzięki fallbackom (`g4t_fetch_ads_products`, `recipe_ads_products`).
+- Brak zmian w schema Twig.
+
+## Scope follow-up
+
+- Phase 5 (cache/invalidation) jest poza zakresem tego PR i pozostaje do osobnego wdrożenia.
+
+## Merge readiness
+
+- PR merge-ready dla zakresu recipes-plugin: Phase 3 + Phase 4.
 
 ## Checklist
 
-- [x] Aktywny segment progress zalezy od aktualnego podkroku
-- [x] Intro nie liczy sie do podkroku (0%)
-- [x] Zachowane `is-active` i `is-done`
-- [x] Usuniete etykiety `step__substep` z formularza
-- [x] Usuniete martwe style CSS zwiazane z `step__substep`
+- [x] Guard `function_exists('g4t_recipe_bottom_strip_get_products_for_post')`
+- [x] Fallback 1: go4taste-ads nieaktywne → `g4t_fetch_ads_products()`
+- [x] Fallback 2: nowy key pusty + legacy ACF dane → `g4t_fetch_ads_products()`
+- [x] `ads.enabled` odzwierciedla faktycznie załadowane produkty
+- [x] `g4t_fetch_ads_products()` zachowana (nie usunięta)
+- [x] Adapter pickera w kroku 6 kreatora
+- [x] Zapis `_g4t_a_recipe_bottom_product_ids` (JSON array)
+- [x] Fallback odczytu do `recipe_ads_products`
+- [x] Sync po `acf/save_post`

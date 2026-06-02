@@ -80,6 +80,11 @@ function g4t_enqueue_recipe_creator_assets(): void {
 
     $plugin_url = GO4TASTE_RECIPES_PLUGIN_URL;
     $version    = defined( 'WP_DEBUG' ) && WP_DEBUG ? time() : '1.0.0';
+    $ads_picker = g4t_get_recipe_creator_ads_picker_config();
+
+    if ( ! empty( $ads_picker['enabled'] ) ) {
+        g4t_enqueue_recipe_creator_ads_picker_assets();
+    }
 
     wp_enqueue_style(
         'g4t-acf-front-form-fonts',
@@ -119,6 +124,7 @@ function g4t_enqueue_recipe_creator_assets(): void {
         'mealTypeTaxonomy'   => g4t_get_classification_taxonomy_for_js( G4T_MEAL_TYPE_TAXONOMY ),
         'prepTimeTaxonomy'   => g4t_get_classification_taxonomy_for_js( G4T_PREP_TIME_TAXONOMY ),
         'featureTaxonomy'    => g4t_get_classification_taxonomy_for_js( G4T_FEATURE_TAXONOMY ),
+        'adsPicker'          => $ads_picker,
         'ajaxUrl'            => admin_url( 'admin-ajax.php' ),
         'homeUrl'            => home_url( '/' ),
         'uploadNonce'        => wp_create_nonce( 'g4t_recipe_creator' ),
@@ -384,13 +390,6 @@ function g4t_get_post_term_ids_for_js( int $post_id, string $taxonomy_key ): arr
  * @return array<string,string|int>
  */
 function g4t_get_algolia_credentials_for_js(): array {
-    // Check if go4taste-ads plugin is active
-    if ( ! function_exists( 'go4taste_ads_get_options' ) ) {
-        return array();
-    }
-
-    // This function would be defined by go4taste-ads plugin
-    // For now, fetch directly from options
     $ads_options = get_option( 'go4taste_ads_options', array() );
 
     if ( empty( $ads_options ) || ! isset( $ads_options['algolia_app_id'], $ads_options['algolia_api_key'] ) ) {
@@ -401,6 +400,86 @@ function g4t_get_algolia_credentials_for_js(): array {
         'appId'     => sanitize_text_field( $ads_options['algolia_app_id'] ),
         'apiKey'    => sanitize_text_field( $ads_options['algolia_api_key'] ),
         'indexName' => 'go4taste_product_list',
+    );
+}
+
+/**
+ * Build picker configuration for the recipe creator step 6 adapter.
+ *
+ * @return array<string,mixed>
+ */
+function g4t_get_recipe_creator_ads_picker_config(): array {
+    $credentials = g4t_get_algolia_credentials_for_js();
+    if ( empty( $credentials['appId'] ) || empty( $credentials['apiKey'] ) ) {
+        return array( 'enabled' => false );
+    }
+
+    $ads_plugin_entry = WP_PLUGIN_DIR . '/go4taste-ads/go4taste-ads.php';
+    if ( ! file_exists( $ads_plugin_entry ) ) {
+        return array( 'enabled' => false );
+    }
+
+    return array(
+        'enabled'   => true,
+        'appId'     => sanitize_text_field( (string) $credentials['appId'] ),
+        'apiKey'    => sanitize_text_field( (string) $credentials['apiKey'] ),
+        'indexName' => sanitize_text_field( (string) ( $credentials['indexName'] ?? 'go4taste_product_list' ) ),
+        'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
+        'nonce'     => wp_create_nonce( 'g4t_ad_preview_nonce' ),
+    );
+}
+
+/**
+ * Enqueue shared Ads picker assets used by the creator adapter.
+ *
+ * @return void
+ */
+function g4t_enqueue_recipe_creator_ads_picker_assets(): void {
+    $ads_plugin_entry = WP_PLUGIN_DIR . '/go4taste-ads/go4taste-ads.php';
+    if ( ! file_exists( $ads_plugin_entry ) ) {
+        return;
+    }
+
+    $version = defined( 'GO4TASTE_ADS_VERSION' ) ? GO4TASTE_ADS_VERSION : null;
+
+    wp_enqueue_style(
+        'go4taste-ads-metabox-preview',
+        plugins_url( 'features/banner-sidebar-widget/assets/css/go4taste-ads-metabox-preview.css', $ads_plugin_entry ),
+        array(),
+        $version,
+        'all'
+    );
+
+    wp_enqueue_style(
+        'go4taste-ads-picker-ui',
+        plugins_url( 'features/banner-sidebar-widget/assets/css/picker-ui.css', $ads_plugin_entry ),
+        array(),
+        $version,
+        'all'
+    );
+
+    wp_enqueue_script(
+        'algolia-instantsearch',
+        'https://cdn.jsdelivr.net/npm/instantsearch.js@4',
+        array(),
+        null,
+        true
+    );
+
+    wp_enqueue_script(
+        'algolia-search-client',
+        'https://cdn.jsdelivr.net/npm/algoliasearch@4',
+        array(),
+        null,
+        true
+    );
+
+    wp_enqueue_script(
+        'g4t-ads-picker-ui',
+        plugins_url( 'features/banner-sidebar-widget/assets/js/picker-ui.js', $ads_plugin_entry ),
+        array( 'jquery', 'algolia-instantsearch', 'algolia-search-client' ),
+        $version,
+        true
     );
 }
 
@@ -554,14 +633,12 @@ function g4t_get_recipe_creator_initial_state( int $post_id ): array {
         );
     }
 
-    $products = array();
-    $products_count = (int) get_post_meta( $post_id, 'recipe_ads_products', true );
-    for ( $i = 0; $i < $products_count; $i++ ) {
-        $product_id = (int) get_post_meta( $post_id, 'recipe_ads_products_' . $i . '_recipe_ads_product_id', true );
-        if ( $product_id > 0 ) {
-            $products[] = array( 'id' => $product_id );
-        }
-    }
+    $products = array_map(
+        static function( string $product_id ): array {
+            return array( 'id' => $product_id );
+        },
+        g4t_get_recipe_bottom_strip_product_ids_for_post( $post_id )
+    );
 
     return array(
         'title'            => (string) get_the_title( $post_id ),
@@ -1047,6 +1124,118 @@ function g4t_creator_state_to_meta( array $state, int $post_id ): void {
             G4T_PREP_TIME_TAXONOMY => is_array( $state['prepTimeTermIds'] ?? null ) ? $state['prepTimeTermIds'] : array(),
             G4T_FEATURE_TAXONOMY   => is_array( $state['featureTermIds'] ?? null ) ? $state['featureTermIds'] : array(),
         )
+    );
+
+    $raw_products = isset( $state['products'] ) && is_array( $state['products'] ) ? $state['products'] : array();
+    $product_ids  = array();
+
+    foreach ( $raw_products as $product ) {
+        if ( is_array( $product ) ) {
+            $product_ids[] = $product['id'] ?? '';
+            continue;
+        }
+
+        $product_ids[] = $product;
+    }
+
+    g4t_update_recipe_bottom_strip_product_ids_meta( $post_id, $product_ids );
+}
+
+/**
+ * Normalize mixed product ID payload into ordered unique string IDs.
+ *
+ * @param array<int,mixed> $raw_ids Raw IDs from creator state or repeater/meta.
+ * @return array<int,string>
+ */
+function g4t_normalize_recipe_bottom_strip_product_ids( array $raw_ids ): array {
+    $normalized = array();
+
+    foreach ( $raw_ids as $raw_id ) {
+        $id = trim( (string) $raw_id );
+        if ( '' === $id ) {
+            continue;
+        }
+
+        $normalized[ $id ] = $id;
+    }
+
+    return array_values( $normalized );
+}
+
+/**
+ * Persist recipe bottom strip product IDs using the shared ads JSON contract.
+ *
+ * @param int              $post_id Post ID.
+ * @param array<int,mixed> $raw_ids Raw product IDs.
+ */
+function g4t_update_recipe_bottom_strip_product_ids_meta( int $post_id, array $raw_ids ): void {
+    if ( $post_id <= 0 ) {
+        return;
+    }
+
+    $product_ids = g4t_normalize_recipe_bottom_strip_product_ids( $raw_ids );
+    if ( empty( $product_ids ) ) {
+        update_post_meta( $post_id, '_g4t_a_recipe_bottom_product_ids', '' );
+        return;
+    }
+
+    $encoded = wp_json_encode( $product_ids );
+    if ( is_string( $encoded ) ) {
+        update_post_meta( $post_id, '_g4t_a_recipe_bottom_product_ids', $encoded );
+    }
+}
+
+/**
+ * Read recipe bottom strip product IDs for creator edit mode.
+ *
+ * Reads new JSON contract first, then falls back to legacy creator repeater.
+ *
+ * @param int $post_id Post ID.
+ * @return array<int,string>
+ */
+function g4t_get_recipe_bottom_strip_product_ids_for_post( int $post_id ): array {
+    if ( $post_id <= 0 ) {
+        return array();
+    }
+
+    $raw_json = get_post_meta( $post_id, '_g4t_a_recipe_bottom_product_ids', true );
+    if ( is_string( $raw_json ) && '' !== trim( $raw_json ) ) {
+        $decoded = json_decode( $raw_json, true );
+        if ( is_array( $decoded ) ) {
+            $normalized = g4t_normalize_recipe_bottom_strip_product_ids( $decoded );
+            if ( ! empty( $normalized ) ) {
+                return $normalized;
+            }
+        }
+    }
+
+    $legacy_product_ids = array();
+    $products_count     = (int) get_post_meta( $post_id, 'recipe_ads_products', true );
+    for ( $i = 0; $i < $products_count; $i++ ) {
+        $legacy_product_ids[] = get_post_meta( $post_id, 'recipe_ads_products_' . $i . '_recipe_ads_product_id', true );
+    }
+
+    return g4t_normalize_recipe_bottom_strip_product_ids( $legacy_product_ids );
+}
+
+/**
+ * Sync recipe bottom strip JSON contract after ACF form save.
+ *
+ * @param int $post_id Post ID saved by ACF.
+ */
+function g4t_recipe_creator_sync_recipe_bottom_strip_meta_after_acf_save( int $post_id ): void {
+    if ( $post_id <= 0 ) {
+        return;
+    }
+
+    $requested_action = g4t_get_recipe_creator_requested_action();
+    if ( ! in_array( $requested_action, array( 'publish', 'update' ), true ) ) {
+        return;
+    }
+
+    g4t_update_recipe_bottom_strip_product_ids_meta(
+        $post_id,
+        g4t_get_recipe_bottom_strip_product_ids_for_post( $post_id )
     );
 }
 

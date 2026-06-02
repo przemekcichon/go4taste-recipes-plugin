@@ -440,6 +440,14 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <section class="step step--wide" data-screen-idx="18" hidden>
+        <div id="g4t-recipe-ads-picker-adapter" class="g4t-recipe-ads-picker-adapter" hidden>
+          <input type="hidden" id="g4t-recipe-ads-picked-id" value="" />
+          <div id="g4t-recipe-ads-searchbox"></div>
+          <div id="g4t-recipe-ads-selected"></div>
+          <div id="g4t-recipe-ads-preview" class="g4t-ad-preview"></div>
+          <button type="button" id="g4t-recipe-ads-add" class="btn-pill">Dodaj wybrany produkt</button>
+        </div>
+
         <div id="selected-strip" class="selected-strip" hidden></div>
 
         <div class="search-box">
