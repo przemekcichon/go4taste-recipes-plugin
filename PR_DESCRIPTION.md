@@ -1,4 +1,4 @@
-﻿# PR: Recipe Creator Picker Adapter — Context-Aware UI Variant for Ads Picker
+﻿# PR: Recipe Creator Product Discovery UI — Algolia Data in Existing Frontend
 
 **Branch:** feature/picker-ui-extensibility -> main
 
@@ -6,63 +6,59 @@
 
 | Stage | Status | Description |
 |---|---|---|
-| Stage 1: Creator adapter contract | ✅ Done | Pass context/variant metadata from creator to shared picker runtime |
-| Stage 2: Creator UI integration | ✅ Done | Apply creator-specific picker section and fallback handling |
-| Stage 3: Meta persistence alignment | 🔲 Next | Keep `_g4t_a_recipe_bottom_product_ids` JSON contract as source of truth |
-| Stage 4: Compatibility behavior | 🔲 Next | Preserve legacy fallback to `recipe_ads_products` in edit mode |
-| Stage 5: Docs + QA checklist | 🔲 Next | Update PR docs and verify creator flow end-to-end |
+| Stage 1: Algolia list in existing `product-list` | 🔲 Next | Replace dummy/local-only list with Algolia-backed results rendered in current creator cards |
+| Stage 2: Search bridge via existing `.search-box` | 🔲 Next | Use existing creator search input as the only query source (no `.ais-SearchBox-input` in UI flow) |
+| Stage 3: Preview in existing `selected-strip` | 🔲 Next | Keep current strip component and render chips with index + product name |
+| Stage 4: Persistence + compatibility guard | ✅ Done | Keep `_g4t_a_recipe_bottom_product_ids` JSON contract and legacy `recipe_ads_products` fallback |
+| Stage 5: Docs + QA checklist | 🔲 Next | Confirm behavior on create/edit, mobile/desktop, and no regressions in summary/save |
 
 ---
 
 ## Motivation
 
-Recipes plugin already uses shared picker runtime and JSON storage key, but the picker visuals are still shared with admin/widget surfaces.
-For creator UX we need a dedicated variant while keeping common resolver and save contract.
+Current work showed that simply mounting the standard Ads picker UI in creator step 6 is not the target UX.
+The target is to keep the current creator frontend components and only reuse Ads/Algolia data logic.
 
 Main goals:
-- keep creator save flow in recipes-plugin,
-- adopt context/variant contract from ads plugin picker extensibility,
-- avoid forking product resolution logic,
-- preserve compatibility for existing recipes and templates.
+- keep the current creator layout and interactions,
+- feed `product-list` with Algolia data,
+- drive search from existing `.search-box` input,
+- use `selected-strip` as preview/selection UI,
+- preserve existing save contract and backward compatibility.
 
 ---
 
 ## Desired outcome
 
 After this implementation:
-1. Creator step 6 declares its picker context and style variant explicitly.
-2. Creator can use dedicated picker visuals without custom resolver duplication.
-3. Saved IDs remain in `_g4t_a_recipe_bottom_product_ids` JSON array format.
-4. Legacy `recipe_ads_products` fallback remains safe in edit mode.
+1. Product rows in creator `product-list` are loaded from Algolia (not dummy/local-only source).
+2. Typing in creator `.search-box` filters Algolia results directly.
+3. `selected-strip` shows selected products with chip number and product name.
+4. Save/edit behavior remains unchanged for `_g4t_a_recipe_bottom_product_ids` and legacy fallback.
 
 ---
 
 ## Proposed architecture
 
-### 1) Creator context mapping
+### 1) Data source and rendering boundary
 
-Creator adapter passes:
-- context: `recipe_creator`,
-- variant: creator-specific key,
-- metadata: post_id/edit mode when available.
+- Data retrieval: use Ads picker logic as data provider (Algolia request path).
+- Rendering: keep creator-native row rendering in `product-list` (`creator.js`), no injection of standard picker result UI.
 
-### 2) UI boundary in creator
+### 2) Search boundary
 
-Keep picker integration inside frontend creator files:
-- `features/frontend-creator/creator-template.php`
-- `features/frontend-creator/creator.js`
-- `features/frontend-creator/creator-form.php`
-- `features/frontend-creator/index.php`
+- Query source must remain creator input inside `.search-box`.
+- Any internal Ads picker input (`.ais-SearchBox-input`) is treated as implementation detail and not used as creator-facing control.
 
-### 3) Save contract
+### 3) Preview/selection boundary
 
-Persist selected product IDs only as JSON array under:
-- `_g4t_a_recipe_bottom_product_ids`
+- Use `selected-strip` as the only creator preview surface for selected products.
+- Chip format: index + product name (for example: `1. Oliwa extra virgin`).
 
-### 4) Compatibility
+### 4) Save contract and fallback
 
-When JSON key is empty in edit mode:
-- read legacy `recipe_ads_products` as fallback source.
+- Persist selected IDs only to `_g4t_a_recipe_bottom_product_ids` (JSON array of strings).
+- On edit, if JSON key is empty, fallback to legacy `recipe_ads_products` read path.
 
 ---
 
@@ -70,40 +66,40 @@ When JSON key is empty in edit mode:
 
 ### Must pass
 
-1. Creator step 6 renders picker in creator variant when ads picker assets are available.
-2. Fallback local list remains available if picker runtime/config is unavailable.
-3. Save from creator updates `_g4t_a_recipe_bottom_product_ids` correctly.
-4. Re-open edit mode loads selected products from JSON key.
-5. Legacy recipes still load products through repeater fallback.
+1. Step 6 loads first page of Algolia products directly into `product-list` on open.
+2. Searching via creator `.search-box` updates Algolia results and keeps current row/card UI.
+3. `selected-strip` displays chips with index + product name for all selected items.
+4. Selecting/unselecting updates state correctly and save payload still maps to `_g4t_a_recipe_bottom_product_ids`.
+5. Edit mode still supports legacy `recipe_ads_products` fallback when JSON key is empty.
 
 ### Follow-up verification
 
-6. Visual QA on mobile and desktop for creator picker section.
-7. No regressions in summary/review step data mapping.
+6. Mobile and desktop QA for step 6 interactions.
+7. No regressions in summary screen and submit/update flow.
 
 ---
 
 ## Risks and mitigations
 
-- Risk: creator-specific UI regressions.
-  Mitigation: keep fallback list and conservative DOM integration.
+- Risk: partial coupling to standard picker DOM.
+  Mitigation: keep creator rendering/search controls as source of truth; isolate Algolia access as data layer.
 
-- Risk: accidental divergence of save contract.
-  Mitigation: enforce single write path to `_g4t_a_recipe_bottom_product_ids`.
+- Risk: duplicate selection state between provider and creator.
+  Mitigation: creator state remains canonical; provider returns data only.
 
-- Risk: dependency on ads plugin assets.
-  Mitigation: runtime checks + graceful fallback behavior.
+- Risk: performance issues with frequent search queries.
+  Mitigation: add debounce/throttle in creator input handler and limit initial hits.
 
 ---
 
 ## Decision points
 
-- Final creator variant key naming.
-- Whether creator needs extra payload fields beyond existing picker preview.
+- Exact debounce interval for `.search-box` query.
+- Initial hits/page size for `product-list` in step 6.
 
 ---
 
 ## Merge readiness
 
-- This branch is planning scope only at this moment.
-- Merge readiness will be reassessed after implementation + QA checklist.
+- This branch is implementation in progress.
+- Merge readiness after Stage 1-3 functional QA plus Stage 5 checklist.
