@@ -151,6 +151,28 @@
     return window.G4T_RECIPE_CREATOR_DATA || {};
   }
 
+  function isAlgoliaConfiguredForCreator() {
+    const adsPickerConfig = creatorData && creatorData.adsPicker && typeof creatorData.adsPicker === 'object'
+      ? creatorData.adsPicker
+      : null;
+
+    return !!(
+      adsPickerConfig
+      && adsPickerConfig.enabled
+      && adsPickerConfig.appId
+      && adsPickerConfig.apiKey
+    );
+  }
+
+  function isStaticDemoProductId(value) {
+    const id = String(value || '').trim().toLowerCase();
+    return /^p([1-9]|10)$/.test(id);
+  }
+
+  function shouldRejectStaticDemoProductId(value) {
+    return isAlgoliaConfiguredForCreator() && isStaticDemoProductId(value);
+  }
+
   function setPreviewButtonState(postId) {
     const previewBtn = document.getElementById('preview-btn');
     const frontLink  = document.getElementById('preview-front');
@@ -555,11 +577,18 @@
           .map((item) => {
             const normalized = normalizeProductRecord(item);
             if (normalized) {
+              if (shouldRejectStaticDemoProductId(normalized.id)) {
+                return null;
+              }
               return normalized;
             }
 
             const fallbackId = String(item && item.id ? item.id : '').trim();
             if (!fallbackId) {
+              return null;
+            }
+
+            if (shouldRejectStaticDemoProductId(fallbackId)) {
               return null;
             }
 
@@ -1672,7 +1701,13 @@
   function toggleProduct(p) {
     const idx = state.data.products.findIndex(s => String(s.id) === String(p.id));
     if (idx >= 0) state.data.products.splice(idx, 1);
-    else state.data.products.push(p);
+    else {
+      if (shouldRejectStaticDemoProductId(p && p.id)) {
+        showError('Ta pozycja pochodzi z danych demonstracyjnych i nie może zostać zapisana.');
+        return;
+      }
+      state.data.products.push(p);
+    }
     renderProducts();
     afterChange();
   }
@@ -1826,12 +1861,23 @@
 
     clearAcfBridgeInputs(form);
     const payload = buildAcfPayload(state.data);
+
+    // Flat fields submitted first — before the large ACF payload — to stay within
+    // PHP max_input_vars. Nested acf[field_recipe_ads_products][N][...] inputs
+    // added by appendAcfPayload land at the end of the POST body and get silently
+    // truncated on servers with a low max_input_vars limit.
     appendField(form, 'g4t_recipe_creator_action', isEditMode ? 'update' : 'publish');
     if (isEditMode && String(creatorData.editPostStatus || '') === 'publish') {
       appendField(form, 'post_status', 'publish');
     }
     appendField(form, 'acf[_post_title]', (state.data.title || '').trim());
     appendField(form, 'post_title', (state.data.title || '').trim());
+    const earlyProductIds = (state.data.products || [])
+      .filter(p => !shouldRejectStaticDemoProductId(p && p.id))
+      .map(p => String(p.id || ''))
+      .filter(Boolean);
+    appendField(form, 'g4t_recipe_ads_product_ids_json', JSON.stringify(earlyProductIds));
+
     appendAcfPayload(form, payload);
     appendField(form, 'g4t_meal_type_term_ids_present', '1');
     appendField(form, 'g4t_meal_type_term_ids', Array.isArray(state.data.mealTypeTermIds) ? state.data.mealTypeTermIds : []);
@@ -1863,9 +1909,11 @@
         field_step_image_url: getPhotoId(r.photo),
       }));
 
-    const adsProducts = d.products.map(p => ({
-      field_recipe_ads_product_id: p.id,
-    }));
+    const adsProducts = d.products
+      .filter((p) => !shouldRejectStaticDemoProductId(p && p.id))
+      .map(p => ({
+        field_recipe_ads_product_id: p.id,
+      }));
 
     return {
       field_recipe_lead: (d.lead || '').trim(),

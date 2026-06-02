@@ -1,4 +1,4 @@
-﻿# PR: Recipe Creator Product Discovery UI — Algolia Data in Existing Frontend
+# PR: Recipe Creator Product Discovery UI — Algolia Data in Existing Frontend
 
 **Branch:** feature/picker-ui-extensibility -> main
 
@@ -6,11 +6,70 @@
 
 | Stage | Status | Description |
 |---|---|---|
-| Stage 1: Algolia list in existing `product-list` | ✅ Done | Replace dummy/local-only list with Algolia-backed results rendered in current creator cards |
-| Stage 2: Search bridge via existing `.search-box` | ✅ Done | Use existing creator search input as the only query source (no `.ais-SearchBox-input` in UI flow) |
-| Stage 3: Preview in existing `selected-strip` | ✅ Done | Keep current strip component and render chips with index + product name |
-| Stage 4: Persistence + compatibility guard | ✅ Done | Keep `_g4t_a_recipe_bottom_product_ids` JSON contract and legacy `recipe_ads_products` fallback |
-| Stage 5: Docs + QA checklist | 🔲 Next | Confirm behavior on create/edit, mobile/desktop, and no regressions in summary/save |
+| Stage 1: Algolia list in existing `product-list` | ✅ Verified | Algolia products load into `product-list` on step 6 open |
+| Stage 2: Search bridge via existing `.search-box` | ✅ Verified | Search input drives Algolia query; results update `product-list` |
+| Stage 3: Preview in existing `selected-strip` | ✅ Verified | Selected products render as chips with index + name |
+| Stage 4: Persistence + compatibility guard | ✅ Fixed and verified | `_g4t_a_recipe_bottom_product_ids` persists correctly after save |
+| Stage 5: Docs + QA checklist | ✅ Updated | Root cause documented; regression risks noted |
+
+---
+
+## Root cause of previous persistence failure
+
+### Symptom
+
+After selecting Algolia products in step 6 and saving, `_g4t_a_recipe_bottom_product_ids` was persisted as empty string:
+
+```sql
+SELECT meta_value
+FROM wp_postmeta
+WHERE post_id = 2299
+  AND meta_key = '_g4t_a_recipe_bottom_product_ids';
+
+-- before fix: "" (empty)
+-- after fix:  '["99","98","97","96"]'
+```
+
+Title changes were also not saved in the same request.
+
+### Diagnosed cause: PHP `max_input_vars` truncation
+
+The native ACF form submits a large number of POST variables for ingredient and step repeaters. The bridge mechanism in `submitToAcf()` appended product IDs as nested ACF fields at the very end of the POST body:
+
+```
+acf[field_recipe_ads_products][0][field_recipe_ads_product_id] = "99"
+acf[field_recipe_ads_products][1][field_recipe_ads_product_id] = "98"
+...
+```
+
+PHP silently drops all variables after the `max_input_vars` limit without any error or warning. Because `field_recipe_ads_products` was the last field appended by `appendAcfPayload()`, it was consistently the first to be cut. The same mechanism caused `acf[_post_title]` to not arrive, breaking title updates.
+
+Diagnostic confirmation: `console.log` before `form.submit()` showed the payload was correct in JS. PHP `error_log` inside `g4t_recipe_creator_extract_product_ids_from_request()` showed `field_recipe_ads_products = KEY_MISSING` in `$_POST['acf']`, while `g4t_recipe_creator_action` (submitted first) arrived correctly.
+
+### Fix
+
+**JS (`creator.js` — `submitToAcf()`):** product IDs and title are now submitted as flat top-level POST fields, before `appendAcfPayload()`, so they land early in the POST body and are never truncated:
+
+```javascript
+// Submitted before appendAcfPayload() — safe from max_input_vars truncation
+appendField(form, 'post_title', (state.data.title || '').trim());
+appendField(form, 'g4t_recipe_ads_product_ids_json', JSON.stringify(earlyProductIds));
+
+appendAcfPayload(form, payload);  // large payload appended after
+```
+
+**PHP (`creator-form.php` — `g4t_recipe_creator_extract_product_ids_from_request()`):** reads from the new flat JSON field as primary source, with the old nested ACF path as fallback:
+
+```php
+if ( isset( $_POST['g4t_recipe_ads_product_ids_json'] ) ) {
+    $decoded = json_decode( sanitize_text_field( wp_unslash( $_POST['g4t_recipe_ads_product_ids_json'] ) ), true );
+    if ( is_array( $decoded ) ) {
+        return g4t_normalize_recipe_bottom_strip_product_ids( $decoded );
+    }
+}
+```
+
+**PHP (`creator-form.php` — `g4t_recipe_creator_sync_recipe_bottom_strip_meta_after_acf_save()`):** title update moved here via `wp_update_post()` from `$_POST['post_title']`, which is a flat field and arrives reliably.
 
 ---
 
@@ -38,68 +97,71 @@ After this implementation:
 
 ---
 
-## Proposed architecture
+## Architecture
 
 ### 1) Data source and rendering boundary
 
-- Data retrieval: use Ads picker logic as data provider (Algolia request path).
-- Rendering: keep creator-native row rendering in `product-list` (`creator.js`), no injection of standard picker result UI.
+- Data retrieval: `algoliaIndex.search()` called directly in `creator.js` via credentials from `G4T_RECIPE_CREATOR_DATA.adsPicker`.
+- Rendering: creator-native row rendering in `product-list`, no injection of standard picker result UI.
 
 ### 2) Search boundary
 
-- Query source must remain creator input inside `.search-box`.
-- Any internal Ads picker input (`.ais-SearchBox-input`) is treated as implementation detail and not used as creator-facing control.
+- Query source: creator input `#product-search`.
+- Algolia search triggered via `refreshProductResults()` with debounce.
 
 ### 3) Preview/selection boundary
 
-- Use `selected-strip` as the only creator preview surface for selected products.
-- Chip format: index + product name (for example: `1. Oliwa extra virgin`).
+- `selected-strip` is the only preview surface for selected products.
+- Chip format: `{index}. {product name}`.
 
 ### 4) Save contract and fallback
 
-- Persist selected IDs only to `_g4t_a_recipe_bottom_product_ids` (JSON array of strings).
-- On edit, if JSON key is empty, fallback to legacy `recipe_ads_products` read path.
+- Persist selected IDs to `_g4t_a_recipe_bottom_product_ids` (JSON array of strings) via dedicated flat POST field `g4t_recipe_ads_product_ids_json`.
+- On edit, if JSON key is empty, fallback to legacy `recipe_ads_products` repeater read path.
+
+### 5) POST field ordering constraint
+
+Fields that must be saved reliably — product IDs, post title — are submitted as flat top-level POST fields before `appendAcfPayload()`. Any future additions to the must-save set should follow the same pattern.
 
 ---
 
-## Validation plan
+## Validation checklist
 
-### Must pass
+### Passed
 
-1. Step 6 loads first page of Algolia products directly into `product-list` on open.
-2. Searching via creator `.search-box` updates Algolia results and keeps current row/card UI.
-3. `selected-strip` displays chips with index + product name for all selected items.
-4. Selecting/unselecting updates state correctly and save payload still maps to `_g4t_a_recipe_bottom_product_ids`.
-5. Edit mode still supports legacy `recipe_ads_products` fallback when JSON key is empty.
+1. ✅ Step 6 loads Algolia products into `product-list` on open.
+2. ✅ Searching via `#product-search` updates Algolia results in real time.
+3. ✅ `selected-strip` displays chips with index + product name for all selected items.
+4. ✅ Selecting/unselecting updates state correctly.
+5. ✅ Save persists real Algolia product IDs to `_g4t_a_recipe_bottom_product_ids`.
+6. ✅ Edit mode loads previously saved product IDs back into `selected-strip`.
+7. ✅ Post title changes are saved correctly.
 
-### Follow-up verification
+### Follow-up
 
-6. Mobile and desktop QA for step 6 interactions.
-7. No regressions in summary screen and submit/update flow.
+8. Mobile and desktop QA for step 6 interactions.
+9. No regressions in summary screen and submit/update flow.
+10. Verify behavior on servers with varying `max_input_vars` values.
 
 ---
 
 ## Risks and mitigations
 
 - Risk: partial coupling to standard picker DOM.
-  Mitigation: keep creator rendering/search controls as source of truth; isolate Algolia access as data layer.
+  Mitigation: creator rendering/search controls are source of truth; Algolia access is isolated as data layer.
 
 - Risk: duplicate selection state between provider and creator.
   Mitigation: creator state remains canonical; provider returns data only.
 
 - Risk: performance issues with frequent search queries.
-  Mitigation: add debounce/throttle in creator input handler and limit initial hits.
+  Mitigation: debounce in creator input handler; initial hits limited by `hitsPerPage`.
 
----
-
-## Decision points
-
-- Exact debounce interval for `.search-box` query.
-- Initial hits/page size for `product-list` in step 6.
+- Risk: `max_input_vars` truncation on low-limit servers.
+  Mitigation: all must-save data submitted as flat top-level fields before `appendAcfPayload()`.
 
 ---
 
 ## Merge readiness
 
-- This branch is implementation in progress.
-- Merge readiness after Stage 1-3 functional QA plus Stage 5 checklist.
+- Stages 1–4 verified, root cause fixed, regression risks documented.
+- Merge readiness pending follow-up QA items 8–10.
