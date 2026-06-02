@@ -613,6 +613,15 @@ function g4t_handle_upload_image(): void {
 function g4t_get_recipe_creator_initial_state( int $post_id ): array {
     $draft_state = g4t_get_recipe_creator_user_draft_state( $post_id );
     if ( ! empty( $draft_state ) ) {
+        if ( ! isset( $draft_state['products'] ) || ! is_array( $draft_state['products'] ) || empty( $draft_state['products'] ) ) {
+            $draft_state['products'] = array_map(
+                static function( string $product_id ): array {
+                    return array( 'id' => $product_id );
+                },
+                g4t_get_recipe_bottom_strip_product_ids_for_post( $post_id )
+            );
+        }
+
         return $draft_state;
     }
 
@@ -1249,10 +1258,48 @@ function g4t_recipe_creator_sync_recipe_bottom_strip_meta_after_acf_save( int $p
         return;
     }
 
+    $posted_product_ids = g4t_recipe_creator_extract_product_ids_from_request();
+    if ( ! empty( $posted_product_ids ) ) {
+        g4t_update_recipe_bottom_strip_product_ids_meta( $post_id, $posted_product_ids );
+        return;
+    }
+
     g4t_update_recipe_bottom_strip_product_ids_meta(
         $post_id,
         g4t_get_recipe_bottom_strip_product_ids_for_post( $post_id )
     );
+}
+
+/**
+ * Extract promoted product IDs from posted ACF payload.
+ *
+ * @return array<int,string>
+ */
+function g4t_recipe_creator_extract_product_ids_from_request(): array {
+    if ( ! isset( $_POST['acf'] ) || ! is_array( $_POST['acf'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+        return array();
+    }
+
+    $acf_payload = wp_unslash( $_POST['acf'] ); // phpcs:ignore WordPress.Security.NonceVerification
+    if ( ! is_array( $acf_payload ) ) {
+        return array();
+    }
+
+    $raw_rows = $acf_payload['field_recipe_ads_products'] ?? null;
+    if ( ! is_array( $raw_rows ) ) {
+        return array();
+    }
+
+    $product_ids = array();
+    foreach ( $raw_rows as $row ) {
+        if ( ! is_array( $row ) ) {
+            continue;
+        }
+
+        $product_ids[] = $row['field_recipe_ads_product_id'] ?? ( $row['product_id'] ?? '' );
+    }
+
+    return g4t_normalize_recipe_bottom_strip_product_ids( $product_ids );
 }
 
 /**
