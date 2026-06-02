@@ -1237,6 +1237,13 @@ function g4t_get_recipe_bottom_strip_product_ids_for_post( int $post_id ): array
     $legacy_product_ids = array();
     $products_count     = (int) get_post_meta( $post_id, 'recipe_ads_products', true );
     for ( $i = 0; $i < $products_count; $i++ ) {
+        $primary_key_value = get_post_meta( $post_id, 'recipe_ads_products_' . $i . '_product_id', true );
+        if ( '' !== trim( (string) $primary_key_value ) ) {
+            $legacy_product_ids[] = $primary_key_value;
+            continue;
+        }
+
+        // Compatibility with older payload shape used by previous creator adapters.
         $legacy_product_ids[] = get_post_meta( $post_id, 'recipe_ads_products_' . $i . '_recipe_ads_product_id', true );
     }
 
@@ -1285,7 +1292,7 @@ function g4t_recipe_creator_extract_product_ids_from_request(): array {
         return array();
     }
 
-    $raw_rows = $acf_payload['field_recipe_ads_products'] ?? null;
+    $raw_rows = $acf_payload['field_recipe_ads_products'] ?? ( $acf_payload['recipe_ads_products'] ?? null );
     if ( ! is_array( $raw_rows ) ) {
         return array();
     }
