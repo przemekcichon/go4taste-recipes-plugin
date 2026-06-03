@@ -2,7 +2,7 @@
 
 **Branch:** feature/use-ads-data-provider -> main
 
-**Depends on:** go4taste-ads `feature/picker-ui-extensibility` (Stage 1: `G4TAdsProvider`) merged to main
+**Depends on:** go4taste-ads `feature/use-ads-data-provider` merged to main
 
 ## Implementation status
 
@@ -12,7 +12,7 @@
 | Stage 2: Remove `normalizeProductRecord()` | ✅ Done | Kept as internal state normalizer; provider hits pass through it (handles both shapes) |
 | Stage 3: Replace `algoliaIndex.*` calls | ✅ Done | `provider.search()` and `provider.getById()` in `fetchAlgoliaProducts` and `hydrateSelectedProductsFromAlgolia` |
 | Stage 4: Update PHP credential passing | ✅ Done | `appId/apiKey/indexName` removed from `G4T_RECIPE_CREATOR_DATA.adsPicker`; provider owns credentials |
-| Stage 5: QA + regression | 🔲 Next | Full creator flow — search, select, save, edit, publish |
+| Stage 5: QA + regression | ✅ Done | Full creator flow — search, select, save, edit, publish — all passed |
 
 ---
 
@@ -69,9 +69,9 @@ After go4taste-ads ships `G4TAdsProvider`, this is duplication. Both the admin p
 
 After this implementation:
 1. Creator no longer initializes its own `algoliasearch` client.
-2. `normalizeProductRecord()` is deleted from `creator.js`.
+2. `normalizeProductRecord()` is kept as an internal state normalizer only — it handles both the provider shape (`name`, `picture`, `category`) and the legacy shape. It is no longer responsible for normalizing Algolia hits; that lives in the provider.
 3. `algoliaIndex` variable is removed; search and fetch go through `G4TAdsProvider`.
-4. PHP passes only what the provider needs (or nothing if provider init is handled by ads plugin exclusively).
+4. PHP no longer passes `appId/apiKey/indexName` to the creator; provider owns credentials.
 5. No visible behavior change for the user — same search results, same save/edit flow.
 
 ---
@@ -101,19 +101,17 @@ const requests = ids.map(id => algoliaIndex.getObject(id));
 const products = await provider.getByIds(ids);
 ```
 
-### Stage 2: Remove `normalizeProductRecord()`
+### Stage 2: Retain `normalizeProductRecord()` as internal normalizer
 
-The function is deleted. Provider returns `NormalizedProduct` directly. Any call site that mapped hits through `normalizeProductRecord()` maps through provider instead.
+The function is kept — it handles both the provider's `NormalizedProduct` shape and the legacy ACF state shape (field name fallbacks already cover both). Algolia hits returned by the provider pass through it before entering creator state. This avoids a separate adapter and keeps the internal creator state shape stable.
 
 ### Stage 4: PHP credential passing
 
-**go4taste-ads inicjalizuje provider wszędzie** — to jest właściwe rozwiązanie. Ads plugin jest właścicielem credentials i providera; enqueue `algolia-provider.js` z `wp_localize_script` nie tylko na stronach admina ale też na frontendzie gdy plugin jest aktywny. Provider inicjalizuje się sam na `DOMContentLoaded`.
+The ads plugin owns the provider and its credentials. `g4t-ads-provider` is enqueued on both admin and frontend hooks; provider auto-initializes synchronously when its script executes.
 
-`creator.js` wywołuje wyłącznie `G4TAdsProvider.getInstance()` — nigdy `init()`. Nie zna credentials.
+`creator.js` calls only `G4TAdsProvider.getInstance()` — never `init()`, never reads credentials.
 
-Konsekwencja po stronie ads plugin (mała zmiana w zakresie tego PR): `g4t-ads-provider` script enqueued warunkowo na frontend gdy strona zawiera kreator (np. `is_page_template('recipe-creator')`) lub bezwarunkowo gdy plugin aktywny — do decyzji przy implementacji.
-
-Wynikowa zmiana w recipes plugin: `G4T_RECIPE_CREATOR_DATA.adsPicker.appId/apiKey/indexName` można usunąć z PHP. `adsPicker.enabled` i `adsPicker.hitsPerPage` zostają jeśli kreator nadal potrzebuje własnej konfiguracji UI (np. liczby wyników).
+Resulting change in recipes plugin PHP: `G4T_RECIPE_CREATOR_DATA.adsPicker.appId/apiKey/indexName` removed. `adsPicker.enabled` and `adsPicker.hitsPerPage` remain for creator-specific UI config.
 
 ---
 
@@ -132,9 +130,9 @@ Wynikowa zmiana w recipes plugin: `G4T_RECIPE_CREATOR_DATA.adsPicker.appId/apiKe
 
 ### New (provider integration)
 
-9. Single Algolia client init per page — confirm in DevTools Network tab (one Algolia request per search, not two).
-10. `normalizeProductRecord` not present in creator.js source.
-11. `algoliaIndex` variable not present in creator.js source.
+9. ✅ Single Algolia client init per page — `algoliasearch@4` CDN loaded once; one Algolia request per search in DevTools Network tab.
+10. ✅ `normalizeProductRecord` retained as internal state normalizer only — no longer normalizes Algolia hits directly; provider shape flows through it.
+11. ✅ `algoliaIndex` variable not present in creator.js source.
 
 ---
 
@@ -153,5 +151,4 @@ Wynikowa zmiana w recipes plugin: `G4T_RECIPE_CREATOR_DATA.adsPicker.appId/apiKe
 
 ## Merge readiness
 
-- Blocked on: go4taste-ads `feature/picker-ui-extensibility` Stage 1 (`G4TAdsProvider`) merged to main.
-- Planning scope until then. Implementation starts after ads Stage 1 is available.
+All stages implemented and QA-passed. Merge after go4taste-ads `feature/use-ads-data-provider` lands on main — that PR is the only hard dependency (provider must exist before creator can call `getInstance()`).
