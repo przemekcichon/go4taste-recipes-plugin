@@ -1872,6 +1872,9 @@
     }
     appendField(form, 'acf[_post_title]', (state.data.title || '').trim());
     appendField(form, 'post_title', (state.data.title || '').trim());
+    if (!isEditMode && autosavePostId > 0) {
+      appendField(form, 'g4t_heartbeat_draft_id', autosavePostId);
+    }
     const earlyProductIds = (state.data.products || [])
       .filter(p => !shouldRejectStaticDemoProductId(p && p.id))
       .map(p => String(p.id || ''))
