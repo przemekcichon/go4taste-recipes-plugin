@@ -440,6 +440,11 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       </section>
 
       <section class="step step--wide" data-screen-idx="18" hidden>
+        <div class="field" style="margin-bottom:16px;">
+          <div class="field__label" id="g4t-recipe-ads-picker-title">Promowane produkty</div>
+          <p class="field__hint" id="g4t-recipe-ads-picker-meta">Ten krok używa wariantu UI dla kreatora przepisu. Jeśli wspólny picker jest niedostępny, poniżej pozostaje lokalna lista produktów.</p>
+        </div>
+
         <div id="g4t-recipe-ads-picker-adapter" class="g4t-recipe-ads-picker-adapter" hidden>
           <input type="hidden" id="g4t-recipe-ads-picked-id" value="" />
           <div id="g4t-recipe-ads-searchbox"></div>
@@ -447,6 +452,8 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
           <div id="g4t-recipe-ads-preview" class="g4t-ad-preview"></div>
           <button type="button" id="g4t-recipe-ads-add" class="btn-pill">Dodaj wybrany produkt</button>
         </div>
+
+        <div id="g4t-recipe-ads-picker-fallback-note" class="field__hint" style="margin:0 0 12px;" hidden></div>
 
         <div id="selected-strip" class="selected-strip" hidden></div>
 

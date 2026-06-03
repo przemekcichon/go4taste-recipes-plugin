@@ -411,21 +411,37 @@ function g4t_get_algolia_credentials_for_js(): array {
 function g4t_get_recipe_creator_ads_picker_config(): array {
     $credentials = g4t_get_algolia_credentials_for_js();
     if ( empty( $credentials['appId'] ) || empty( $credentials['apiKey'] ) ) {
-        return array( 'enabled' => false );
+        return array(
+            'enabled'         => false,
+            'context'         => 'recipe_creator',
+            'variant'         => 'creator',
+            'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
+            'fallbackMessage' => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
+        );
     }
 
     $ads_plugin_entry = WP_PLUGIN_DIR . '/go4taste-ads/go4taste-ads.php';
     if ( ! file_exists( $ads_plugin_entry ) ) {
-        return array( 'enabled' => false );
+        return array(
+            'enabled'         => false,
+            'context'         => 'recipe_creator',
+            'variant'         => 'creator',
+            'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
+            'fallbackMessage' => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
+        );
     }
 
     return array(
-        'enabled'   => true,
-        'appId'     => sanitize_text_field( (string) $credentials['appId'] ),
-        'apiKey'    => sanitize_text_field( (string) $credentials['apiKey'] ),
-        'indexName' => sanitize_text_field( (string) ( $credentials['indexName'] ?? 'go4taste_product_list' ) ),
-        'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
-        'nonce'     => wp_create_nonce( 'g4t_ad_preview_nonce' ),
+        'enabled'         => true,
+        'appId'           => sanitize_text_field( (string) $credentials['appId'] ),
+        'apiKey'          => sanitize_text_field( (string) $credentials['apiKey'] ),
+        'indexName'       => sanitize_text_field( (string) ( $credentials['indexName'] ?? 'go4taste_product_list' ) ),
+        'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
+        'nonce'           => wp_create_nonce( 'g4t_ad_preview_nonce' ),
+        'context'         => 'recipe_creator',
+        'variant'         => 'creator',
+        'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
+        'fallbackMessage'  => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
     );
 }
 
@@ -597,6 +613,15 @@ function g4t_handle_upload_image(): void {
 function g4t_get_recipe_creator_initial_state( int $post_id ): array {
     $draft_state = g4t_get_recipe_creator_user_draft_state( $post_id );
     if ( ! empty( $draft_state ) ) {
+        if ( ! isset( $draft_state['products'] ) || ! is_array( $draft_state['products'] ) || empty( $draft_state['products'] ) ) {
+            $draft_state['products'] = array_map(
+                static function( string $product_id ): array {
+                    return array( 'id' => $product_id );
+                },
+                g4t_get_recipe_bottom_strip_product_ids_for_post( $post_id )
+            );
+        }
+
         return $draft_state;
     }
 
@@ -1149,6 +1174,7 @@ function g4t_creator_state_to_meta( array $state, int $post_id ): void {
  */
 function g4t_normalize_recipe_bottom_strip_product_ids( array $raw_ids ): array {
     $normalized = array();
+    $reject_demo_ids = g4t_recipe_creator_should_reject_demo_product_ids();
 
     foreach ( $raw_ids as $raw_id ) {
         $id = trim( (string) $raw_id );
@@ -1156,10 +1182,37 @@ function g4t_normalize_recipe_bottom_strip_product_ids( array $raw_ids ): array 
             continue;
         }
 
+        if ( $reject_demo_ids && g4t_recipe_creator_is_static_demo_product_id( $id ) ) {
+            continue;
+        }
+
         $normalized[ $id ] = $id;
     }
 
     return array_values( $normalized );
+}
+
+/**
+ * Check whether static demo product IDs must be rejected.
+ *
+ * @return bool
+ */
+function g4t_recipe_creator_should_reject_demo_product_ids(): bool {
+    $credentials = g4t_get_algolia_credentials_for_js();
+
+    return ! empty( $credentials['appId'] ) && ! empty( $credentials['apiKey'] );
+}
+
+/**
+ * Identify legacy demo IDs from creator-data.js sample catalog.
+ *
+ * @param string $product_id Raw product ID.
+ * @return bool
+ */
+function g4t_recipe_creator_is_static_demo_product_id( string $product_id ): bool {
+    $normalized = strtolower( trim( $product_id ) );
+
+    return (bool) preg_match( '/^p([1-9]|10)$/', $normalized );
 }
 
 /**
@@ -1212,6 +1265,13 @@ function g4t_get_recipe_bottom_strip_product_ids_for_post( int $post_id ): array
     $legacy_product_ids = array();
     $products_count     = (int) get_post_meta( $post_id, 'recipe_ads_products', true );
     for ( $i = 0; $i < $products_count; $i++ ) {
+        $primary_key_value = get_post_meta( $post_id, 'recipe_ads_products_' . $i . '_product_id', true );
+        if ( '' !== trim( (string) $primary_key_value ) ) {
+            $legacy_product_ids[] = $primary_key_value;
+            continue;
+        }
+
+        // Compatibility with older payload shape used by previous creator adapters.
         $legacy_product_ids[] = get_post_meta( $post_id, 'recipe_ads_products_' . $i . '_recipe_ads_product_id', true );
     }
 
@@ -1233,10 +1293,78 @@ function g4t_recipe_creator_sync_recipe_bottom_strip_meta_after_acf_save( int $p
         return;
     }
 
+    // Update post title from the flat `post_title` field submitted early in the POST
+    // body — before the large ACF payload that may be truncated by max_input_vars.
+    // acf[_post_title] is not relied on because it lands late in the POST body and
+    // gets silently dropped on servers with a low max_input_vars limit.
+    $submitted_title = isset( $_POST['post_title'] ) // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        ? sanitize_text_field( wp_unslash( (string) $_POST['post_title'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        : '';
+    if ( '' !== $submitted_title ) {
+        wp_update_post(
+            array(
+                'ID'         => $post_id,
+                'post_title' => $submitted_title,
+            )
+        );
+    }
+
+    $posted_product_ids = g4t_recipe_creator_extract_product_ids_from_request();
+    if ( ! empty( $posted_product_ids ) ) {
+        g4t_update_recipe_bottom_strip_product_ids_meta( $post_id, $posted_product_ids );
+        return;
+    }
+
     g4t_update_recipe_bottom_strip_product_ids_meta(
         $post_id,
         g4t_get_recipe_bottom_strip_product_ids_for_post( $post_id )
     );
+}
+
+/**
+ * Extract promoted product IDs from posted ACF payload.
+ *
+ * @return array<int,string>
+ */
+function g4t_recipe_creator_extract_product_ids_from_request(): array {
+    // Primary path: flat JSON field submitted early in the POST body, before the large
+    // ACF repeater payload. This avoids silent truncation caused by PHP max_input_vars
+    // when the server limit is reached by ingredients/steps repeater inputs.
+    if ( isset( $_POST['g4t_recipe_ads_product_ids_json'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+        $json_string = sanitize_text_field( wp_unslash( (string) $_POST['g4t_recipe_ads_product_ids_json'] ) ); // phpcs:ignore WordPress.Security.NonceVerification
+        if ( '' !== $json_string ) {
+            $decoded = json_decode( $json_string, true );
+            if ( is_array( $decoded ) ) {
+                return g4t_normalize_recipe_bottom_strip_product_ids( $decoded );
+            }
+        }
+    }
+
+    // Fallback: nested ACF payload (may be truncated on servers with low max_input_vars).
+    if ( ! isset( $_POST['acf'] ) || ! is_array( $_POST['acf'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+        return array();
+    }
+
+    $acf_payload = wp_unslash( $_POST['acf'] ); // phpcs:ignore WordPress.Security.NonceVerification
+    if ( ! is_array( $acf_payload ) ) {
+        return array();
+    }
+
+    $raw_rows = $acf_payload['field_recipe_ads_products'] ?? ( $acf_payload['recipe_ads_products'] ?? null );
+    if ( ! is_array( $raw_rows ) ) {
+        return array();
+    }
+
+    $product_ids = array();
+    foreach ( $raw_rows as $row ) {
+        if ( ! is_array( $row ) ) {
+            continue;
+        }
+
+        $product_ids[] = $row['field_recipe_ads_product_id'] ?? ( $row['product_id'] ?? '' );
+    }
+
+    return g4t_normalize_recipe_bottom_strip_product_ids( $product_ids );
 }
 
 /**

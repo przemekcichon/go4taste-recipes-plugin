@@ -137,6 +137,11 @@
   const creatorData = getCreatorData();
   const isHeartbeatEnabled = !!creatorData.heartbeatEnabled;
   let autosavePostId = Number(creatorData.editPostId || 0) || 0;
+  let productSourceMode = 'local';
+  let algoliaIndex = null;
+  let productSearchTimer = null;
+  let productRequestSeq = 0;
+  let visibleProducts = [];
 
   function mkIng()  { return { id: rid('ing'),  name:'', termId:null, amount:'', unit:'', hint:'' }; }
   function mkPrep() { return { id: rid('prep'), heading:'', body:'', hint:'', photo:null }; }
@@ -144,6 +149,28 @@
 
   function getCreatorData() {
     return window.G4T_RECIPE_CREATOR_DATA || {};
+  }
+
+  function isAlgoliaConfiguredForCreator() {
+    const adsPickerConfig = creatorData && creatorData.adsPicker && typeof creatorData.adsPicker === 'object'
+      ? creatorData.adsPicker
+      : null;
+
+    return !!(
+      adsPickerConfig
+      && adsPickerConfig.enabled
+      && adsPickerConfig.appId
+      && adsPickerConfig.apiKey
+    );
+  }
+
+  function isStaticDemoProductId(value) {
+    const id = String(value || '').trim().toLowerCase();
+    return /^p([1-9]|10)$/.test(id);
+  }
+
+  function shouldRejectStaticDemoProductId(value) {
+    return isAlgoliaConfiguredForCreator() && isStaticDemoProductId(value);
   }
 
   function setPreviewButtonState(postId) {
@@ -548,10 +575,31 @@
     const normalizedProducts = Array.isArray(initial.products)
       ? initial.products
           .map((item) => {
-            const id = asNumber(item && item.id, 0);
-            if (!id) return null;
-            const match = Array.isArray(window.PRODUCTS) ? window.PRODUCTS.find((p) => Number(p.id) === id) : null;
-            return match || { id, title: `Produkt #${id}`, cat: '', sku: '', price: '' };
+            const normalized = normalizeProductRecord(item);
+            if (normalized) {
+              if (shouldRejectStaticDemoProductId(normalized.id)) {
+                return null;
+              }
+              return normalized;
+            }
+
+            const fallbackId = String(item && item.id ? item.id : '').trim();
+            if (!fallbackId) {
+              return null;
+            }
+
+            if (shouldRejectStaticDemoProductId(fallbackId)) {
+              return null;
+            }
+
+            return {
+              id: fallbackId,
+              title: `Produkt #${fallbackId}`,
+              cat: '',
+              sku: fallbackId,
+              price: '',
+              image: '',
+            };
           })
           .filter(Boolean)
       : [];
@@ -1105,69 +1153,426 @@
   // ============================================================
   // PRODUCTS  —  search + multi-select
   // ============================================================
-  function setupProductSearch() {
-    const pickerConfig = creatorData && creatorData.adsPicker && creatorData.adsPicker.enabled
+  function normalizePickerToken(value, fallbackValue) {
+    const normalized = String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-');
+
+    return normalized || fallbackValue;
+  }
+
+  function getAdsPickerRuntimeContract() {
+    const baseConfig = creatorData && creatorData.adsPicker && typeof creatorData.adsPicker === 'object'
+      ? creatorData.adsPicker
+      : {};
+    const rawMetadata = baseConfig.metadata && typeof baseConfig.metadata === 'object'
+      ? baseConfig.metadata
+      : {};
+    const currentPostId = Number(autosavePostId || creatorData.editPostId || 0);
+
+    return {
+      ...baseConfig,
+      enabled: !!baseConfig.enabled,
+      context: normalizePickerToken(baseConfig.context, 'recipe_creator'),
+      variant: normalizePickerToken(baseConfig.variant, 'creator'),
+      metadata: {
+        ...rawMetadata,
+        surface: 'frontend_creator',
+        step: 'promoted_products',
+        editMode: !!creatorData.editMode,
+        postId: Number.isFinite(currentPostId) && currentPostId > 0 ? currentPostId : 0,
+      },
+    };
+  }
+
+  function applyAdsPickerAdapterContract(adapter, pickerConfig) {
+    if (!adapter || !pickerConfig) {
+      return;
+    }
+
+    const variantClassPrefix = 'g4t-recipe-ads-picker--variant-';
+    const metadata = pickerConfig.metadata && typeof pickerConfig.metadata === 'object'
+      ? pickerConfig.metadata
+      : {};
+
+    Array.from(adapter.classList).forEach((className) => {
+      if (className.indexOf(variantClassPrefix) === 0) {
+        adapter.classList.remove(className);
+      }
+    });
+
+    adapter.dataset.g4tPickerContext = String(pickerConfig.context || '');
+    adapter.dataset.g4tPickerVariant = String(pickerConfig.variant || '');
+    adapter.dataset.g4tPickerMetadata = JSON.stringify(metadata);
+    adapter.dataset.g4tPickerSurfaceLabel = String(pickerConfig.surfaceLabel || '');
+    adapter.dataset.g4tPickerFallbackMessage = String(pickerConfig.fallbackMessage || '');
+
+    if (pickerConfig.variant) {
+      adapter.classList.add(`${variantClassPrefix}${pickerConfig.variant}`);
+    }
+  }
+
+  function updateAdsPickerStatusUI(pickerConfig, isRuntimeEnabled) {
+    const title = document.getElementById('g4t-recipe-ads-picker-title');
+    const meta = document.getElementById('g4t-recipe-ads-picker-meta');
+    const fallbackNote = document.getElementById('g4t-recipe-ads-picker-fallback-note');
+
+    if (title && pickerConfig.surfaceLabel) {
+      title.textContent = String(pickerConfig.surfaceLabel);
+    }
+
+    if (meta) {
+      const contextLabel = pickerConfig.context ? `Kontrakt: ${pickerConfig.context}` : 'Kontrakt: recipe_creator';
+      const variantLabel = pickerConfig.variant ? `wariant: ${pickerConfig.variant}` : 'wariant: creator';
+      meta.textContent = `Ten krok używa ${contextLabel}, ${variantLabel}. Lista produktów jest renderowana natywnie w kreatorze.`;
+    }
+
+    if (fallbackNote) {
+      if (isRuntimeEnabled) {
+        fallbackNote.hidden = true;
+        fallbackNote.textContent = '';
+      } else {
+        fallbackNote.hidden = false;
+        fallbackNote.textContent = pickerConfig.fallbackMessage || 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.';
+      }
+    }
+  }
+
+  function normalizeProductRecord(raw) {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const id = String(raw.id || raw.objectID || '').trim();
+    if (!id) {
+      return null;
+    }
+
+    const title = String(raw.title || raw.name || raw.product_name || `Produkt #${id}`);
+    const category = String(raw.cat || raw.category || raw.category_name || '');
+    const sku = String(raw.sku || raw.reference || raw.product_reference || id);
+    const priceValue = raw.price ?? raw.formatted_price ?? raw.formattedPrice ?? raw.display_price ?? '';
+
+    const resolveImageUrl = (candidate) => {
+      if (!candidate) {
+        return '';
+      }
+
+      if (typeof candidate === 'string') {
+        return candidate.trim();
+      }
+
+      if (typeof candidate === 'object') {
+        const nested = candidate.url || candidate.src || candidate.image_url || candidate.imageUrl || candidate.thumbnail || candidate.thumb;
+        return typeof nested === 'string' ? nested.trim() : '';
+      }
+
+      return '';
+    };
+
+    const imageValue = resolveImageUrl(raw.image)
+      || resolveImageUrl(raw.image_url)
+      || resolveImageUrl(raw.imageUrl)
+      || resolveImageUrl(raw.thumbnail)
+      || resolveImageUrl(raw.thumb)
+      || resolveImageUrl(raw.photo)
+      || resolveImageUrl(raw.picture)
+      || resolveImageUrl(raw.main_image)
+      || resolveImageUrl(raw.main_image_url)
+      || resolveImageUrl(raw.cover)
+      || resolveImageUrl(raw.images)
+      || resolveImageUrl(raw.media)
+      || resolveImageUrl(raw.default_image)
+      || resolveImageUrl(raw.featured_image)
+      || resolveImageUrl(raw.small_image)
+      || resolveImageUrl(raw.smallImage)
+      || resolveImageUrl(raw.product_image)
+      || resolveImageUrl(raw.productImage);
+
+    return {
+      id,
+      title,
+      cat: category,
+      sku,
+      price: String(priceValue || ''),
+      image: String(imageValue || ''),
+    };
+  }
+
+  function mergeVisibleWithSelectedProducts(items) {
+    const visible = Array.isArray(items) ? items : [];
+    if (state.productQuery.trim()) {
+      return visible;
+    }
+
+    const merged = [];
+    const seen = new Set();
+
+    state.data.products.forEach((product) => {
+      const normalized = normalizeProductRecord(product);
+      if (!normalized) {
+        return;
+      }
+      if (seen.has(normalized.id)) {
+        return;
+      }
+      seen.add(normalized.id);
+      merged.push(normalized);
+    });
+
+    visible.forEach((product) => {
+      const normalized = normalizeProductRecord(product);
+      if (!normalized) {
+        return;
+      }
+      if (seen.has(normalized.id)) {
+        return;
+      }
+      seen.add(normalized.id);
+      merged.push(normalized);
+    });
+
+    return merged;
+  }
+
+  function mergeProductDetails(baseProduct, incomingProduct) {
+    const base = normalizeProductRecord(baseProduct) || { id: String(baseProduct && baseProduct.id ? baseProduct.id : ''), title: '', cat: '', sku: '', price: '', image: '' };
+    const incoming = normalizeProductRecord(incomingProduct);
+    if (!incoming) {
+      return base;
+    }
+
+    return {
+      id: incoming.id || base.id,
+      title: incoming.title || base.title || `Produkt #${incoming.id || base.id}`,
+      cat: incoming.cat || base.cat || '',
+      sku: incoming.sku || base.sku || '',
+      price: incoming.price || base.price || '',
+      image: incoming.image || base.image || '',
+    };
+  }
+
+  function hydrateSelectedProductsFromLocalCatalog() {
+    const localCatalog = getLocalProductsCatalog();
+    if (!Array.isArray(localCatalog) || localCatalog.length === 0) {
+      return;
+    }
+
+    const byId = new Map(localCatalog.map((product) => [String(product.id), product]));
+    let hasChanges = false;
+
+    state.data.products = state.data.products.map((product) => {
+      const id = String(product && product.id ? product.id : '').trim();
+      if (!id) {
+        return product;
+      }
+
+      const fromLocal = byId.get(id);
+      if (!fromLocal) {
+        return product;
+      }
+
+      hasChanges = true;
+      return mergeProductDetails(product, fromLocal);
+    });
+
+    if (hasChanges) {
+      renderSelectedStrip();
+    }
+  }
+
+  async function hydrateSelectedProductsFromAlgolia() {
+    if (!algoliaIndex || !Array.isArray(state.data.products) || state.data.products.length === 0) {
+      return;
+    }
+
+    const ids = [...new Set(state.data.products
+      .map((product) => String(product && product.id ? product.id : '').trim())
+      .filter((id) => id.length > 0))];
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    const requests = ids.map((id) => algoliaIndex.getObject(id));
+    const settled = await Promise.allSettled(requests);
+    const byId = new Map();
+
+    settled.forEach((item) => {
+      if (item.status !== 'fulfilled') {
+        return;
+      }
+
+      const normalized = normalizeProductRecord(item.value);
+      if (!normalized) {
+        return;
+      }
+
+      byId.set(String(normalized.id), normalized);
+    });
+
+    if (byId.size === 0) {
+      return;
+    }
+
+    let hasChanges = false;
+    state.data.products = state.data.products.map((product) => {
+      const id = String(product && product.id ? product.id : '').trim();
+      if (!id) {
+        return product;
+      }
+
+      const fromAlgolia = byId.get(id);
+      if (!fromAlgolia) {
+        return product;
+      }
+
+      hasChanges = true;
+      return mergeProductDetails(product, fromAlgolia);
+    });
+
+    if (hasChanges) {
+      renderProducts();
+    }
+  }
+
+  function getLocalProductsCatalog() {
+    const adsPickerConfig = creatorData && creatorData.adsPicker && typeof creatorData.adsPicker === 'object'
       ? creatorData.adsPicker
       : null;
+    const shouldSkipStaticCatalog = !!(
+      adsPickerConfig
+      && adsPickerConfig.enabled
+      && adsPickerConfig.appId
+      && adsPickerConfig.apiKey
+    );
 
-    if (pickerConfig && typeof window.G4TAdsPicker === 'function') {
-      const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
-      const fallbackSearch = document.querySelector('.search-box');
-      if (adapter) {
-        adapter.hidden = false;
-      }
-      if (fallbackSearch) {
-        fallbackSearch.hidden = true;
-      }
+    if (shouldSkipStaticCatalog) {
+      return [];
+    }
 
-      window.G4TAdsPicker({
-        hiddenFieldSelector: '#g4t-recipe-ads-picked-id',
-        searchBoxSelector: '#g4t-recipe-ads-searchbox',
-        selectedContainerSelector: '#g4t-recipe-ads-selected',
-        previewContainerSelector: '#g4t-recipe-ads-preview',
-        algoliaAppId: pickerConfig.appId || '',
-        algoliaApiKey: pickerConfig.apiKey || '',
-        indexName: pickerConfig.indexName || 'go4taste_product_list',
-        ajaxUrl: pickerConfig.ajaxUrl || '',
-        nonce: pickerConfig.nonce || '',
-        postId: autosavePostId || 0,
-      });
+    if (!Array.isArray(window.PRODUCTS)) {
+      return [];
+    }
 
-      const addButton = document.getElementById('g4t-recipe-ads-add');
-      if (addButton) {
-        addButton.addEventListener('click', () => {
-          const hiddenField = document.getElementById('g4t-recipe-ads-picked-id');
-          const pickedId = hiddenField ? String(hiddenField.value || '').trim() : '';
-          if (!pickedId) {
-            showError('Wybierz produkt z wyszukiwarki, zanim go dodasz.');
-            return;
-          }
+    return window.PRODUCTS
+      .map((item) => normalizeProductRecord(item))
+      .filter(Boolean);
+  }
 
-          const alreadySelected = state.data.products.some((item) => String(item.id) === pickedId);
-          if (alreadySelected) {
-            showError('Ten produkt jest już na liście wybranych.');
-            return;
-          }
+  async function fetchAlgoliaProducts(query, pickerConfig) {
+    if (!algoliaIndex || !pickerConfig) {
+      return [];
+    }
 
-          const matchedProduct = Array.isArray(window.PRODUCTS)
-            ? window.PRODUCTS.find((item) => String(item.id) === pickedId)
-            : null;
+    const response = await algoliaIndex.search(String(query || ''), {
+      hitsPerPage: Number(pickerConfig.hitsPerPage || 12),
+    });
 
-          state.data.products.push(matchedProduct || {
-            id: pickedId,
-            title: `Produkt #${pickedId}`,
-            cat: '',
-            sku: '',
-            price: '',
-          });
+    if (!response || !Array.isArray(response.hits)) {
+      return [];
+    }
 
-          showError(null);
-          renderProducts();
-          afterChange();
-        });
-      }
+    return response.hits
+      .map((hit) => normalizeProductRecord(hit))
+      .filter(Boolean);
+  }
 
+  function renderProductLoadingState() {
+    const list = document.getElementById('product-list');
+    if (!list) {
       return;
+    }
+
+    list.innerHTML = '';
+    const loading = document.createElement('div');
+    loading.style.cssText = 'padding:20px; text-align:center; color:var(--ink-2); border:1px dashed var(--line); border-radius:var(--r-md);';
+    loading.textContent = 'Ładowanie produktów...';
+    list.appendChild(loading);
+  }
+
+  async function refreshProductResults(query, pickerConfig) {
+    const requestId = ++productRequestSeq;
+
+    if (productSourceMode === 'algolia') {
+      try {
+        renderProductLoadingState();
+        const algoliaResults = await fetchAlgoliaProducts(query, pickerConfig);
+        if (requestId !== productRequestSeq) {
+          return;
+        }
+        visibleProducts = algoliaResults;
+        showError(null);
+      } catch (error) {
+        if (requestId !== productRequestSeq) {
+          return;
+        }
+        const hasAlgoliaConfig = !!(
+          pickerConfig
+          && pickerConfig.enabled
+          && pickerConfig.appId
+          && pickerConfig.apiKey
+        );
+
+        productSourceMode = 'local';
+        visibleProducts = getLocalProductsCatalog();
+        if (hasAlgoliaConfig) {
+          showError('Nie udało się pobrać produktów z Algolii. Sprawdź konfigurację lub połączenie.');
+        } else {
+          showError('Nie udało się pobrać produktów z Algolii. Pokazujemy listę lokalną.');
+        }
+      }
+
+      renderProducts();
+      return;
+    }
+
+    const q = String(query || '').trim().toLowerCase();
+    const localCatalog = getLocalProductsCatalog();
+    visibleProducts = !q
+      ? localCatalog
+      : localCatalog.filter((p) =>
+          String(p.title || '').toLowerCase().includes(q)
+          || String(p.cat || '').toLowerCase().includes(q)
+          || String(p.sku || '').toLowerCase().includes(q)
+        );
+    renderProducts();
+  }
+
+  function syncAdsPickerAdapterContract() {
+    const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
+    if (!adapter) {
+      return;
+    }
+
+    applyAdsPickerAdapterContract(adapter, getAdsPickerRuntimeContract());
+  }
+
+  function setupProductSearch() {
+    const pickerConfig = getAdsPickerRuntimeContract();
+    const hasAlgoliaConfig = !!(
+      pickerConfig.enabled
+      && pickerConfig.appId
+      && pickerConfig.apiKey
+    );
+    const runtimeEnabled = !!(
+      hasAlgoliaConfig
+      && window.algoliasearch
+    );
+    updateAdsPickerStatusUI(pickerConfig, runtimeEnabled);
+
+    productSourceMode = runtimeEnabled || hasAlgoliaConfig ? 'algolia' : 'local';
+
+    if (runtimeEnabled) {
+      const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
+      algoliaIndex = searchClient.initIndex(pickerConfig.indexName || 'go4taste_product_list');
+      hydrateSelectedProductsFromAlgolia().catch(() => {
+        // If selected IDs cannot be hydrated from Algolia, keep current fallback labels.
+      });
+    } else {
+      algoliaIndex = null;
+      hydrateSelectedProductsFromLocalCatalog();
     }
 
     const searchInput = document.getElementById('product-search');
@@ -1175,29 +1580,72 @@
       return;
     }
 
+    const adapter = document.getElementById('g4t-recipe-ads-picker-adapter');
+    if (adapter) {
+      applyAdsPickerAdapterContract(adapter, pickerConfig);
+      adapter.hidden = true;
+    }
+    const fallbackSearch = document.querySelector('.search-box');
+    if (fallbackSearch) {
+      fallbackSearch.hidden = false;
+    }
+
+    searchInput.value = '';
+
     searchInput.addEventListener('input', (e) => {
-      state.productQuery = e.target.value;
-      renderProducts();
+      state.productQuery = String(e.target.value || '');
+
+      if (productSearchTimer) {
+        clearTimeout(productSearchTimer);
+      }
+
+      productSearchTimer = setTimeout(() => {
+        refreshProductResults(state.productQuery, pickerConfig);
+      }, Number(pickerConfig.searchDebounceMs || 260));
     });
+
+    const bootstrapAlgoliaWithRetry = (retriesLeft) => {
+      if (!hasAlgoliaConfig) {
+        refreshProductResults('', pickerConfig);
+        return;
+      }
+
+      if (window.algoliasearch) {
+        const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
+        algoliaIndex = searchClient.initIndex(pickerConfig.indexName || 'go4taste_product_list');
+        productSourceMode = 'algolia';
+        updateAdsPickerStatusUI(pickerConfig, true);
+        hydrateSelectedProductsFromAlgolia().catch(() => {
+          // Keep selected IDs as fallback labels when hydration fails.
+        });
+        refreshProductResults('', pickerConfig);
+        return;
+      }
+
+      if (retriesLeft <= 0) {
+        visibleProducts = [];
+        renderProducts();
+        showError('Biblioteka Algolia nie została załadowana. Odśwież stronę i spróbuj ponownie.');
+        return;
+      }
+
+      setTimeout(() => bootstrapAlgoliaWithRetry(retriesLeft - 1), 200);
+    };
+
+    bootstrapAlgoliaWithRetry(15);
   }
 
   function renderProducts() {
     const list = document.getElementById('product-list');
     list.innerHTML = '';
-    const allProducts = Array.isArray(window.PRODUCTS) ? window.PRODUCTS : [];
-    const q = state.productQuery.trim().toLowerCase();
-    const filtered = !q
-      ? allProducts
-      : allProducts.filter(p =>
-          String(p.title || '').toLowerCase().includes(q) ||
-          String(p.cat || '').toLowerCase().includes(q) ||
-          String(p.sku || '').toLowerCase().includes(q)
-        );
+    const filtered = mergeVisibleWithSelectedProducts(Array.isArray(visibleProducts) ? visibleProducts : []);
 
     if (filtered.length === 0) {
       const empty = document.createElement('div');
       empty.style.cssText = 'padding:28px; text-align:center; color:var(--ink-2); border:1px dashed var(--line); border-radius:var(--r-md);';
-      empty.textContent = `Brak wyników dla „${state.productQuery}". Spróbuj inaczej.`;
+      empty.textContent = state.productQuery.trim()
+        ? `Brak wyników dla „${state.productQuery}". Spróbuj inaczej.`
+        : 'Brak produktów do wyświetlenia.';
       list.appendChild(empty);
     } else {
       filtered.forEach((p, i) => list.appendChild(productRow(p, i)));
@@ -1220,7 +1668,24 @@
       <div class="product-row__check"></div>
     `;
     const thumb = row.querySelector('.product-row__thumb');
-    thumb.appendChild(placeholderImg(i, ''));
+    const imageUrl = String((p && p.image) || '').trim();
+    if (imageUrl) {
+      const image = document.createElement('img');
+      image.src = imageUrl;
+      image.alt = String((p && p.title) || 'Produkt');
+      image.loading = 'lazy';
+      image.style.width = '100%';
+      image.style.height = '100%';
+      image.style.objectFit = 'cover';
+      image.style.display = 'block';
+      image.addEventListener('error', () => {
+        thumb.innerHTML = '';
+        thumb.appendChild(placeholderImg(i, ''));
+      });
+      thumb.appendChild(image);
+    } else {
+      thumb.appendChild(placeholderImg(i, ''));
+    }
     const cam = document.createElement('span');
     cam.className = 'product-row__thumb-icon';
     cam.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
@@ -1236,7 +1701,13 @@
   function toggleProduct(p) {
     const idx = state.data.products.findIndex(s => String(s.id) === String(p.id));
     if (idx >= 0) state.data.products.splice(idx, 1);
-    else state.data.products.push(p);
+    else {
+      if (shouldRejectStaticDemoProductId(p && p.id)) {
+        showError('Ta pozycja pochodzi z danych demonstracyjnych i nie może zostać zapisana.');
+        return;
+      }
+      state.data.products.push(p);
+    }
     renderProducts();
     afterChange();
   }
@@ -1250,10 +1721,11 @@
     label.className = 'selected-strip__label';
     label.textContent = `Wybrane (${state.data.products.length}):`;
     strip.appendChild(label);
-    state.data.products.forEach(p => {
+    state.data.products.forEach((p, index) => {
+      const title = String((p && p.title) || '').trim() || `Produkt #${String((p && p.id) || '').trim()}`;
       const chip = document.createElement('span');
       chip.className = 'chip';
-      chip.innerHTML = `${escapeHtml(p.title)}<button type="button" class="chip__x" aria-label="Usuń">×</button>`;
+      chip.innerHTML = `${escapeHtml(`${index + 1}. ${title}`)}<button type="button" class="chip__x" aria-label="Usuń">×</button>`;
       chip.querySelector('.chip__x').addEventListener('click', (e) => { e.stopPropagation(); toggleProduct(p); });
       strip.appendChild(chip);
     });
@@ -1389,12 +1861,26 @@
 
     clearAcfBridgeInputs(form);
     const payload = buildAcfPayload(state.data);
+
+    // Flat fields submitted first — before the large ACF payload — to stay within
+    // PHP max_input_vars. Nested acf[field_recipe_ads_products][N][...] inputs
+    // added by appendAcfPayload land at the end of the POST body and get silently
+    // truncated on servers with a low max_input_vars limit.
     appendField(form, 'g4t_recipe_creator_action', isEditMode ? 'update' : 'publish');
     if (isEditMode && String(creatorData.editPostStatus || '') === 'publish') {
       appendField(form, 'post_status', 'publish');
     }
     appendField(form, 'acf[_post_title]', (state.data.title || '').trim());
     appendField(form, 'post_title', (state.data.title || '').trim());
+    if (!isEditMode && autosavePostId > 0) {
+      appendField(form, 'g4t_heartbeat_draft_id', autosavePostId);
+    }
+    const earlyProductIds = (state.data.products || [])
+      .filter(p => !shouldRejectStaticDemoProductId(p && p.id))
+      .map(p => String(p.id || ''))
+      .filter(Boolean);
+    appendField(form, 'g4t_recipe_ads_product_ids_json', JSON.stringify(earlyProductIds));
+
     appendAcfPayload(form, payload);
     appendField(form, 'g4t_meal_type_term_ids_present', '1');
     appendField(form, 'g4t_meal_type_term_ids', Array.isArray(state.data.mealTypeTermIds) ? state.data.mealTypeTermIds : []);
@@ -1426,9 +1912,11 @@
         field_step_image_url: getPhotoId(r.photo),
       }));
 
-    const adsProducts = d.products.map(p => ({
-      field_recipe_ads_product_id: p.id,
-    }));
+    const adsProducts = d.products
+      .filter((p) => !shouldRejectStaticDemoProductId(p && p.id))
+      .map(p => ({
+        field_recipe_ads_product_id: p.id,
+      }));
 
     return {
       field_recipe_lead: (d.lead || '').trim(),
@@ -1719,6 +2207,7 @@
         if (nextPostId > 0) {
           autosavePostId = nextPostId;
           setPreviewButtonState(autosavePostId);
+          syncAdsPickerAdapterContract();
         }
         const savedAt = String(result.savedAt || '');
         renderAutosaveBadge(`Wersja robocza zapisana${savedAt ? ` · ${savedAt}` : ''}`, true);
@@ -1763,6 +2252,7 @@
     if (nextPostId > 0) {
       autosavePostId = nextPostId;
       setPreviewButtonState(autosavePostId);
+      syncAdsPickerAdapterContract();
     }
 
     const savedAt = String(result.savedAt || '');

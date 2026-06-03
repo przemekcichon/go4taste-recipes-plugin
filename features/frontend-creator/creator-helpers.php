@@ -85,7 +85,30 @@ function g4t_get_recipe_form_config( $post_id ) {
         $cpt_key  = $strategy['post_type'];
     }
 
-    $return_post_id = is_numeric( $post_id ) ? (string) (int) $post_id : '%post_id%';
+    // Build return URL. For existing posts (numeric $post_id), pass the ID directly
+    // through add_query_arg — safe because it is a plain integer.
+    // For new posts, %post_id% must NOT go through add_query_arg: WordPress's
+    // build_query URL-encodes it to %25post_id%25, which ACF's str_replace cannot
+    // find and leaves unreplaced. The browser then receives %post_id% as a literal
+    // string; (int)'%post_id%' === 0, producing ?post_id=0 and a "not found" error.
+    if ( is_numeric( $post_id ) ) {
+        $return_url = add_query_arg(
+            array(
+                'saved'   => '1',
+                'status'  => 'published',
+                'post_id' => (int) $post_id,
+            ),
+            get_the_permalink()
+        );
+    } else {
+        $return_url = add_query_arg(
+            array(
+                'saved'   => '1',
+                'status'  => 'published',
+            ),
+            get_the_permalink()
+        ) . '&post_id=%post_id%';
+    }
 
     return array(
         'post_id'              => $post_id,
@@ -100,14 +123,7 @@ function g4t_get_recipe_form_config( $post_id ) {
             'group_recipe_tips',
             'group_recipe_source',
         ),
-        'return'               => add_query_arg(
-            array(
-                'saved'   => '1',
-                'status'  => 'published',
-                'post_id' => $return_post_id,
-            ),
-            get_the_permalink()
-        ),
+        'return'               => $return_url,
         'submit_value'         => __( 'Opublikuj przepis', 'go4taste-recipes-plugin' ),
         'updated_message'      => __( 'Recipe updated.', 'go4taste-recipes-plugin' ),
     );
@@ -191,17 +207,21 @@ function g4t_recipe_creator_force_pre_save_post( $post_id, array $form ) {
     $requested_action = g4t_get_recipe_creator_requested_action();
     $submitted_taxonomies = g4t_get_submitted_recipe_classification_taxonomy_term_ids();
 
-    if ( is_numeric( $post_id ) && in_array( $requested_action, array( 'update', 'publish' ), true ) ) {
-        $numeric_post_id = (int) $post_id;
-        g4t_clear_recipe_creator_user_draft_state( $numeric_post_id );
-        $taxonomy_term_ids = g4t_filter_present_recipe_classification_taxonomy_term_ids( $submitted_taxonomies );
+    // ACF passes integer 0 (not the string 'new_post') when the form was rendered
+    // for a new post. Treat both as "new post" to avoid returning 0 as the post ID.
+    $is_new_post = ( 'new_post' === $post_id ) || ( is_numeric( $post_id ) && (int) $post_id <= 0 );
 
-        if ( ! empty( $taxonomy_term_ids ) ) {
-            g4t_sync_recipe_classification_taxonomies( $numeric_post_id, $taxonomy_term_ids );
+    if ( ! $is_new_post ) {
+        if ( is_numeric( $post_id ) && in_array( $requested_action, array( 'update', 'publish' ), true ) ) {
+            $numeric_post_id = (int) $post_id;
+            g4t_clear_recipe_creator_user_draft_state( $numeric_post_id );
+            $taxonomy_term_ids = g4t_filter_present_recipe_classification_taxonomy_term_ids( $submitted_taxonomies );
+
+            if ( ! empty( $taxonomy_term_ids ) ) {
+                g4t_sync_recipe_classification_taxonomies( $numeric_post_id, $taxonomy_term_ids );
+            }
         }
-    }
 
-    if ( 'new_post' !== $post_id ) {
         return $post_id;
     }
 
@@ -217,10 +237,36 @@ function g4t_recipe_creator_force_pre_save_post( $post_id, array $form ) {
         $title = sanitize_text_field( wp_unslash( (string) $_POST['post_title'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
     }
 
+    $target_status = 'publish' === $requested_action ? 'publish' : 'draft';
+
+    // If the heartbeat already created a draft for this session, publish that post
+    // instead of creating a new one. This prevents orphaned duplicate posts when the
+    // user clicks "Opublikuj" after autosave has already run.
+    $heartbeat_draft_id = isset( $_POST['g4t_heartbeat_draft_id'] ) // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        ? (int) $_POST['g4t_heartbeat_draft_id'] // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        : 0;
+
+    if ( $heartbeat_draft_id > 0 && g4t_can_user_edit_recipe( $heartbeat_draft_id ) ) {
+        wp_update_post(
+            array(
+                'ID'          => $heartbeat_draft_id,
+                'post_status' => $target_status,
+                'post_title'  => '' !== $title ? $title : get_the_title( $heartbeat_draft_id ),
+            )
+        );
+
+        $taxonomy_term_ids = g4t_filter_present_recipe_classification_taxonomy_term_ids( $submitted_taxonomies );
+        if ( ! empty( $taxonomy_term_ids ) ) {
+            g4t_sync_recipe_classification_taxonomies( $heartbeat_draft_id, $taxonomy_term_ids );
+        }
+
+        return $heartbeat_draft_id;
+    }
+
     $inserted = wp_insert_post(
         array(
             'post_type'   => 'post',
-            'post_status' => 'publish' === $requested_action ? 'publish' : 'draft',
+            'post_status' => $target_status,
             'post_title'  => '' !== $title ? $title : __( 'Nowy przepis', 'go4taste-recipes-plugin' ),
             'post_author' => get_current_user_id(),
         ),
