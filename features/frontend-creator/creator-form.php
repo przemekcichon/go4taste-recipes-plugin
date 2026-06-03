@@ -389,60 +389,31 @@ function g4t_get_post_term_ids_for_js( int $post_id, string $taxonomy_key ): arr
  *
  * @return array<string,string|int>
  */
-function g4t_get_algolia_credentials_for_js(): array {
-    $ads_options = get_option( 'go4taste_ads_options', array() );
-
-    if ( empty( $ads_options ) || ! isset( $ads_options['algolia_app_id'], $ads_options['algolia_api_key'] ) ) {
-        return array();
-    }
-
-    return array(
-        'appId'     => sanitize_text_field( $ads_options['algolia_app_id'] ),
-        'apiKey'    => sanitize_text_field( $ads_options['algolia_api_key'] ),
-        'indexName' => 'go4taste_product_list',
-    );
-}
-
 /**
  * Build picker configuration for the recipe creator step 6 adapter.
+ *
+ * Credentials are intentionally absent — G4TAdsProvider (go4taste-ads) owns
+ * Algolia credentials and initializes the shared JS client on wp_enqueue_scripts.
+ * Creator.js calls G4TAdsProvider.getInstance() to get search access.
  *
  * @return array<string,mixed>
  */
 function g4t_get_recipe_creator_ads_picker_config(): array {
-    $credentials = g4t_get_algolia_credentials_for_js();
-    if ( empty( $credentials['appId'] ) || empty( $credentials['apiKey'] ) ) {
-        return array(
-            'enabled'         => false,
-            'context'         => 'recipe_creator',
-            'variant'         => 'creator',
-            'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
-            'fallbackMessage' => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
-        );
-    }
-
-    $ads_plugin_entry = WP_PLUGIN_DIR . '/go4taste-ads/go4taste-ads.php';
-    if ( ! file_exists( $ads_plugin_entry ) ) {
-        return array(
-            'enabled'         => false,
-            'context'         => 'recipe_creator',
-            'variant'         => 'creator',
-            'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
-            'fallbackMessage' => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
-        );
-    }
-
-    return array(
-        'enabled'         => true,
-        'appId'           => sanitize_text_field( (string) $credentials['appId'] ),
-        'apiKey'          => sanitize_text_field( (string) $credentials['apiKey'] ),
-        'indexName'       => sanitize_text_field( (string) ( $credentials['indexName'] ?? 'go4taste_product_list' ) ),
-        'ajaxUrl'         => admin_url( 'admin-ajax.php' ),
-        'nonce'           => wp_create_nonce( 'g4t_ad_preview_nonce' ),
-        'context'         => 'recipe_creator',
-        'variant'         => 'creator',
-        'surfaceLabel'    => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
+    $base = array(
+        'enabled'          => false,
+        'context'          => 'recipe_creator',
+        'variant'          => 'creator',
+        'surfaceLabel'     => __( 'Kreator przepisu', 'go4taste-recipes-plugin' ),
         'fallbackMessage'  => __( 'Wyszukiwarka produktów jest chwilowo niedostępna. Możesz korzystać z lokalnej listy produktów poniżej.', 'go4taste-recipes-plugin' ),
+        'hitsPerPage'      => 12,
+        'searchDebounceMs' => 260,
     );
+
+    if ( ! file_exists( WP_PLUGIN_DIR . '/go4taste-ads/go4taste-ads.php' ) ) {
+        return $base;
+    }
+
+    return array_merge( $base, array( 'enabled' => true ) );
 }
 
 /**
@@ -451,52 +422,8 @@ function g4t_get_recipe_creator_ads_picker_config(): array {
  * @return void
  */
 function g4t_enqueue_recipe_creator_ads_picker_assets(): void {
-    $ads_plugin_entry = WP_PLUGIN_DIR . '/go4taste-ads/go4taste-ads.php';
-    if ( ! file_exists( $ads_plugin_entry ) ) {
-        return;
-    }
-
-    $version = defined( 'GO4TASTE_ADS_VERSION' ) ? GO4TASTE_ADS_VERSION : null;
-
-    wp_enqueue_style(
-        'go4taste-ads-metabox-preview',
-        plugins_url( 'features/banner-sidebar-widget/assets/css/go4taste-ads-metabox-preview.css', $ads_plugin_entry ),
-        array(),
-        $version,
-        'all'
-    );
-
-    wp_enqueue_style(
-        'go4taste-ads-picker-ui',
-        plugins_url( 'features/banner-sidebar-widget/assets/css/picker-ui.css', $ads_plugin_entry ),
-        array(),
-        $version,
-        'all'
-    );
-
-    wp_enqueue_script(
-        'algolia-instantsearch',
-        'https://cdn.jsdelivr.net/npm/instantsearch.js@4',
-        array(),
-        null,
-        true
-    );
-
-    wp_enqueue_script(
-        'algolia-search-client',
-        'https://cdn.jsdelivr.net/npm/algoliasearch@4',
-        array(),
-        null,
-        true
-    );
-
-    wp_enqueue_script(
-        'g4t-ads-picker-ui',
-        plugins_url( 'features/banner-sidebar-widget/assets/js/picker-ui.js', $ads_plugin_entry ),
-        array( 'jquery', 'algolia-instantsearch', 'algolia-search-client' ),
-        $version,
-        true
-    );
+    // G4TAdsProvider (algolia-search-client + algolia-provider.js) is enqueued
+    // by go4taste-ads on wp_enqueue_scripts. No additional assets needed here.
 }
 
 /**
@@ -1198,9 +1125,7 @@ function g4t_normalize_recipe_bottom_strip_product_ids( array $raw_ids ): array 
  * @return bool
  */
 function g4t_recipe_creator_should_reject_demo_product_ids(): bool {
-    $credentials = g4t_get_algolia_credentials_for_js();
-
-    return ! empty( $credentials['appId'] ) && ! empty( $credentials['apiKey'] );
+    return file_exists( WP_PLUGIN_DIR . '/go4taste-ads/go4taste-ads.php' );
 }
 
 /**

@@ -1,97 +1,157 @@
-# PR: Recipe Creator Step 6 - Algolia products, stable persistence, autosave/publish fixes
+# PR: Creator Algolia Integration — Use Shared Ads Data Provider
 
-**Branch:** feature/picker-ui-extensibility -> main
+**Branch:** feature/use-ads-data-provider -> main
 
-## Co wnosi ten branch
+**Depends on:** go4taste-ads `feature/picker-ui-extensibility` (Stage 1: `G4TAdsProvider`) merged to main
 
-Ten branch domyka wdrozenie sekcji produktowej (Step 6) w kreatorze przepisu oraz usuwa bledy zapisu, ktore blokowaly stabilna prace flow:
+## Implementation status
 
-- wyszukiwanie i wybor produktow Algolia w natywnym UI kreatora,
-- poprawny zapis ID produktow do docelowego kontraktu meta,
-- poprawny odczyt zapisanych produktow przy edycji,
-- usuniecie problemu `post_id=0` po publikacji nowego wpisu,
-- usuniecie duplikowania postow przy sekwencji autosave (heartbeat) -> publish.
-
----
-
-## Zakres zmian (w kolejnosci rozwoju)
-
-### 1) Integracja danych produktowych w Step 6
-
-- Kreator zaczal korzystac z danych Algolia do listy i paska wybranych produktow.
-- Dodano mapowanie/hydratacje danych tak, aby po wejciu w edycje odtworzyc poprawnie wybrane produkty (z miniaturami i podstawowymi polami).
-- Dodano odporniejsze mapowanie rekordow z Algolia i fallbacki dla roznych wariantow kluczy.
-
-### 2) Utrwalenie kontraktu zapisu produktow
-
-- Zapis produktow zostal ustabilizowany do wspolnego kontraktu:
-	- meta key: `_g4t_a_recipe_bottom_product_ids`
-	- format: JSON array of strings, np. `["154","89"]`
-- Dodano obsluge legacy fallback dla starszych wariantow kluczy ID produktu.
-
-### 3) Realny root cause bledow persystencji i fix
-
-Pierwotna hipoteza o `max_input_vars` okazala sie nietrafiona.
-
-**Rzeczywista przyczyna:** ACF security field filtering.
-
-ACF usuwa z `$_POST['acf']` pola, ktore nie naleza do field groups zadeklarowanych w `acf_form()`. W efekcie pole produktow bylo odfiltrowywane zanim uruchamial sie hook zapisu.
-
-**Naprawa:** krytyczne dane dla zapisu produktow sa wysylane jako top-level POST field poza `acf[...]`:
-
-- `g4t_recipe_ads_product_ids_json`
-
-To omija filtracje ACF dla niedeklarowanych pol i zapewnia stabilny zapis.
-
-### 4) Stabilizacja zapisu nowego wpisu i publikacji
-
-- Poprawiono flow nowego posta tak, aby nie konczyc w stanie `post_id=0`.
-- Dodano logike ponownego wykorzystania draftu utworzonego przez heartbeat przy publikacji.
-- Efekt: brak duplikatow postow przy scenariuszu autosave -> publish.
+| Stage | Status | Description |
+|---|---|---|
+| Stage 1: Replace direct algoliasearch init | ✅ Done | `G4TAdsProvider.getInstance()` used; `algoliaIndex` variable removed |
+| Stage 2: Remove `normalizeProductRecord()` | ✅ Done | Kept as internal state normalizer; provider hits pass through it (handles both shapes) |
+| Stage 3: Replace `algoliaIndex.*` calls | ✅ Done | `provider.search()` and `provider.getById()` in `fetchAlgoliaProducts` and `hydrateSelectedProductsFromAlgolia` |
+| Stage 4: Update PHP credential passing | ✅ Done | `appId/apiKey/indexName` removed from `G4T_RECIPE_CREATOR_DATA.adsPicker`; provider owns credentials |
+| Stage 5: QA + regression | 🔲 Next | Full creator flow — search, select, save, edit, publish |
 
 ---
 
-## Najwazniejsze commity na branchu
+## Context
 
-- `e902bd1` feat(creator): use algolia data in native list and strip
-- `218d01a` fix(creator): hydrate selected products and show thumbnails
-- `9d0dd63` fix(creator): robust product hydration and image extraction
-- `60ab50c` fix(creator): persist product ids from posted acf payload
-- `13894c7` fix(creator): support product_id legacy fallback keys
-- `d81023a` fix(creator): disable dummy products when algolia is configured
-- `b291120` fix(creator): persist product ids via flat POST fields
-- `388ed1d` fix(creator): prevent duplicate posts on autosave + publish sequence
+The previous branch (`feature/picker-ui-extensibility`, merged) delivered:
+- Step 6 Algolia picker in the recipe creator — search, select, save, edit
+- Save path via `g4t_recipe_ads_product_ids_json` flat POST field (bypasses ACF field filtering)
+- Read path via `g4t_recipe_bottom_strip_get_products_for_post()` (from go4taste-ads)
+- Bug fixes: ACF field filtering, new recipe redirect to `post_id=0`, orphaned heartbeat draft
 
----
-
-## Walidacja (zakres funkcjonalny)
-
-### Potwierdzone
-
-- Step 6 laduje produkty Algolia.
-- Wyszukiwanie filtruje wyniki poprawnie.
-- Wybor produktow aktualizuje selected strip.
-- Zapis utrwala dane do `_g4t_a_recipe_bottom_product_ids`.
-- Edycja odtwarza zapisane produkty.
-- Tytul wpisu zapisuje sie poprawnie.
-- Publish nowego wpisu nie konczy sie na `post_id=0`.
-- Sekwencja autosave -> publish nie tworzy duplikatow.
-
-### Follow-up QA
-
-- Pelny retest mobile + desktop dla Step 6.
-- Krotki regression check calego flow kreatora po publikacji.
+That branch is complete and merge-ready. This PR is a follow-up refactor only — no user-visible behavior changes.
 
 ---
 
-## Ryzyka i uwagi
+## Problem
 
-- Branch zawiera kumulatywny zestaw fixow (UI + persistence + publish flow). Zalecany merge jako jedna calosc.
-- Save path produktow jest celowo niezalezny od `acf[...]` dla krytycznego pola IDs, aby uniknac ponownego efektu filtracji ACF.
+`creator.js` currently initializes its own Algolia client independently:
+
+```javascript
+// creator.js — direct SDK usage
+const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
+algoliaIndex = searchClient.initIndex(pickerConfig.indexName || 'go4taste_product_list');
+const response = await algoliaIndex.search(query, { hitsPerPage: 12 });
+```
+
+And has its own hit normalization:
+
+```javascript
+function normalizeProductRecord(raw) {
+  return {
+    id:      String(raw.id || raw.objectID || ''),
+    name:    raw.name || raw.title || '',
+    picture: raw.picture || raw.image || '',
+    // ...
+  };
+}
+```
+
+After go4taste-ads ships `G4TAdsProvider`, this is duplication. Both the admin picker and the creator would maintain separate clients, separate normalization, and risk diverging product shapes.
+
+---
+
+## Motivation
+
+- One Algolia client instance per page — no duplicate init.
+- One canonical product shape — `NormalizedProduct` from the provider, used by all surfaces.
+- Creator data layer shrinks to a thin consumer; all data logic lives in the ads provider.
+- Future changes to normalization or API version propagate to all surfaces automatically.
+
+---
+
+## Desired outcome
+
+After this implementation:
+1. Creator no longer initializes its own `algoliasearch` client.
+2. `normalizeProductRecord()` is deleted from `creator.js`.
+3. `algoliaIndex` variable is removed; search and fetch go through `G4TAdsProvider`.
+4. PHP passes only what the provider needs (or nothing if provider init is handled by ads plugin exclusively).
+5. No visible behavior change for the user — same search results, same save/edit flow.
+
+---
+
+## Architecture
+
+### Stage 1 + 3: Replace SDK calls
+
+```javascript
+// Before
+const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
+algoliaIndex = searchClient.initIndex(pickerConfig.indexName);
+const response = await algoliaIndex.search(query, { hitsPerPage: 12 });
+const products = response.hits.map(normalizeProductRecord);
+
+// After
+const provider = window.G4TAdsProvider && window.G4TAdsProvider.getInstance();
+if (!provider) return [];
+const products = await provider.search(query, { hitsPerPage: 12 });
+```
+
+```javascript
+// Before — hydrate selected from Algolia
+const requests = ids.map(id => algoliaIndex.getObject(id));
+
+// After
+const products = await provider.getByIds(ids);
+```
+
+### Stage 2: Remove `normalizeProductRecord()`
+
+The function is deleted. Provider returns `NormalizedProduct` directly. Any call site that mapped hits through `normalizeProductRecord()` maps through provider instead.
+
+### Stage 4: PHP credential passing
+
+**go4taste-ads inicjalizuje provider wszędzie** — to jest właściwe rozwiązanie. Ads plugin jest właścicielem credentials i providera; enqueue `algolia-provider.js` z `wp_localize_script` nie tylko na stronach admina ale też na frontendzie gdy plugin jest aktywny. Provider inicjalizuje się sam na `DOMContentLoaded`.
+
+`creator.js` wywołuje wyłącznie `G4TAdsProvider.getInstance()` — nigdy `init()`. Nie zna credentials.
+
+Konsekwencja po stronie ads plugin (mała zmiana w zakresie tego PR): `g4t-ads-provider` script enqueued warunkowo na frontend gdy strona zawiera kreator (np. `is_page_template('recipe-creator')`) lub bezwarunkowo gdy plugin aktywny — do decyzji przy implementacji.
+
+Wynikowa zmiana w recipes plugin: `G4T_RECIPE_CREATOR_DATA.adsPicker.appId/apiKey/indexName` można usunąć z PHP. `adsPicker.enabled` i `adsPicker.hitsPerPage` zostają jeśli kreator nadal potrzebuje własnej konfiguracji UI (np. liczby wyników).
+
+---
+
+## Validation checklist
+
+### Must pass (no regressions)
+
+1. ✅ Step 6 loads Algolia products — same results as before.
+2. ✅ Search input filters results in real time.
+3. ✅ Selecting products updates `selected-strip` correctly.
+4. ✅ Save persists product IDs to `_g4t_a_recipe_bottom_product_ids`.
+5. ✅ Edit mode loads saved IDs back into `selected-strip`.
+6. ✅ New recipe publishes with correct redirect (post_id not 0).
+7. ✅ Heartbeat draft reused on publish.
+8. ✅ Title changes save correctly.
+
+### New (provider integration)
+
+9. Single Algolia client init per page — confirm in DevTools Network tab (one Algolia request per search, not two).
+10. `normalizeProductRecord` not present in creator.js source.
+11. `algoliaIndex` variable not present in creator.js source.
+
+---
+
+## Risks and mitigations
+
+- Risk: `G4TAdsProvider` not available when creator page loads (ads plugin inactive or provider not yet enqueued on frontend).
+  Mitigation: guard with `window.G4TAdsProvider && G4TAdsProvider.getInstance()` — falls back to local catalog gracefully, same as current `algoliaIndex = null` path.
+
+- Risk: `NormalizedProduct` shape from provider differs from `normalizeProductRecord()` output.
+  Mitigation: compare field names before removing local function; provider shape is source of truth.
+
+- Risk: this PR merges before ads Stage 1 is on main.
+  Mitigation: hard dependency — merge order enforced: ads Stage 1 first, this PR second.
 
 ---
 
 ## Merge readiness
 
-- Status: gotowe do merge.
-- Wymaganie: standardowy smoke test po merge na srodowisku docelowym.
+- Blocked on: go4taste-ads `feature/picker-ui-extensibility` Stage 1 (`G4TAdsProvider`) merged to main.
+- Planning scope until then. Implementation starts after ads Stage 1 is available.

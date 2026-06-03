@@ -138,7 +138,6 @@
   const isHeartbeatEnabled = !!creatorData.heartbeatEnabled;
   let autosavePostId = Number(creatorData.editPostId || 0) || 0;
   let productSourceMode = 'local';
-  let algoliaIndex = null;
   let productSearchTimer = null;
   let productRequestSeq = 0;
   let visibleProducts = [];
@@ -159,8 +158,8 @@
     return !!(
       adsPickerConfig
       && adsPickerConfig.enabled
-      && adsPickerConfig.appId
-      && adsPickerConfig.apiKey
+      && window.G4TAdsProvider
+      && window.G4TAdsProvider.getInstance()
     );
   }
 
@@ -1383,7 +1382,8 @@
   }
 
   async function hydrateSelectedProductsFromAlgolia() {
-    if (!algoliaIndex || !Array.isArray(state.data.products) || state.data.products.length === 0) {
+    const provider = window.G4TAdsProvider && window.G4TAdsProvider.getInstance();
+    if (!provider || !Array.isArray(state.data.products) || state.data.products.length === 0) {
       return;
     }
 
@@ -1395,8 +1395,7 @@
       return;
     }
 
-    const requests = ids.map((id) => algoliaIndex.getObject(id));
-    const settled = await Promise.allSettled(requests);
+    const settled = await Promise.allSettled(ids.map((id) => provider.getById(id)));
     const byId = new Map();
 
     settled.forEach((item) => {
@@ -1444,8 +1443,8 @@
     const shouldSkipStaticCatalog = !!(
       adsPickerConfig
       && adsPickerConfig.enabled
-      && adsPickerConfig.appId
-      && adsPickerConfig.apiKey
+      && window.G4TAdsProvider
+      && window.G4TAdsProvider.getInstance()
     );
 
     if (shouldSkipStaticCatalog) {
@@ -1462,21 +1461,16 @@
   }
 
   async function fetchAlgoliaProducts(query, pickerConfig) {
-    if (!algoliaIndex || !pickerConfig) {
+    const provider = window.G4TAdsProvider && window.G4TAdsProvider.getInstance();
+    if (!provider || !pickerConfig) {
       return [];
     }
 
-    const response = await algoliaIndex.search(String(query || ''), {
+    const products = await provider.search(String(query || ''), {
       hitsPerPage: Number(pickerConfig.hitsPerPage || 12),
     });
 
-    if (!response || !Array.isArray(response.hits)) {
-      return [];
-    }
-
-    return response.hits
-      .map((hit) => normalizeProductRecord(hit))
-      .filter(Boolean);
+    return products.map((p) => normalizeProductRecord(p)).filter(Boolean);
   }
 
   function renderProductLoadingState() {
@@ -1508,16 +1502,9 @@
         if (requestId !== productRequestSeq) {
           return;
         }
-        const hasAlgoliaConfig = !!(
-          pickerConfig
-          && pickerConfig.enabled
-          && pickerConfig.appId
-          && pickerConfig.apiKey
-        );
-
         productSourceMode = 'local';
         visibleProducts = getLocalProductsCatalog();
-        if (hasAlgoliaConfig) {
+        if ( pickerConfig && pickerConfig.enabled ) {
           showError('Nie udało się pobrać produktów z Algolii. Sprawdź konfigurację lub połączenie.');
         } else {
           showError('Nie udało się pobrać produktów z Algolii. Pokazujemy listę lokalną.');
@@ -1551,27 +1538,21 @@
 
   function setupProductSearch() {
     const pickerConfig = getAdsPickerRuntimeContract();
-    const hasAlgoliaConfig = !!(
-      pickerConfig.enabled
-      && pickerConfig.appId
-      && pickerConfig.apiKey
-    );
+    const hasAlgoliaConfig = !!pickerConfig.enabled;
     const runtimeEnabled = !!(
       hasAlgoliaConfig
-      && window.algoliasearch
+      && window.G4TAdsProvider
+      && window.G4TAdsProvider.getInstance()
     );
     updateAdsPickerStatusUI(pickerConfig, runtimeEnabled);
 
-    productSourceMode = runtimeEnabled || hasAlgoliaConfig ? 'algolia' : 'local';
+    productSourceMode = hasAlgoliaConfig ? 'algolia' : 'local';
 
     if (runtimeEnabled) {
-      const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
-      algoliaIndex = searchClient.initIndex(pickerConfig.indexName || 'go4taste_product_list');
       hydrateSelectedProductsFromAlgolia().catch(() => {
         // If selected IDs cannot be hydrated from Algolia, keep current fallback labels.
       });
     } else {
-      algoliaIndex = null;
       hydrateSelectedProductsFromLocalCatalog();
     }
 
@@ -1604,15 +1585,14 @@
       }, Number(pickerConfig.searchDebounceMs || 260));
     });
 
-    const bootstrapAlgoliaWithRetry = (retriesLeft) => {
+    const bootstrapProviderWithRetry = (retriesLeft) => {
       if (!hasAlgoliaConfig) {
         refreshProductResults('', pickerConfig);
         return;
       }
 
-      if (window.algoliasearch) {
-        const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
-        algoliaIndex = searchClient.initIndex(pickerConfig.indexName || 'go4taste_product_list');
+      const provider = window.G4TAdsProvider && window.G4TAdsProvider.getInstance();
+      if (provider) {
         productSourceMode = 'algolia';
         updateAdsPickerStatusUI(pickerConfig, true);
         hydrateSelectedProductsFromAlgolia().catch(() => {
@@ -1629,10 +1609,10 @@
         return;
       }
 
-      setTimeout(() => bootstrapAlgoliaWithRetry(retriesLeft - 1), 200);
+      setTimeout(() => bootstrapProviderWithRetry(retriesLeft - 1), 200);
     };
 
-    bootstrapAlgoliaWithRetry(15);
+    bootstrapProviderWithRetry(15);
   }
 
   function renderProducts() {
