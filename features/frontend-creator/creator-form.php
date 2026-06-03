@@ -1323,15 +1323,5 @@ function g4t_recipe_creator_format_minutes( int $total_minutes ): string {
         return '';
     }
 
-    $hours = (int) floor( $total_minutes / 60 );
-    $mins  = $total_minutes % 60;
-
-    if ( $hours > 0 && $mins > 0 ) {
-        return $hours . ' h ' . $mins . ' min';
-    }
-    if ( $hours > 0 ) {
-        return $hours . ' h';
-    }
-
-    return $mins . ' min';
+    return (string) $total_minutes;
 }
