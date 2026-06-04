@@ -1,154 +1,258 @@
-# PR: Creator Algolia Integration — Use Shared Ads Data Provider
+# PR: Data Migration — ACF Repeater → `_g4t_a_recipe_bottom_product_ids`
 
-**Branch:** feature/use-ads-data-provider -> main
+**Branch:** feature/migrate-ads-products-contract -> main
 
-**Depends on:** go4taste-ads `feature/use-ads-data-provider` merged to main
+**Depends on:** go4taste-ads `feature/use-ads-data-provider` merged to main (provider must be on main before migration runs)
 
 ## Implementation status
 
 | Stage | Status | Description |
 |---|---|---|
-| Stage 1: Replace direct algoliasearch init | ✅ Done | `G4TAdsProvider.getInstance()` used; `algoliaIndex` variable removed |
-| Stage 2: Remove `normalizeProductRecord()` | ✅ Done | Kept as internal state normalizer; provider hits pass through it (handles both shapes) |
-| Stage 3: Replace `algoliaIndex.*` calls | ✅ Done | `provider.search()` and `provider.getById()` in `fetchAlgoliaProducts` and `hydrateSelectedProductsFromAlgolia` |
-| Stage 4: Update PHP credential passing | ✅ Done | `appId/apiKey/indexName` removed from `G4T_RECIPE_CREATOR_DATA.adsPicker`; provider owns credentials |
-| Stage 5: QA + regression | ✅ Done | Full creator flow — search, select, save, edit, publish — all passed |
+| Stage 1: Dry run | ✅ Done | `migrate-ads-products-dryrun.php` run — list verified |
+| Stage 2: Migration | ✅ Done | `migrate-ads-products.php` run — 140 recipes migrated |
+| Stage 3: Verify | ✅ Done | Query 1 confirmed `tylko_acf_repeater` = 0 |
+| Stage 4: Cleanup | ✅ Done | Fallback path removed from `view-model-builder.php` |
 
 ---
 
 ## Context
 
-The previous branch (`feature/picker-ui-extensibility`, merged) delivered:
-- Step 6 Algolia picker in the recipe creator — search, select, save, edit
-- Save path via `g4t_recipe_ads_product_ids_json` flat POST field (bypasses ACF field filtering)
-- Read path via `g4t_recipe_bottom_strip_get_products_for_post()` (from go4taste-ads)
-- Bug fixes: ACF field filtering, new recipe redirect to `post_id=0`, orphaned heartbeat draft
+Two previous PRs ship the new product storage contract:
 
-That branch is complete and merge-ready. This PR is a follow-up refactor only — no user-visible behavior changes.
+- `feature/banner-extensibility` (go4taste-ads) — PHP foundation: placement registry, payload resolver, `g4t_recipe_bottom_strip_get_products_for_post()`
+- `feature/use-ads-data-provider` (both plugins) — JS shared provider; save path via `_g4t_a_recipe_bottom_product_ids`
+
+140 production recipes still have products stored only in the old ACF repeater format (`recipe_ads_products_N_product_id`). The new key (`_g4t_a_recipe_bottom_product_ids`) is empty for them. The frontend works via a fallback in `view-model-builder.php`, but the fallback is a liability.
 
 ---
 
 ## Problem
 
-`creator.js` currently initializes its own Algolia client independently:
+- `go4taste-ads` reads only `_g4t_a_recipe_bottom_product_ids` through its own rendering path — no fallback
+- The fallback in `view-model-builder.php` can be removed in future architecture changes
+- The ACF metabox in wp-admin is the only UI that still writes to the old format
 
-```javascript
-// creator.js — direct SDK usage
-const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
-algoliaIndex = searchClient.initIndex(pickerConfig.indexName || 'go4taste_product_list');
-const response = await algoliaIndex.search(query, { hitsPerPage: 12 });
+---
+
+## Database state before migration
+
+### Query 1 — overview: how many recipes use which path
+
+```sql
+SELECT
+  COUNT(DISTINCT p.ID)                                                         AS total_recipes,
+  COUNT(DISTINCT CASE WHEN pm_new.meta_value != '' THEN p.ID END)              AS nowy_kontrakt,
+  COUNT(DISTINCT CASE WHEN CAST(pm_old.meta_value AS UNSIGNED) > 0
+                        AND (pm_new.meta_value IS NULL OR pm_new.meta_value = '')
+                       THEN p.ID END)                                          AS tylko_acf_repeater,
+  COUNT(DISTINCT CASE WHEN pm_new.meta_value IS NULL OR pm_new.meta_value = ''
+                        AND (pm_old.meta_value IS NULL OR pm_old.meta_value = '0' OR pm_old.meta_value = '')
+                       THEN p.ID END)                                          AS brak_produktow
+FROM wp_posts p
+LEFT JOIN wp_postmeta pm_new ON p.ID = pm_new.post_id
+  AND pm_new.meta_key = '_g4t_a_recipe_bottom_product_ids'
+LEFT JOIN wp_postmeta pm_old ON p.ID = pm_old.post_id
+  AND pm_old.meta_key = 'recipe_ads_products'
+WHERE p.post_type = 'post'
+  AND p.post_status = 'publish';
 ```
 
-And has its own hit normalization:
+Expected result before migration:
 
-```javascript
-function normalizeProductRecord(raw) {
-  return {
-    id:      String(raw.id || raw.objectID || ''),
-    name:    raw.name || raw.title || '',
-    picture: raw.picture || raw.image || '',
-    // ...
-  };
+```
++---------------+---------------+--------------------+----------------+
+| total_recipes | nowy_kontrakt | tylko_acf_repeater | brak_produktow |
++---------------+---------------+--------------------+----------------+
+|           144 |             1 |                140 |            143 |
++---------------+---------------+--------------------+----------------+
+```
+
+- **1** recipe has the new contract — post 2299 (test)
+- **140** have only the old ACF repeater — production recipes
+- These work via fallback but depend on it staying in place
+
+### Query 2 — list of recipes to migrate
+
+```sql
+SELECT
+  p.ID,
+  p.post_title,
+  pm_old.meta_value        AS acf_liczba_produktow,
+  pm_new.meta_value        AS nowy_kontrakt
+FROM wp_posts p
+INNER JOIN wp_postmeta pm_old ON p.ID = pm_old.post_id
+  AND pm_old.meta_key = 'recipe_ads_products'
+  AND CAST(pm_old.meta_value AS UNSIGNED) > 0
+LEFT JOIN wp_postmeta pm_new ON p.ID = pm_new.post_id
+  AND pm_new.meta_key = '_g4t_a_recipe_bottom_product_ids'
+WHERE p.post_type = 'post'
+  AND p.post_status = 'publish'
+  AND (pm_new.meta_value IS NULL OR pm_new.meta_value = '')
+ORDER BY p.ID;
+```
+
+### Query 3 — verify a single recipe
+
+```sql
+SELECT meta_key, meta_value
+FROM wp_postmeta
+WHERE post_id = 1635
+AND meta_key IN (
+  '_g4t_a_recipe_bottom_product_ids',
+  'recipe_ads_products',
+  'recipe_ads_products_0_product_id',
+  'recipe_ads_products_1_product_id',
+  'recipe_ads_products_2_product_id'
+)
+ORDER BY meta_key;
+```
+
+---
+
+## Migration scripts
+
+### Dry run (read-only preview)
+
+File: `migrate-ads-products-dryrun.php`
+Run: `wp eval-file migrate-ads-products-dryrun.php`
+
+```php
+<?php
+global $wpdb;
+
+$posts = $wpdb->get_results(
+    "SELECT p.ID, p.post_title, pm.meta_value AS count
+     FROM wp_posts p
+     INNER JOIN wp_postmeta pm ON p.ID = pm.post_id
+         AND pm.meta_key = 'recipe_ads_products'
+         AND CAST(pm.meta_value AS UNSIGNED) > 0
+     LEFT JOIN wp_postmeta pm_new ON p.ID = pm_new.post_id
+         AND pm_new.meta_key = '_g4t_a_recipe_bottom_product_ids'
+     WHERE p.post_type = 'post'
+         AND p.post_status = 'publish'
+         AND (pm_new.meta_value IS NULL OR pm_new.meta_value = '')
+     ORDER BY p.ID"
+);
+
+echo "DRY RUN — brak zapisu do bazy\n\n";
+
+foreach ( $posts as $post ) {
+    $ids = [];
+
+    for ( $i = 0; $i < (int) $post->count; $i++ ) {
+        $id = get_post_meta( $post->ID, "recipe_ads_products_{$i}_product_id", true );
+        if ( $id !== '' && $id !== false ) {
+            $ids[] = (string) $id;
+        }
+    }
+
+    $label = empty( $ids ) ? 'BRAK ID' : implode( ', ', $ids );
+    echo "post {$post->ID} ({$post->post_title}): {$label}\n";
 }
+
+echo "\nLiczba przepisów do migracji: " . count( $posts ) . "\n";
 ```
 
-After go4taste-ads ships `G4TAdsProvider`, this is duplication. Both the admin picker and the creator would maintain separate clients, separate normalization, and risk diverging product shapes.
+### Migration script (writes to DB)
 
----
+File: `migrate-ads-products.php`
+Run: `wp eval-file migrate-ads-products.php`
 
-## Motivation
+```php
+<?php
+global $wpdb;
 
-- One Algolia client instance per page — no duplicate init.
-- One canonical product shape — `NormalizedProduct` from the provider, used by all surfaces.
-- Creator data layer shrinks to a thin consumer; all data logic lives in the ads provider.
-- Future changes to normalization or API version propagate to all surfaces automatically.
+$posts = $wpdb->get_results(
+    "SELECT p.ID, pm.meta_value AS count
+     FROM wp_posts p
+     INNER JOIN wp_postmeta pm ON p.ID = pm.post_id
+         AND pm.meta_key = 'recipe_ads_products'
+         AND CAST(pm.meta_value AS UNSIGNED) > 0
+     LEFT JOIN wp_postmeta pm_new ON p.ID = pm_new.post_id
+         AND pm_new.meta_key = '_g4t_a_recipe_bottom_product_ids'
+     WHERE p.post_type = 'post'
+         AND p.post_status = 'publish'
+         AND (pm_new.meta_value IS NULL OR pm_new.meta_value = '')"
+);
 
----
+$migrated = 0;
+$skipped  = 0;
 
-## Desired outcome
+foreach ( $posts as $post ) {
+    $ids = [];
 
-After this implementation:
-1. Creator no longer initializes its own `algoliasearch` client.
-2. `normalizeProductRecord()` is kept as an internal state normalizer only — it handles both the provider shape (`name`, `picture`, `category`) and the legacy shape. It is no longer responsible for normalizing Algolia hits; that lives in the provider.
-3. `algoliaIndex` variable is removed; search and fetch go through `G4TAdsProvider`.
-4. PHP no longer passes `appId/apiKey/indexName` to the creator; provider owns credentials.
-5. No visible behavior change for the user — same search results, same save/edit flow.
+    for ( $i = 0; $i < (int) $post->count; $i++ ) {
+        $id = get_post_meta( $post->ID, "recipe_ads_products_{$i}_product_id", true );
+        if ( $id !== '' && $id !== false ) {
+            $ids[] = (string) $id;
+        }
+    }
 
----
+    if ( empty( $ids ) ) {
+        echo "SKIP post {$post->ID} — brak product_id w repeaterze\n";
+        $skipped++;
+        continue;
+    }
 
-## Architecture
+    update_post_meta( $post->ID, '_g4t_a_recipe_bottom_product_ids', wp_json_encode( $ids ) );
+    $migrated++;
+    echo "OK post {$post->ID}: " . implode( ', ', $ids ) . "\n";
+}
 
-### Stage 1 + 3: Replace SDK calls
-
-```javascript
-// Before
-const searchClient = window.algoliasearch(pickerConfig.appId, pickerConfig.apiKey);
-algoliaIndex = searchClient.initIndex(pickerConfig.indexName);
-const response = await algoliaIndex.search(query, { hitsPerPage: 12 });
-const products = response.hits.map(normalizeProductRecord);
-
-// After
-const provider = window.G4TAdsProvider && window.G4TAdsProvider.getInstance();
-if (!provider) return [];
-const products = await provider.search(query, { hitsPerPage: 12 });
+echo "\nGotowe. Zmigrowano: {$migrated}, pominięto: {$skipped}\n";
 ```
 
-```javascript
-// Before — hydrate selected from Algolia
-const requests = ids.map(id => algoliaIndex.getObject(id));
+---
 
-// After
-const products = await provider.getByIds(ids);
+## Expected database state after migration
+
+Query 1 should return:
+
+```
++---------------+---------------+--------------------+----------------+
+| total_recipes | nowy_kontrakt | tylko_acf_repeater | brak_produktow |
++---------------+---------------+--------------------+----------------+
+|           144 |           141 |                  0 |              3 |
++---------------+---------------+--------------------+----------------+
 ```
 
-### Stage 2: Retain `normalizeProductRecord()` as internal normalizer
+Query 2 should return 0 rows.
 
-The function is kept — it handles both the provider's `NormalizedProduct` shape and the legacy ACF state shape (field name fallbacks already cover both). Algolia hits returned by the provider pass through it before entering creator state. This avoids a separate adapter and keeps the internal creator state shape stable.
-
-### Stage 4: PHP credential passing
-
-The ads plugin owns the provider and its credentials. `g4t-ads-provider` is enqueued on both admin and frontend hooks; provider auto-initializes synchronously when its script executes.
-
-`creator.js` calls only `G4TAdsProvider.getInstance()` — never `init()`, never reads credentials.
-
-Resulting change in recipes plugin PHP: `G4T_RECIPE_CREATOR_DATA.adsPicker.appId/apiKey/indexName` removed. `adsPicker.enabled` and `adsPicker.hitsPerPage` remain for creator-specific UI config.
+(3 recipes without products = ACF repeater had `count > 0` but empty `_product_id` rows — skipped by the script.)
 
 ---
 
-## Validation checklist
+## Notes
 
-### Must pass (no regressions)
-
-1. ✅ Step 6 loads Algolia products — same results as before.
-2. ✅ Search input filters results in real time.
-3. ✅ Selecting products updates `selected-strip` correctly.
-4. ✅ Save persists product IDs to `_g4t_a_recipe_bottom_product_ids`.
-5. ✅ Edit mode loads saved IDs back into `selected-strip`.
-6. ✅ New recipe publishes with correct redirect (post_id not 0).
-7. ✅ Heartbeat draft reused on publish.
-8. ✅ Title changes save correctly.
-
-### New (provider integration)
-
-9. ✅ Single Algolia client init per page — `algoliasearch@4` CDN loaded once; one Algolia request per search in DevTools Network tab.
-10. ✅ `normalizeProductRecord` retained as internal state normalizer only — no longer normalizes Algolia hits directly; provider shape flows through it.
-11. ✅ `algoliaIndex` variable not present in creator.js source.
+- Scripts are **idempotent** — recipes that already have `_g4t_a_recipe_bottom_product_ids` are skipped by the SQL WHERE clause.
+- Old ACF repeater keys (`recipe_ads_products_N_product_id`) are **not deleted** — they remain as a backup.
+- Demo IDs (`p1`–`p10`) will pass through the script but are rejected by `g4t_normalize_recipe_bottom_strip_product_ids()` at read time when Algolia is configured — expected behavior.
 
 ---
 
-## Risks and mitigations
+## Stage 4: Remove fallback from view-model-builder.php
 
-- Risk: `G4TAdsProvider` not available when creator page loads (ads plugin inactive or provider not yet enqueued on frontend).
-  Mitigation: guard with `window.G4TAdsProvider && G4TAdsProvider.getInstance()` — falls back to local catalog gracefully, same as current `algoliaIndex = null` path.
+After migration is confirmed (Query 1 shows `tylko_acf_repeater = 0`), remove the legacy fallback from `features/recipe-display/view-model-builder.php`:
 
-- Risk: `NormalizedProduct` shape from provider differs from `normalizeProductRecord()` output.
-  Mitigation: compare field names before removing local function; provider shape is source of truth.
+```php
+// Remove this entire block — replace with single call:
+if ( function_exists( 'g4t_recipe_bottom_strip_get_products_for_post' ) ) {
+    $ads_products = g4t_recipe_bottom_strip_get_products_for_post( $post_id );
+    if ( empty( $ads_products ) && ! empty( $ads_product_ids ) ) {
+        $ads_products = g4t_fetch_ads_products( $ads_product_ids, $post_id );  // ← remove fallback
+    }
+} else {
+    $ads_products = g4t_fetch_ads_products( $ads_product_ids, $post_id );      // ← remove else branch
+}
 
-- Risk: this PR merges before ads Stage 1 is on main.
-  Mitigation: hard dependency — merge order enforced: ads Stage 1 first, this PR second.
+// Keep only:
+$ads_products = g4t_recipe_bottom_strip_get_products_for_post( $post_id );
+```
 
 ---
 
 ## Merge readiness
 
-All stages implemented and QA-passed. Merge after go4taste-ads `feature/use-ads-data-provider` lands on main — that PR is the only hard dependency (provider must exist before creator can call `getInstance()`).
+- Blocked on: go4taste-ads `feature/use-ads-data-provider` merged to main.
+- Scripts are ready — run dry run first, verify output, then run migration.
+- Stage 4 (fallback removal) can be a follow-up commit on the same branch or a separate tiny PR.
