@@ -713,10 +713,23 @@
     });
     updateTotalTime();
   }
+  function getAutoTermIdForTotalMinutes(totalMinutes) {
+    const slug = totalMinutes <= 15 ? 'do-15-min'
+               : totalMinutes <= 30 ? 'do-30-min'
+               : totalMinutes <= 45 ? 'do-45-min'
+               : 'powyzej-45-min';
+    const match = (window.PREP_TIME_TAXONOMY || []).find(t => t.id === slug);
+    return match ? match.termId : null;
+  }
   function updateTotalTime() {
     const t = state.data.timePrep + state.data.timeCook + state.data.timeSoak;
     document.getElementById('total-h').value = Math.floor(t / 60);
     document.getElementById('total-m').value = t % 60;
+    const termId = t > 0 ? getAutoTermIdForTotalMinutes(t) : null;
+    if (termId !== null && state.data.prepTimeTermIds[0] !== termId) {
+      state.data.prepTimeTermIds = [termId];
+      renderTaxonomySelectors();
+    }
   }
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
