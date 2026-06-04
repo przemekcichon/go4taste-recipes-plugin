@@ -48,12 +48,14 @@ function g4t_register_settings( Go4Taste_Recipes_Plugin $plugin ): void {
                 return g4t_sanitize_options( $input, $plugin );
             },
             'default'           => array(
-                'source_mode'        => Go4Taste_Recipes_Plugin::MODE_POST,
-                'existing_post_type' => 'post',
-                'creator_min_role'   => 'editor',
-                'creator_brand_mark' => 0,
-                'creator_brand_name' => '',
+                'source_mode'             => Go4Taste_Recipes_Plugin::MODE_POST,
+                'existing_post_type'      => 'post',
+                'creator_min_role'        => 'editor',
+                'creator_brand_mark'      => 0,
+                'creator_brand_name'      => '',
                 'creator_heartbeat_roles' => array(),
+                'unregister_category'     => false,
+                'unregister_post_tag'     => false,
             ),
         )
     );
@@ -112,6 +114,29 @@ function g4t_register_settings( Go4Taste_Recipes_Plugin $plugin ): void {
         'go4taste-recipes-settings',
         'go4taste_recipes_section'
     );
+
+    add_settings_section(
+        'go4taste_recipes_section_post_type',
+        __( 'Post Type Configuration', 'go4taste-recipes-plugin' ),
+        'g4t_render_settings_section_post_type',
+        'go4taste-recipes-settings'
+    );
+
+    add_settings_field(
+        'go4taste_recipes_unregister_category',
+        __( 'Odepnij Kategorie od wpisów', 'go4taste-recipes-plugin' ),
+        'g4t_settings_field_unregister_category',
+        'go4taste-recipes-settings',
+        'go4taste_recipes_section_post_type'
+    );
+
+    add_settings_field(
+        'go4taste_recipes_unregister_post_tag',
+        __( 'Odepnij Tagi od wpisów', 'go4taste-recipes-plugin' ),
+        'g4t_settings_field_unregister_post_tag',
+        'go4taste-recipes-settings',
+        'go4taste_recipes_section_post_type'
+    );
 }
 
 /**
@@ -157,6 +182,20 @@ function g4t_settings_field_creator_heartbeat_roles(): void {
     global $g4t_recipes_plugin;
     if ( $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ) {
         g4t_render_creator_heartbeat_roles_field( $g4t_recipes_plugin );
+    }
+}
+
+function g4t_settings_field_unregister_category(): void {
+    global $g4t_recipes_plugin;
+    if ( $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ) {
+        g4t_render_unregister_taxonomy_field( $g4t_recipes_plugin, 'unregister_category' );
+    }
+}
+
+function g4t_settings_field_unregister_post_tag(): void {
+    global $g4t_recipes_plugin;
+    if ( $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ) {
+        g4t_render_unregister_taxonomy_field( $g4t_recipes_plugin, 'unregister_post_tag' );
     }
 }
 
@@ -253,15 +292,21 @@ function g4t_sanitize_options( $input, Go4Taste_Recipes_Plugin $plugin ): array 
         $creator_heartbeat_roles = array_values( array_unique( $creator_heartbeat_roles ) );
     }
 
+    // Checkboxes are absent from $_POST when unchecked — treat absence as false.
+    $unregister_category = ! empty( $input['unregister_category'] );
+    $unregister_post_tag = ! empty( $input['unregister_post_tag'] );
+
     g4t_clear_recipe_options_cache();
 
     return array(
-        'source_mode'        => $mode,
-        'existing_post_type' => $existing_post_type,
-        'creator_min_role'   => $creator_min_role,
-        'creator_brand_mark' => $creator_brand_mark,
-        'creator_brand_name' => $creator_brand_name,
+        'source_mode'             => $mode,
+        'existing_post_type'      => $existing_post_type,
+        'creator_min_role'        => $creator_min_role,
+        'creator_brand_mark'      => $creator_brand_mark,
+        'creator_brand_name'      => $creator_brand_name,
         'creator_heartbeat_roles' => $creator_heartbeat_roles,
+        'unregister_category'     => $unregister_category,
+        'unregister_post_tag'     => $unregister_post_tag,
     );
 }
 
@@ -434,6 +479,45 @@ function g4t_render_creator_heartbeat_roles_field( Go4Taste_Recipes_Plugin $plug
     echo '<p class="description">';
     esc_html_e( 'Dla zaznaczonych ról kreator uruchomi heartbeat i będzie okresowo zapisywał wersję roboczą (draft).', 'go4taste-recipes-plugin' );
     echo '</p>';
+}
+
+/**
+ * Render the Post Type Configuration section description.
+ */
+function g4t_render_settings_section_post_type(): void {
+    echo '<p>' . esc_html__( 'Kontrola wbudowanych taksonomii WordPressa. Dotyczy tylko trybu "Standardowe post".', 'go4taste-recipes-plugin' ) . '</p>';
+}
+
+/**
+ * Render a single taxonomy unregister checkbox field.
+ *
+ * @param Go4Taste_Recipes_Plugin $plugin Plugin instance.
+ * @param string                  $key    Option key: 'unregister_category' or 'unregister_post_tag'.
+ */
+function g4t_render_unregister_taxonomy_field( Go4Taste_Recipes_Plugin $plugin, string $key ): void {
+    $options  = g4t_get_recipe_options();
+    $checked  = ! empty( $options[ $key ] );
+    $input_id = 'g4t_' . $key;
+
+    $descriptions = array(
+        'unregister_category' => __( 'WordPress nie będzie wymuszał przypisania "Uncategorized" do wpisów bez kategorii. Metabox Kategorie znika z edytora.', 'go4taste-recipes-plugin' ),
+        'unregister_post_tag' => __( 'Metabox Tagi znika z edytora wpisów.', 'go4taste-recipes-plugin' ),
+    );
+    $desc = $descriptions[ $key ] ?? '';
+    ?>
+    <label for="<?php echo esc_attr( $input_id ); ?>">
+        <input
+            type="checkbox"
+            id="<?php echo esc_attr( $input_id ); ?>"
+            name="<?php echo esc_attr( Go4Taste_Recipes_Plugin::OPTION_KEY ); ?>[<?php echo esc_attr( $key ); ?>]"
+            value="1"
+            <?php checked( $checked ); ?>
+        />
+        <?php esc_html_e( 'Tak, odepnij', 'go4taste-recipes-plugin' ); ?>
+    </label>
+    <?php if ( $desc ) : ?>
+        <p class="description"><?php echo esc_html( $desc ); ?></p>
+    <?php endif;
 }
 
 /**
