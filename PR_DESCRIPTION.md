@@ -15,6 +15,8 @@
 | Taxonomy 1: Settings | ✅ Done | Two checkboxes added to admin settings page |
 | Taxonomy 2: Logic | ✅ Done | Runtime unregister on `init` priority 11 |
 | Taxonomy 3: Data cleanup | ✅ Done | Existing Uncategorized removed from 6 posts via WP-CLI |
+| Prep-time 1: Backfill script | ✅ Done | `bin/backfill-prep-time-terms.php` run — existing recipes backfilled |
+| Prep-time 2: Auto-select in creator | ✅ Done | `creator.js` auto-selects term on time field change |
 
 ---
 
@@ -75,6 +77,71 @@ The unregister applies to whatever post type is resolved by `g4t_get_source_stra
 - `features/admin-settings/settings-page.php` — new section, two `add_settings_field` calls, named callbacks, `g4t_render_unregister_taxonomy_field()`, sanitize support, updated defaults
 - `features/admin-settings/settings-logic.php` — `g4t_maybe_unregister_recipe_taxonomies()` function
 - `features/admin-settings/index.php` — `add_action('init', 'g4t_maybe_unregister_recipe_taxonomies', 11)`
+
+---
+
+## Part 3: Backfill prep-time taxonomy from `recipe_time_total`
+
+### Problem
+
+Recipes created before the `recipe_prep_time_range` taxonomy was introduced have no term assigned. The FacetWP "Czas przygotowania" filter shows no results for them. The fix is a one-time WP-CLI script that reads `recipe_time_total` and assigns the matching term.
+
+### Known before implementation
+
+| Fact | Source |
+|---|---|
+| Field: `recipe_time_total` stores integer minutes as a plain string (`"35"`) | `creator-form.php:1321` — `g4t_recipe_creator_format_minutes()` returns `(string) $total_minutes` |
+| Taxonomy slug: `recipe_prep_time_range` (`G4T_PREP_TIME_TAXONOMY`) | `recipe-taxonomies.php:19` |
+| Single-select: max 1 term per recipe | `creator-meta-sync.php:212` |
+| Post type from: `g4t_get_source_strategy()['post_type']` | plugin source strategy |
+| Skip if already has a term: yes — idempotent backfill only | design decision |
+| Skip if `recipe_time_total` empty: yes — log to output | design decision |
+
+### Mapping: minutes → term
+
+| Zakres | Slug | term_id |
+|---|---|---|
+| ≤ 15 min | `do-15-min` | 19 |
+| 16–30 min | `do-30-min` | 980 |
+| 31–45 min | `do-45-min` | 981 |
+| > 45 min | `powyzej-45-min` | 11 |
+
+### Script (`bin/backfill-prep-time-terms.php`)
+
+```
+# dry run (domyślnie):
+wp eval-file wp-content/plugins/go4taste-recipes-plugin/bin/backfill-prep-time-terms.php
+
+# realny run:
+wp eval-file wp-content/plugins/go4taste-recipes-plugin/bin/backfill-prep-time-terms.php run
+```
+
+Logika: dla każdego przepisu bez termu — czyta `recipe_time_total`, mapuje minuty na zakres, wywołuje `wp_set_object_terms()`. Pomija przepisy z już przypisanym termem (idempotentny). Wypisuje podsumowanie: `Przypisano / Pominięto / Brak czasu / Błędy`.
+
+Zabezpieczenia: `WP_Query` z `no_found_rows + update_*_cache = false`, `wp_get_object_terms()` (nie cached), weryfikacja slugów na starcie.
+
+### Auto-select w kreatorze
+
+**`features/frontend-creator/creator.js`**
+
+Dodano `getAutoTermIdForTotalMinutes(totalMinutes)` — mapuje sumę minut na slug termu i zwraca `termId` z `window.PREP_TIME_TAXONOMY`. `updateTotalTime()` wywołuje tę funkcję po każdej zmianie pola czasu i aktualizuje `state.data.prepTimeTermIds`, po czym wywołuje `renderTaxonomySelectors()`. Selector prep-time w formularzu aktualizuje się w czasie rzeczywistym — zawsze nadpisuje poprzedni wybór. Warunek `state.data.prepTimeTermIds[0] !== termId` zapobiega zbędnemu re-renderowi gdy zakres się nie zmienił.
+
+### Verification query (po uruchomieniu backfill)
+
+```sql
+SELECT
+    COUNT(*) AS total,
+    SUM(CASE WHEN tt.term_id IS NOT NULL THEN 1 ELSE 0 END) AS has_prep_time_term,
+    SUM(CASE WHEN tt.term_id IS NULL THEN 1 ELSE 0 END) AS missing_prep_time_term
+FROM wp_posts p
+LEFT JOIN wp_term_relationships tr ON tr.object_id = p.ID
+LEFT JOIN wp_term_taxonomy tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
+    AND tt.taxonomy = 'recipe_prep_time_range'
+WHERE p.post_type = 'post'
+AND p.post_status = 'publish';
+```
+
+Oczekiwany wynik: `missing_prep_time_term = 0` (lub równy liczbie przepisów bez `recipe_time_total`).
 
 ---
 
