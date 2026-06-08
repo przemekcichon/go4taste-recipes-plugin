@@ -441,6 +441,11 @@ function g4t_can_user_edit_recipe( int $post_id ): bool {
         return true;
     }
 
+    // Mirror wp-admin: users with edit_others_posts (e.g. Editor role) can edit any recipe.
+    if ( current_user_can( 'edit_others_posts' ) ) {
+        return true;
+    }
+
     $post = get_post( $post_id );
     if ( ! $post ) {
         return false;

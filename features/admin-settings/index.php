@@ -14,6 +14,7 @@ require_once __DIR__ . '/settings-page.php';
 
 function g4t_bootstrap_admin_settings_feature(): void {
     add_action( 'admin_init', 'g4t_admin_settings_register' );
+    add_action( 'admin_init', 'g4t_admin_access_guard_check' );
     add_action( 'admin_menu', 'g4t_admin_settings_register_options_page' );
     add_action( 'admin_enqueue_scripts', 'g4t_admin_settings_enqueue_assets' );
     add_action( 'admin_notices', 'g4t_admin_settings_render_dependency_notices' );
@@ -23,6 +24,10 @@ function g4t_bootstrap_admin_settings_feature(): void {
 
 function g4t_admin_settings_register(): void {
     g4t_register_settings( g4t_bootstrap_plugin() );
+}
+
+function g4t_admin_access_guard_check(): void {
+    g4t_admin_access_guard();
 }
 
 function g4t_admin_settings_register_options_page(): void {
