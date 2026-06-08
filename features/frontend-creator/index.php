@@ -25,8 +25,11 @@ function g4t_bootstrap_frontend_creator_feature(): void {
     add_action( 'acf/validate_save_post', 'g4t_frontend_creator_validate_classification_taxonomies' );
     add_filter( 'acf/pre_save_post', 'g4t_frontend_creator_force_pre_save_post', 10, 2 );
     add_action( 'acf/save_post', 'g4t_frontend_creator_sync_recipe_bottom_strip_meta_after_acf_save', 20 );
+    add_action( 'acf/save_post', 'g4t_frontend_creator_sync_ingredient_sections_taxonomy_after_acf_save', 21 );
     add_filter( 'acf/load_value/key=field_ingredient_term_id', 'g4t_frontend_creator_normalize_acf_ingredient_term_value', 10, 3 );
     add_filter( 'acf/update_value/key=field_ingredient_term_id', 'g4t_frontend_creator_normalize_acf_ingredient_term_value', 10, 3 );
+    add_filter( 'acf/load_value/key=field_section_item_term_id', 'g4t_frontend_creator_normalize_acf_ingredient_term_value', 10, 3 );
+    add_filter( 'acf/update_value/key=field_section_item_term_id', 'g4t_frontend_creator_normalize_acf_ingredient_term_value', 10, 3 );
 }
 
 function g4t_frontend_creator_register_acf_fields(): void {
@@ -71,6 +74,23 @@ function g4t_frontend_creator_sync_recipe_bottom_strip_meta_after_acf_save( $pos
     }
 
     g4t_recipe_creator_sync_recipe_bottom_strip_meta_after_acf_save( (int) $post_id );
+}
+
+function g4t_frontend_creator_sync_ingredient_sections_taxonomy_after_acf_save( $post_id ): void {
+    if ( ! is_numeric( $post_id ) ) {
+        return;
+    }
+    $post_id = (int) $post_id;
+    $mode    = (string) get_post_meta( $post_id, 'recipe_ingredients_mode', true );
+    if ( 'sections' !== $mode ) {
+        return;
+    }
+    $section_count = (int) get_post_meta( $post_id, 'recipe_ingredient_sections', true );
+    if ( $section_count <= 0 ) {
+        return;
+    }
+    $sections = g4t_load_ingredient_sections_meta( $post_id, $section_count );
+    g4t_sync_ingredient_sections_meta( $post_id, $sections );
 }
 
 function g4t_frontend_creator_normalize_acf_ingredient_term_value( $value, $post_id, array $field ) {

@@ -292,17 +292,32 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
 
       <!-- 2.2 · LISTA SKŁADNIKÓW -->
       <section class="step step--wide" data-screen-idx="10" hidden>
-        <!-- Lista składników -->
         <div class="field">
           <div class="field__label">Lista składników</div>
           <p class="field__hint">Minimum jeden składnik. Możesz dodać wskazówkę (np. „świeży, drobno posiekany").</p>
 
-          <div class="repeater" id="ingredients-list"></div>
+          <div class="mode-toggle" id="ingredients-mode-toggle">
+            <button type="button" class="mode-btn" data-action="set-ingredients-mode" data-mode="single">Jedna lista</button>
+            <button type="button" class="mode-btn" data-action="set-ingredients-mode" data-mode="sections">Kilka sekcji</button>
+          </div>
 
-          <button type="button" class="rep-add" data-action="add-ingredient">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg>
-            Dodaj składnik
-          </button>
+          <!-- Single mode panel -->
+          <div id="ingredients-single-panel">
+            <div class="repeater" id="ingredients-list"></div>
+            <button type="button" class="rep-add" data-action="add-ingredient">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg>
+              Dodaj składnik
+            </button>
+          </div>
+
+          <!-- Sections mode panel (toggled by JS) -->
+          <div id="ingredients-sections-panel" hidden>
+            <div id="sections-list"></div>
+            <button type="button" class="rep-add" data-action="add-section">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg>
+              Dodaj sekcję
+            </button>
+          </div>
         </div>
 
         <datalist id="unit-suggestions"></datalist>
@@ -571,6 +586,30 @@ $creator_brand_name     = isset( $creator_brand_name ) ? (string) $creator_brand
       <div class="ing-hint">
         <input class="input" data-field="hint" placeholder='Wskazówka (opcjonalnie) — np. „drobno posiekany", „świeży", „bez skórki"'/>
       </div>
+    </div>
+  </template>
+
+  <template id="tpl-section">
+    <div class="sec-card">
+      <div class="sec-card__head">
+        <input class="input sec-card__title" data-field="title" placeholder="Nazwa sekcji (np. Ciasto, Farsz)"/>
+        <div class="rep-card__tools">
+          <button type="button" class="icon-btn" data-action="move-section-up" title="Wyżej" aria-label="Wyżej">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 14 6-6 6 6"/></svg>
+          </button>
+          <button type="button" class="icon-btn" data-action="move-section-down" title="Niżej" aria-label="Niżej">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 10 6 6 6-6"/></svg>
+          </button>
+          <button type="button" class="icon-btn icon-btn--danger" data-action="remove-section" title="Usuń sekcję" aria-label="Usuń sekcję">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="repeater sec-card__items"></div>
+      <button type="button" class="rep-add rep-add--sm" data-action="add-ingredient-to-section">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg>
+        Dodaj składnik
+      </button>
     </div>
   </template>
 
