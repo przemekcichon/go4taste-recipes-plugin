@@ -54,6 +54,7 @@ function g4t_register_settings( Go4Taste_Recipes_Plugin $plugin ): void {
                 'creator_brand_mark'      => 0,
                 'creator_brand_name'      => '',
                 'creator_heartbeat_roles' => array(),
+                'admin_block_roles'       => array(),
                 'unregister_category'     => false,
                 'unregister_post_tag'     => false,
             ),
@@ -137,6 +138,21 @@ function g4t_register_settings( Go4Taste_Recipes_Plugin $plugin ): void {
         'go4taste-recipes-settings',
         'go4taste_recipes_section_post_type'
     );
+
+    add_settings_section(
+        'go4taste_recipes_section_access',
+        __( 'Kontrola dostępu do panelu', 'go4taste-recipes-plugin' ),
+        'g4t_render_settings_section_access',
+        'go4taste-recipes-settings'
+    );
+
+    add_settings_field(
+        'go4taste_recipes_admin_block_roles',
+        __( 'Zablokuj wp-admin dla ról', 'go4taste-recipes-plugin' ),
+        'g4t_settings_field_admin_block_roles',
+        'go4taste-recipes-settings',
+        'go4taste_recipes_section_access'
+    );
 }
 
 /**
@@ -196,6 +212,13 @@ function g4t_settings_field_unregister_post_tag(): void {
     global $g4t_recipes_plugin;
     if ( $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ) {
         g4t_render_unregister_taxonomy_field( $g4t_recipes_plugin, 'unregister_post_tag' );
+    }
+}
+
+function g4t_settings_field_admin_block_roles(): void {
+    global $g4t_recipes_plugin;
+    if ( $g4t_recipes_plugin instanceof Go4Taste_Recipes_Plugin ) {
+        g4t_render_admin_block_roles_field( $g4t_recipes_plugin );
     }
 }
 
@@ -292,6 +315,18 @@ function g4t_sanitize_options( $input, Go4Taste_Recipes_Plugin $plugin ): array 
         $creator_heartbeat_roles = array_values( array_unique( $creator_heartbeat_roles ) );
     }
 
+    $admin_block_roles = array();
+    if ( isset( $input['admin_block_roles'] ) && is_array( $input['admin_block_roles'] ) ) {
+        foreach ( $input['admin_block_roles'] as $role ) {
+            $role = sanitize_key( (string) $role );
+            // administrator can never be blocked — hard constraint, not UI-controlled.
+            if ( in_array( $role, $allowed_roles, true ) && 'administrator' !== $role ) {
+                $admin_block_roles[] = $role;
+            }
+        }
+        $admin_block_roles = array_values( array_unique( $admin_block_roles ) );
+    }
+
     // Checkboxes are absent from $_POST when unchecked — treat absence as false.
     $unregister_category = ! empty( $input['unregister_category'] );
     $unregister_post_tag = ! empty( $input['unregister_post_tag'] );
@@ -305,6 +340,7 @@ function g4t_sanitize_options( $input, Go4Taste_Recipes_Plugin $plugin ): array 
         'creator_brand_mark'      => $creator_brand_mark,
         'creator_brand_name'      => $creator_brand_name,
         'creator_heartbeat_roles' => $creator_heartbeat_roles,
+        'admin_block_roles'       => $admin_block_roles,
         'unregister_category'     => $unregister_category,
         'unregister_post_tag'     => $unregister_post_tag,
     );
@@ -518,6 +554,56 @@ function g4t_render_unregister_taxonomy_field( Go4Taste_Recipes_Plugin $plugin, 
     <?php if ( $desc ) : ?>
         <p class="description"><?php echo esc_html( $desc ); ?></p>
     <?php endif;
+}
+
+/**
+ * Render the Access Control section description.
+ */
+function g4t_render_settings_section_access(): void {
+    echo '<p>' . esc_html__( 'Wybrane role będą automatycznie przekierowywane z wp-admin na stronę główną. Administratorzy są zawsze przepuszczani.', 'go4taste-recipes-plugin' ) . '</p>';
+}
+
+/**
+ * Render the admin block roles multi-checkbox field.
+ */
+function g4t_render_admin_block_roles_field( Go4Taste_Recipes_Plugin $plugin ): void {
+    $options      = g4t_get_recipe_options();
+    $blocked      = isset( $options['admin_block_roles'] ) && is_array( $options['admin_block_roles'] )
+        ? array_map( 'sanitize_key', $options['admin_block_roles'] )
+        : array();
+    $all_roles = array(
+        'subscriber'    => __( 'Subscriber', 'go4taste-recipes-plugin' ),
+        'contributor'   => __( 'Contributor', 'go4taste-recipes-plugin' ),
+        'author'        => __( 'Author', 'go4taste-recipes-plugin' ),
+        'editor'        => __( 'Editor', 'go4taste-recipes-plugin' ),
+        'administrator' => __( 'Administrator', 'go4taste-recipes-plugin' ),
+    );
+
+    foreach ( $all_roles as $role_key => $role_label ) {
+        $input_id    = 'g4t_admin_block_role_' . $role_key;
+        $is_admin    = 'administrator' === $role_key;
+        $is_checked  = ! $is_admin && in_array( $role_key, $blocked, true );
+        ?>
+        <label for="<?php echo esc_attr( $input_id ); ?>" style="display:block; margin-bottom:6px;">
+            <input
+                type="checkbox"
+                id="<?php echo esc_attr( $input_id ); ?>"
+                name="<?php echo esc_attr( Go4Taste_Recipes_Plugin::OPTION_KEY ); ?>[admin_block_roles][]"
+                value="<?php echo esc_attr( $role_key ); ?>"
+                <?php checked( $is_checked ); ?>
+                <?php disabled( $is_admin ); ?>
+            />
+            <?php echo esc_html( $role_label ); ?>
+            <?php if ( $is_admin ) : ?>
+                <span style="color:#999; font-style:italic;">— <?php esc_html_e( 'zawsze przepuszczany', 'go4taste-recipes-plugin' ); ?></span>
+            <?php endif; ?>
+        </label>
+        <?php
+    }
+
+    echo '<p class="description">';
+    esc_html_e( 'Zaznaczone role zostaną przekierowane na stronę główną przy każdej próbie wejścia do wp-admin. Wyjątki: AJAX, REST API, WP Cron, własna strona profilu.', 'go4taste-recipes-plugin' );
+    echo '</p>';
 }
 
 /**
