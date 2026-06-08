@@ -169,6 +169,123 @@ function g4t_ensure_ingredient_term( string $ingredient_name ): ?int {
 }
 
 /**
+ * Load ingredient sections from post meta (nested repeater format).
+ *
+ * Mirrors g4t_load_ingredients_repeater_meta() for the sections structure.
+ *
+ * @param int $post_id       Post ID.
+ * @param int $section_count Number of sections.
+ * @return array<int,array{section_title:string,section_items:array<int,array<string,mixed>>}>
+ */
+function g4t_load_ingredient_sections_meta( int $post_id, int $section_count ): array {
+    $sections = array();
+
+    for ( $i = 0; $i < $section_count; $i++ ) {
+        $title      = trim( (string) get_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_title", true ) );
+        $item_count = (int) get_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items", true );
+
+        $items = array();
+        for ( $j = 0; $j < $item_count; $j++ ) {
+            $name = trim( (string) get_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_name", true ) );
+            if ( '' === $name ) {
+                continue;
+            }
+
+            $amount_raw = get_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_amount", true );
+            $amount     = trim( (string) $amount_raw );
+            $amount     = '' !== $amount ? $amount : null;
+
+            $term_raw = get_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_ingredient_term_id", true );
+            $term_id  = ( '' !== (string) $term_raw && is_numeric( (string) $term_raw ) ) ? (int) $term_raw : null;
+
+            $items[] = array(
+                'ingredient_term_id' => $term_id,
+                'name'               => $name,
+                'amount'             => $amount,
+                'unit'               => trim( (string) get_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_unit", true ) ),
+                'ingredient_note'    => trim( (string) get_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_ingredient_note", true ) ),
+            );
+        }
+
+        $sections[] = array(
+            'section_title' => $title,
+            'section_items' => $items,
+        );
+    }
+
+    return $sections;
+}
+
+/**
+ * Write ingredient sections to post meta (nested repeater format) and sync taxonomy terms.
+ *
+ * Parallel to g4t_sync_ingredients_repeater_meta() for the sections mode.
+ * Collects ingredient term IDs across ALL sections and calls wp_set_object_terms once.
+ *
+ * @param int $post_id  Post ID.
+ * @param array<int,array{section_title:string,section_items:array<int,array<string,mixed>>}> $sections
+ */
+function g4t_sync_ingredient_sections_meta( int $post_id, array $sections ): void {
+    $old_count = (int) get_post_meta( $post_id, 'recipe_ingredient_sections', true );
+    $new_count = count( $sections );
+    $term_ids  = array();
+
+    // Delete orphaned section rows first.
+    for ( $i = 0; $i < $old_count; $i++ ) {
+        $old_item_count = (int) get_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items", true );
+        delete_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_title" );
+        for ( $j = 0; $j < $old_item_count; $j++ ) {
+            delete_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_name" );
+            delete_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_amount" );
+            delete_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_unit" );
+            delete_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_ingredient_term_id" );
+            delete_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_ingredient_note" );
+        }
+        delete_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items" );
+    }
+
+    foreach ( $sections as $i => $section ) {
+        $title = sanitize_text_field( (string) ( $section['section_title'] ?? '' ) );
+        $items = is_array( $section['section_items'] ?? null ) ? $section['section_items'] : array();
+
+        update_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_title", $title );
+
+        $item_count = 0;
+        foreach ( $items as $j => $row ) {
+            $name   = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
+            $amount = sanitize_text_field( trim( (string) ( $row['amount'] ?? '' ) ) );
+
+            update_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_name", $name );
+            update_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_amount", $amount );
+            update_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_unit", sanitize_text_field( (string) ( $row['unit'] ?? '' ) ) );
+            update_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_ingredient_note", sanitize_text_field( (string) ( $row['ingredient_note'] ?? '' ) ) );
+
+            $term_id = null;
+            if ( isset( $row['ingredient_term_id'] ) && is_numeric( (string) $row['ingredient_term_id'] ) ) {
+                $term_id = (int) $row['ingredient_term_id'];
+            }
+            if ( null === $term_id && '' !== $name ) {
+                $term_id = g4t_ensure_ingredient_term( $name );
+            }
+            if ( null !== $term_id ) {
+                update_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items_{$j}_ingredient_term_id", $term_id );
+                $term_ids[] = $term_id;
+            }
+
+            $item_count++;
+        }
+
+        update_post_meta( $post_id, "recipe_ingredient_sections_{$i}_section_items", $item_count );
+    }
+
+    update_post_meta( $post_id, 'recipe_ingredient_sections', $new_count );
+
+    if ( taxonomy_exists( G4T_INGREDIENT_TAXONOMY ) ) {
+        wp_set_object_terms( $post_id, array_values( array_unique( $term_ids ) ), G4T_INGREDIENT_TAXONOMY, false );
+    }
+}
+
+/**
  * Write step rows to post meta (ACF repeater format).
  *
  * @param int $post_id Post ID.

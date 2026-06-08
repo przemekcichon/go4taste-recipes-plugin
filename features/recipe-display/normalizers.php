@@ -68,6 +68,57 @@ function g4t_normalize_ingredients_list( array $items ): array {
 }
 
 /**
+ * Normalize raw ingredient data into the unified ingredient_sections shape.
+ *
+ * Always returns an array of sections regardless of mode so templates
+ * never need to branch. Single-mode wraps the flat list in one unnamed section.
+ *
+ * @param string           $mode  'single' | 'sections'
+ * @param array<int,mixed> $data  For single: flat ingredient rows.
+ *                                For sections: raw ACF sections repeater rows.
+ * @return array<int,array{title:string|null,items:array<int,array{ingredient_term_id:int|null,name:string,amount:string|null,unit:string,ingredient_note:string}>}>
+ */
+function g4t_normalize_ingredient_sections( string $mode, array $data ): array {
+    if ( 'sections' !== $mode ) {
+        return array(
+            array(
+                'title' => null,
+                'items' => g4t_normalize_ingredients_list( $data ),
+            ),
+        );
+    }
+
+    $sections = array();
+
+    foreach ( $data as $section_raw ) {
+        if ( ! is_array( $section_raw ) ) {
+            continue;
+        }
+
+        $title     = isset( $section_raw['section_title'] ) ? trim( (string) $section_raw['section_title'] ) : '';
+        $items_raw = isset( $section_raw['section_items'] ) && is_array( $section_raw['section_items'] )
+            ? $section_raw['section_items']
+            : array();
+        $items     = g4t_normalize_ingredients_list( $items_raw );
+
+        if ( '' === $title && empty( $items ) ) {
+            continue;
+        }
+
+        $sections[] = array(
+            'title' => '' !== $title ? $title : null,
+            'items' => $items,
+        );
+    }
+
+    if ( empty( $sections ) ) {
+        return array( array( 'title' => null, 'items' => array() ) );
+    }
+
+    return $sections;
+}
+
+/**
  * Normalize an array of step rows into a consistent shape.
  *
  * @param array<int,mixed> $steps

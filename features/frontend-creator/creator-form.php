@@ -560,6 +560,11 @@ function g4t_get_recipe_creator_initial_state( int $post_id ): array {
     $featured_image_id = get_post_thumbnail_id( $post_id );
     $featured_image    = $featured_image_id ? g4t_get_recipe_creator_photo_payload( (string) $featured_image_id ) : null;
 
+    $ingredients_mode  = (string) get_post_meta( $post_id, 'recipe_ingredients_mode', true );
+    if ( '' === $ingredients_mode ) {
+        $ingredients_mode = 'single';
+    }
+
     $ingredients = array();
     $ingredients_count = (int) get_post_meta( $post_id, 'recipe_ingredients', true );
     for ( $i = 0; $i < $ingredients_count; $i++ ) {
@@ -570,6 +575,28 @@ function g4t_get_recipe_creator_initial_state( int $post_id ): array {
             'amount' => (string) get_post_meta( $post_id, 'recipe_ingredients_' . $i . '_amount', true ),
             'unit'   => (string) get_post_meta( $post_id, 'recipe_ingredients_' . $i . '_unit', true ),
             'hint'   => (string) get_post_meta( $post_id, 'recipe_ingredients_' . $i . '_ingredient_note', true ),
+        );
+    }
+
+    $ingredient_sections   = array();
+    $section_count = (int) get_post_meta( $post_id, 'recipe_ingredient_sections', true );
+    for ( $i = 0; $i < $section_count; $i++ ) {
+        $item_count = (int) get_post_meta( $post_id, 'recipe_ingredient_sections_' . $i . '_section_items', true );
+        $items      = array();
+        for ( $j = 0; $j < $item_count; $j++ ) {
+            $items[] = array(
+                'id'     => 'ing-' . $i . '-' . $j,
+                'name'   => (string) get_post_meta( $post_id, 'recipe_ingredient_sections_' . $i . '_section_items_' . $j . '_name', true ),
+                'termId' => (string) get_post_meta( $post_id, 'recipe_ingredient_sections_' . $i . '_section_items_' . $j . '_ingredient_term_id', true ),
+                'amount' => (string) get_post_meta( $post_id, 'recipe_ingredient_sections_' . $i . '_section_items_' . $j . '_amount', true ),
+                'unit'   => (string) get_post_meta( $post_id, 'recipe_ingredient_sections_' . $i . '_section_items_' . $j . '_unit', true ),
+                'hint'   => (string) get_post_meta( $post_id, 'recipe_ingredient_sections_' . $i . '_section_items_' . $j . '_ingredient_note', true ),
+            );
+        }
+        $ingredient_sections[] = array(
+            'id'    => 'sec-' . $i,
+            'title' => (string) get_post_meta( $post_id, 'recipe_ingredient_sections_' . $i . '_section_title', true ),
+            'items' => $items,
         );
     }
 
@@ -602,9 +629,11 @@ function g4t_get_recipe_creator_initial_state( int $post_id ): array {
         'timePrep'         => g4t_recipe_creator_parse_minutes( (string) get_post_meta( $post_id, 'recipe_time_prep', true ) ),
         'timeCook'         => g4t_recipe_creator_parse_minutes( (string) get_post_meta( $post_id, 'recipe_time_cook', true ) ),
         'timeSoak'         => g4t_recipe_creator_parse_minutes( (string) get_post_meta( $post_id, 'recipe_time_soak', true ) ),
-        'ingredientsPhoto' => g4t_get_recipe_creator_photo_payload( get_post_meta( $post_id, 'recipe_ingredients_photo_url', true ) ),
-        'ingredients'      => $ingredients,
-        'steps'            => $steps,
+        'ingredientsPhoto'   => g4t_get_recipe_creator_photo_payload( get_post_meta( $post_id, 'recipe_ingredients_photo_url', true ) ),
+        'ingredientsMode'    => $ingredients_mode,
+        'ingredients'        => $ingredients,
+        'ingredientSections' => $ingredient_sections,
+        'steps'              => $steps,
         'tips'             => (string) get_post_meta( $post_id, 'recipe_tips', true ),
         'sourceName'       => (string) get_post_meta( $post_id, 'recipe_source_label', true ),
         'sourceUrl'        => (string) get_post_meta( $post_id, 'recipe_source_url', true ),
@@ -1015,33 +1044,84 @@ function g4t_creator_state_to_meta( array $state, int $post_id ): void {
     }
     update_post_meta( $post_id, 'recipe_ingredients_photo_url', $ingredients_photo_url );
 
-    // Ingredients repeater — maps creator field names to meta-sync field names.
-    $ingredients = array();
-    if ( isset( $state['ingredients'] ) && is_array( $state['ingredients'] ) ) {
-        foreach ( $state['ingredients'] as $row ) {
-            if ( ! is_array( $row ) ) {
-                continue;
-            }
-            $name   = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
-            $amount = sanitize_text_field( trim( (string) ( $row['amount'] ?? '' ) ) );
-            if ( '' === $name && '' === $amount ) {
-                continue;
-            }
-            $term_id = null;
-            if ( isset( $row['termId'] ) && is_numeric( (string) $row['termId'] ) && (int) $row['termId'] > 0 ) {
-                $term_id = (int) $row['termId'];
-            }
-            $ingredients[] = array(
-                'name'               => $name,
-                'amount'             => '' !== $amount ? $amount : null,
-                'unit'               => sanitize_text_field( (string) ( $row['unit'] ?? '' ) ),
-                'ingredient_note'    => sanitize_text_field( (string) ( $row['hint'] ?? '' ) ),
-                'ingredient_term_id' => $term_id,
-            );
-        }
+    // Ingredients mode toggle.
+    $ingredients_mode = 'single';
+    if ( isset( $state['ingredientsMode'] ) && 'sections' === (string) $state['ingredientsMode'] ) {
+        $ingredients_mode = 'sections';
     }
-    // g4t_sync_ingredients_repeater_meta() writes meta rows AND syncs taxonomy terms.
-    g4t_sync_ingredients_repeater_meta( $post_id, $ingredients );
+    update_post_meta( $post_id, 'recipe_ingredients_mode', $ingredients_mode );
+
+    if ( 'sections' === $ingredients_mode ) {
+        // Sections mode — map creator section rows to meta-sync shape and persist.
+        $sections = array();
+        if ( isset( $state['ingredientSections'] ) && is_array( $state['ingredientSections'] ) ) {
+            foreach ( $state['ingredientSections'] as $section_row ) {
+                if ( ! is_array( $section_row ) ) {
+                    continue;
+                }
+                $section_title = sanitize_text_field( (string) ( $section_row['title'] ?? '' ) );
+                $section_items = array();
+                if ( isset( $section_row['items'] ) && is_array( $section_row['items'] ) ) {
+                    foreach ( $section_row['items'] as $row ) {
+                        if ( ! is_array( $row ) ) {
+                            continue;
+                        }
+                        $name   = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
+                        $amount = sanitize_text_field( trim( (string) ( $row['amount'] ?? '' ) ) );
+                        if ( '' === $name && '' === $amount ) {
+                            continue;
+                        }
+                        $term_id = null;
+                        if ( isset( $row['termId'] ) && is_numeric( (string) $row['termId'] ) && (int) $row['termId'] > 0 ) {
+                            $term_id = (int) $row['termId'];
+                        }
+                        $section_items[] = array(
+                            'name'               => $name,
+                            'amount'             => '' !== $amount ? $amount : null,
+                            'unit'               => sanitize_text_field( (string) ( $row['unit'] ?? '' ) ),
+                            'ingredient_note'    => sanitize_text_field( (string) ( $row['hint'] ?? '' ) ),
+                            'ingredient_term_id' => $term_id,
+                        );
+                    }
+                }
+                if ( '' === $section_title && empty( $section_items ) ) {
+                    continue;
+                }
+                $sections[] = array(
+                    'section_title' => $section_title,
+                    'section_items' => $section_items,
+                );
+            }
+        }
+        g4t_sync_ingredient_sections_meta( $post_id, $sections );
+    } else {
+        // Single mode — flat ingredients repeater. Writes meta rows AND syncs taxonomy terms.
+        $ingredients = array();
+        if ( isset( $state['ingredients'] ) && is_array( $state['ingredients'] ) ) {
+            foreach ( $state['ingredients'] as $row ) {
+                if ( ! is_array( $row ) ) {
+                    continue;
+                }
+                $name   = sanitize_text_field( (string) ( $row['name'] ?? '' ) );
+                $amount = sanitize_text_field( trim( (string) ( $row['amount'] ?? '' ) ) );
+                if ( '' === $name && '' === $amount ) {
+                    continue;
+                }
+                $term_id = null;
+                if ( isset( $row['termId'] ) && is_numeric( (string) $row['termId'] ) && (int) $row['termId'] > 0 ) {
+                    $term_id = (int) $row['termId'];
+                }
+                $ingredients[] = array(
+                    'name'               => $name,
+                    'amount'             => '' !== $amount ? $amount : null,
+                    'unit'               => sanitize_text_field( (string) ( $row['unit'] ?? '' ) ),
+                    'ingredient_note'    => sanitize_text_field( (string) ( $row['hint'] ?? '' ) ),
+                    'ingredient_term_id' => $term_id,
+                );
+            }
+        }
+        g4t_sync_ingredients_repeater_meta( $post_id, $ingredients );
+    }
 
     // Steps repeater — maps creator field names to meta-sync field names.
     $steps = array();

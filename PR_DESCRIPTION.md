@@ -1,153 +1,324 @@
-# PR: Migration + Post Type Taxonomy Cleanup
+# PR: Ingredient Sections — Grouped Ingredients Support
 
-**Branch:** feature/migrate-ads-products-contract -> main
+**Branch:** `feature/ingredient-sections` → `main`
 
-**Depends on:** go4taste-ads `feature/use-ads-data-provider` merged to main
+**Affects repos:** `go4taste-recipes-plugin` + `go4taste-recipes-theme`
 
-## Implementation status
+---
+
+## Goal
+
+Add support for dividing recipe ingredients into named sections (e.g., "Ciasto" + "Farsz") while keeping the existing flat-list approach as the default. Zero migration required for the existing ~130 recipes.
+
+---
+
+## Design decisions
+
+| Decision | Choice | Reason |
+|---|---|---|
+| Old repeater | Kept intact | Zero migration for ~130 existing recipes |
+| New structure | `recipe_ingredient_sections` nested repeater | ACF Pro supports nested repeaters natively; clean separation |
+| Mode toggle | `recipe_ingredients_mode` (`single` \| `sections`) | One source of truth, explicit intent stored in data |
+| View model output | Always `ingredient_sections[]` | One Twig template, no branching — single-mode wraps in one unnamed section |
+| Single-mode wrapping | Flat list wrapped as `[['title' => null, 'items' => [...]]]` | Unified shape regardless of mode |
+| Frontend creator | Both modes supported | Redaktorzy only access creator, not wp-admin |
+| Old `ingredients` key | Removed from view model | Replaced by `ingredient_sections`; template updated accordingly |
+
+---
+
+## New meta keys
+
+```
+# Mode toggle (new field)
+recipe_ingredients_mode                         = "single" | "sections"   (default: "single")
+
+# Sections repeater (new — only written when mode = "sections")
+recipe_ingredient_sections                      = N   (section count)
+recipe_ingredient_sections_0_title              = "Ciasto"
+recipe_ingredient_sections_0_items              = M   (item count in section 0)
+recipe_ingredient_sections_0_items_0_ingredient_term_id = 5
+recipe_ingredient_sections_0_items_0_name       = "Mąka"
+recipe_ingredient_sections_0_items_0_amount     = "500"
+recipe_ingredient_sections_0_items_0_unit       = "g"
+recipe_ingredient_sections_0_items_0_ingredient_note = ""
+recipe_ingredient_sections_1_title              = "Farsz"
+recipe_ingredient_sections_1_items              = K
+...
+
+# Existing keys — unchanged, still used when mode = "single"
+recipe_ingredients                              = N   (flat count)
+recipe_ingredients_0_name                       = ...
+recipe_ingredients_0_amount                     = ...
+recipe_ingredients_0_unit                       = ...
+recipe_ingredients_0_ingredient_term_id         = ...
+recipe_ingredients_0_ingredient_note            = ...
+recipe_ingredients_photo_url                    = ...   (used in both modes)
+```
+
+---
+
+## New view model shape (SCHEMA_CONTRACT_V3)
+
+Replaces the existing `ingredients` flat array. Always present, always same structure:
+
+```php
+'ingredient_sections' => [
+  [
+    'title' => null | string,   // null = no heading (single-mode), string = section title
+    'items' => [
+      [
+        'ingredient_term_id' => int|null,
+        'name'               => string,    // required, non-empty
+        'amount'             => string|null,
+        'unit'               => string,
+        'ingredient_note'    => string,
+      ],
+      // ...
+    ],
+  ],
+  // single-mode: exactly 1 section with title = null
+  // sections-mode: 1..N sections each with non-empty string title
+]
+```
+
+---
+
+## Implementation stages
 
 | Stage | Status | Description |
 |---|---|---|
-| Migration 1: Dry run | ✅ Done | `bin/migrate-ads-products-dryrun.php` run — list verified |
-| Migration 2: Migration | ✅ Done | `bin/migrate-ads-products.php` run — 140 recipes migrated |
-| Migration 3: Verify | ✅ Done | Query 1 confirmed `tylko_acf_repeater` = 0 |
-| Migration 4: Cleanup | ✅ Done | Fallback removed from `view-model-builder.php` |
-| Taxonomy 1: Settings | ✅ Done | Two checkboxes added to admin settings page |
-| Taxonomy 2: Logic | ✅ Done | Runtime unregister on `init` priority 11 |
-| Taxonomy 3: Data cleanup | ✅ Done | Existing Uncategorized removed from 6 posts via WP-CLI |
-| Prep-time 1: Backfill script | ✅ Done | `bin/backfill-prep-time-terms.php` run — existing recipes backfilled |
-| Prep-time 2: Auto-select in creator | ✅ Done | `creator.js` auto-selects term on time field change |
+| Schema 1: SCHEMA_CONTRACT_V3 | ✅ Done | Document new meta keys, new view model shape, note deprecation of `ingredients` |
+| ACF 1: Mode toggle field | ✅ Done | `recipe_ingredients_mode` radio field added to `acf-fields.php` (group_recipe_ingredients) |
+| ACF 2: Sections repeater | ✅ Done | `recipe_ingredient_sections` nested repeater with `section_title` + `section_items` sub-repeater |
+| Plugin 1: Normalizer | ✅ Done | New `g4t_normalize_ingredient_sections()` in `normalizers.php` |
+| Plugin 2: View model builder | ✅ Done | Read mode toggle, branch to correct loader, always output `ingredient_sections` |
+| Plugin 3: Meta sync — read | ✅ Done | `g4t_load_ingredient_sections_meta()` in `creator-meta-sync.php` |
+| Plugin 4: Meta sync — write | ✅ Done | `g4t_sync_ingredient_sections_meta()` + taxonomy term sync for sections items |
+| Creator 1: State shape | ✅ Done | Add `ingredientsMode` + `ingredientSections` to `state.data` in `creator.js` |
+| Creator 2: Mode selector UI | ✅ Done | UI toggle on ingredient screen: "Jedna lista składników / Kilka sekcji" |
+| Creator 3: Sections UI | ✅ Done | Add/remove/rename sections; move-up/down sections; ingredient rows within each section |
+| Creator 4: Payload builder | ✅ Done | `buildAcfPayload()` — emit mode field + correct repeater based on active mode |
+| Creator 5: Edit-mode load | ✅ Done | Hydrate `ingredientsMode` + `ingredientSections` from `initialState` on edit |
+| Creator 6: Validation | ✅ Done | ≥1 section with ≥1 ingredient (name + amount) in sections mode |
+| Theme 1: Template | ✅ Done | Replace `recipe.ingredients` loop with `recipe.ingredient_sections` loop in Twig |
+| Theme 2: Styles | ✅ Done | `.ingredients-section-title` styles in theme `single-recipe.css` (see theme PR) |
+| Migration: Manual | 📋 Post-merge | ~5 recipes converted to sections mode manually via creator — no code changes needed |
 
 ---
 
-## Part 1: Data Migration — ACF Repeater → `_g4t_a_recipe_bottom_product_ids`
+## Part 1: SCHEMA_CONTRACT_V3
 
-### Problem
+New file `SCHEMA_CONTRACT_V3.md` in plugin root.
 
-140 production recipes had products stored only in the old ACF repeater format (`recipe_ads_products_N_product_id`). The new key (`_g4t_a_recipe_bottom_product_ids`) was empty for them. The frontend worked via a fallback in `view-model-builder.php`, but:
-
-- `go4taste-ads` reads only `_g4t_a_recipe_bottom_product_ids` through its own rendering path — no fallback there
-- The fallback in `view-model-builder.php` was a liability for future architecture changes
-
-### What was done
-
-Ran `bin/migrate-ads-products.php` via `wp eval-file` — for each recipe with ACF repeater data and no new key, read product IDs from `recipe_ads_products_{N}_product_id` and wrote them as JSON to `_g4t_a_recipe_bottom_product_ids`.
-
-Result:
-
-```
-+---------------+---------------+--------------------+----------------+
-| total_recipes | nowy_kontrakt | tylko_acf_repeater | brak_produktow |
-+---------------+---------------+--------------------+----------------+
-|           144 |           141 |                  0 |              3 |
-+---------------+---------------+--------------------+----------------+
-```
-
-Old ACF keys left intact as backup.
-
-### Files changed
-
-- `features/recipe-display/view-model-builder.php` — removed `if/else` fallback block; replaced with single call to `g4t_recipe_bottom_strip_get_products_for_post()`
+Key changes vs V2:
+- `ingredients` flat array → **deprecated, removed**
+- New: `ingredient_sections[]` — unified array, always present
+- New meta key: `recipe_ingredients_mode`
+- New meta key group: `recipe_ingredient_sections_*`
 
 ---
 
-## Part 2: Unregister Built-in Taxonomies from Post Type
+## Part 2: ACF Fields (`features/frontend-creator/acf-fields.php`)
 
-### Problem
+### Mode toggle
 
-When the recipe source post type is `post`, WordPress automatically assigns the "Uncategorized" category to every post saved without a category. This results in unwanted category assignments on recipe posts. Additionally, the Category and Tag metaboxes clutter the editor for content that doesn't use them.
+```php
+[
+  'key'           => 'field_recipe_ingredients_mode',
+  'name'          => 'recipe_ingredients_mode',
+  'label'         => 'Tryb składników',
+  'type'          => 'radio',
+  'choices'       => [ 'single' => 'Jedna lista', 'sections' => 'Kilka sekcji' ],
+  'default_value' => 'single',
+  'layout'        => 'horizontal',
+]
+```
 
-### Solution
+### Sections nested repeater
 
-New admin settings section "Post Type Configuration" with two independent checkboxes:
+```php
+[
+  'key'        => 'field_recipe_ingredient_sections',
+  'name'       => 'recipe_ingredient_sections',
+  'label'      => 'Sekcje składników',
+  'type'       => 'repeater',
+  'layout'     => 'block',
+  'sub_fields' => [
+    // section_title (text)
+    // section_items (repeater — same sub-fields as existing recipe_ingredients:
+    //   ingredient_term_id, name, amount, unit, ingredient_note)
+  ],
+]
+```
 
-- **Odepnij Kategorie od wpisów** (`unregister_category`) — calls `unregister_taxonomy_for_object_type('category', post_type)` on `init` priority 11; WordPress stops forcing Uncategorized on save; Category metabox disappears from editor
-- **Odepnij Tagi od wpisów** (`unregister_post_tag`) — calls `unregister_taxonomy_for_object_type('post_tag', post_type)` on `init` priority 11; Tag metabox disappears from editor
-
-Hook runs at priority 11 because WordPress registers built-in taxonomies in `create_initial_taxonomies()` at `init` priority 0.
-
-The unregister applies to whatever post type is resolved by `g4t_get_source_strategy()` — works for `post`, existing CPT, or dedicated CPT.
-
-### One-off data cleanup
-
-6 production recipes had the Uncategorized term already assigned. Removed via `bin/remove-uncategorized.php` (WP-CLI script, deleted after use).
-
-### Files changed
-
-- `features/admin-settings/settings-page.php` — new section, two `add_settings_field` calls, named callbacks, `g4t_render_unregister_taxonomy_field()`, sanitize support, updated defaults
-- `features/admin-settings/settings-logic.php` — `g4t_maybe_unregister_recipe_taxonomies()` function
-- `features/admin-settings/index.php` — `add_action('init', 'g4t_maybe_unregister_recipe_taxonomies', 11)`
+Both field groups live in `group_recipe_ingredients`. The sections repeater is conditionally shown in ACF UI when mode = "sections" (ACF conditional logic).
 
 ---
 
-## Part 3: Backfill prep-time taxonomy from `recipe_time_total`
+## Part 3: Plugin — Normalizer (`features/recipe-display/normalizers.php`)
 
-### Problem
+### New function
 
-Recipes created before the `recipe_prep_time_range` taxonomy was introduced have no term assigned. The FacetWP "Czas przygotowania" filter shows no results for them. The fix is a one-time WP-CLI script that reads `recipe_time_total` and assigns the matching term.
-
-### Known before implementation
-
-| Fact | Source |
-|---|---|
-| Field: `recipe_time_total` stores integer minutes as a plain string (`"35"`) | `creator-form.php:1321` — `g4t_recipe_creator_format_minutes()` returns `(string) $total_minutes` |
-| Taxonomy slug: `recipe_prep_time_range` (`G4T_PREP_TIME_TAXONOMY`) | `recipe-taxonomies.php:19` |
-| Single-select: max 1 term per recipe | `creator-meta-sync.php:212` |
-| Post type from: `g4t_get_source_strategy()['post_type']` | plugin source strategy |
-| Skip if already has a term: yes — idempotent backfill only | design decision |
-| Skip if `recipe_time_total` empty: yes — log to output | design decision |
-
-### Mapping: minutes → term
-
-| Zakres | Slug | term_id |
-|---|---|---|
-| ≤ 15 min | `do-15-min` | 19 |
-| 16–30 min | `do-30-min` | 980 |
-| 31–45 min | `do-45-min` | 981 |
-| > 45 min | `powyzej-45-min` | 11 |
-
-### Script (`bin/backfill-prep-time-terms.php`)
-
-```
-# dry run (domyślnie):
-wp eval-file wp-content/plugins/go4taste-recipes-plugin/bin/backfill-prep-time-terms.php
-
-# realny run:
-wp eval-file wp-content/plugins/go4taste-recipes-plugin/bin/backfill-prep-time-terms.php run
+```php
+/**
+ * Normalizes raw ACF sections repeater data into the unified ingredient_sections shape.
+ * For single-mode: wraps existing flat g4t_normalize_ingredients_list() output.
+ *
+ * @param string $mode   'single' | 'sections'
+ * @param array  $data   Raw ACF field value for the active repeater
+ * @return array         ingredient_sections[]
+ */
+function g4t_normalize_ingredient_sections( string $mode, array $data ): array
 ```
 
-Logika: dla każdego przepisu bez termu — czyta `recipe_time_total`, mapuje minuty na zakres, wywołuje `wp_set_object_terms()`. Pomija przepisy z już przypisanym termem (idempotentny). Wypisuje podsumowanie: `Przypisano / Pominięto / Brak czasu / Błędy`.
+- `mode = 'single'` → calls existing `g4t_normalize_ingredients_list($data)`, wraps in `[['title' => null, 'items' => [...]]]`
+- `mode = 'sections'` → iterates sections, normalizes each `section_items` via `g4t_normalize_ingredients_list()`, returns `[['title' => string, 'items' => [...]]]`
+- Skips sections with empty title or zero valid items
 
-Zabezpieczenia: `WP_Query` z `no_found_rows + update_*_cache = false`, `wp_get_object_terms()` (nie cached), weryfikacja slugów na starcie.
+---
 
-### Auto-select w kreatorze
+## Part 4: Plugin — View Model Builder (`features/recipe-display/view-model-builder.php`)
 
-**`features/frontend-creator/creator.js`**
+`g4t_build_single_recipe_view_model()` updated:
 
-Dodano `getAutoTermIdForTotalMinutes(totalMinutes)` — mapuje sumę minut na slug termu i zwraca `termId` z `window.PREP_TIME_TAXONOMY`. `updateTotalTime()` wywołuje tę funkcję po każdej zmianie pola czasu i aktualizuje `state.data.prepTimeTermIds`, po czym wywołuje `renderTaxonomySelectors()`. Selector prep-time w formularzu aktualizuje się w czasie rzeczywistym — zawsze nadpisuje poprzedni wybór. Warunek `state.data.prepTimeTermIds[0] !== termId` zapobiega zbędnemu re-renderowi gdy zakres się nie zmienił.
+1. Read `recipe_ingredients_mode` (default `'single'` if missing — backward compat for all existing recipes)
+2. Branch:
+   - `single` → load `recipe_ingredients` repeater (existing path)
+   - `sections` → load `recipe_ingredient_sections` repeater (new path)
+3. Pass both `$mode` and raw data to `g4t_normalize_ingredient_sections()`
+4. Write result to `ingredient_sections` key
+5. Remove old `ingredients` key from returned array
 
-### Verification query (po uruchomieniu backfill)
+Backward compat: any recipe with no `recipe_ingredients_mode` stored treats as `'single'` → zero behavior change for all existing recipes.
 
-```sql
-SELECT
-    COUNT(*) AS total,
-    SUM(CASE WHEN tt.term_id IS NOT NULL THEN 1 ELSE 0 END) AS has_prep_time_term,
-    SUM(CASE WHEN tt.term_id IS NULL THEN 1 ELSE 0 END) AS missing_prep_time_term
-FROM wp_posts p
-LEFT JOIN wp_term_relationships tr ON tr.object_id = p.ID
-LEFT JOIN wp_term_taxonomy tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
-    AND tt.taxonomy = 'recipe_prep_time_range'
-WHERE p.post_type = 'post'
-AND p.post_status = 'publish';
+---
+
+## Part 5: Plugin — Meta Sync (`features/frontend-creator/creator-meta-sync.php`)
+
+### Read (for edit mode in creator)
+
+New `g4t_load_ingredient_sections_meta(int $post_id, int $section_count): array`
+
+Mirrors existing `g4t_load_ingredients_repeater_meta()` but reads the nested structure:
+```
+recipe_ingredient_sections_{i}_title
+recipe_ingredient_sections_{i}_items       (count)
+recipe_ingredient_sections_{i}_items_{j}_* (per-item fields)
 ```
 
-Oczekiwany wynik: `missing_prep_time_term = 0` (lub równy liczbie przepisów bez `recipe_time_total`).
+### Write
+
+New `g4t_sync_ingredient_sections_meta(int $post_id, array $sections): void`
+
+- Deletes old `recipe_ingredient_sections_*` keys
+- Writes new nested structure to post_meta
+- Collects all ingredient term IDs across ALL sections
+- Calls `wp_set_object_terms()` with merged term list (single taxonomy sync call)
+
+### Mode toggle
+
+`g4t_sync_ingredients_mode(int $post_id, string $mode): void` — writes `recipe_ingredients_mode`.
+
+Existing `g4t_sync_ingredients_repeater_meta()` unchanged — still called when mode = `'single'`.
+
+---
+
+## Part 6: Frontend Creator (`features/frontend-creator/creator.js`)
+
+### State shape additions
+
+```javascript
+state.data.ingredientsMode = 'single';          // 'single' | 'sections'
+state.data.ingredientSections = [               // only used when mode = 'sections'
+  {
+    id: 'sec-xxxx',
+    title: '',
+    items: [
+      { id: 'ing-xxxx', name: '', termId: null, amount: '', unit: '', hint: '' }
+    ]
+  }
+];
+// Existing state.data.ingredients unchanged — used when mode = 'single'
+```
+
+### Mode selector UI (Screen 10, above ingredient list)
+
+Radio/toggle: "Jedna lista składników" | "Kilka sekcji (np. ciasto i farsz)"
+
+Switching mode:
+- `single → sections`: auto-creates Section 1 pre-populated with current `state.data.ingredients`
+- `sections → single`: flattens all section items into `state.data.ingredients`, confirms if >1 section
+
+### Sections UI (mode = 'sections')
+
+- Render each section as a titled block with its own ingredient rows table
+- "Dodaj sekcję" button appends new empty section
+- Section title: inline text input, required (non-empty)
+- Remove section: only if ≥2 sections; confirms if section has items
+- Drag-reorder sections (same mechanism as existing ingredient row reorder)
+- Ingredient row UI within each section: identical to existing single-mode rows
+
+### `buildAcfPayload()` additions
+
+```javascript
+// Mode field
+acf[field_recipe_ingredients_mode] = state.data.ingredientsMode
+
+// Sections (only emitted when mode = 'sections')
+acf[field_recipe_ingredient_sections][0][field_section_title] = 'Ciasto'
+acf[field_recipe_ingredient_sections][0][field_section_items][0][field_ingredient_name] = 'Mąka'
+// ...
+```
+
+Existing ingredients payload logic unchanged — still emitted when mode = `'single'`.
+
+### Edit-mode hydration
+
+`window.G4T_RECIPE_CREATOR_DATA.initialState` extended server-side:
+```javascript
+ingredientsMode: 'single' | 'sections',
+ingredientSections: [ { id, title, items: [...] } ]  // populated for sections mode
+```
+
+`creator.js` reads these on init, populates correct state branch.
+
+---
+
+## Part 7: Theme (`go4taste-recipes-theme`)
+
+### Template change
+
+Replace current:
+```twig
+{% for ingredient in recipe.ingredients %}
+  ...
+{% endfor %}
+```
+
+With:
+```twig
+{% for section in recipe.ingredient_sections %}
+  {% if section.title %}
+    <h3 class="ingredients__section-title">{{ section.title }}</h3>
+  {% endif %}
+  {% for ingredient in section.items %}
+    ...
+  {% endfor %}
+{% endfor %}
+```
+
+### Styles
+
+New `.ingredients__section-title` rule — visual weight between recipe heading and ingredient rows. Exact styling TBD during implementation.
+
+---
+
+## Part 8: Manual migration
+
+Identify recipes that need sections (user-driven, ~5 recipes). For each: open in creator, switch mode to "Kilka sekcji", arrange ingredients into sections, save. No script needed.
 
 ---
 
 ## Merge readiness
 
-All stages done. No regressions expected:
-- Migration is idempotent — safe to verify by re-running dry run script
-- Old ACF repeater data untouched — can be used for rollback verification
-- Taxonomy unregister is opt-in via settings — disabled by default, no change for installs that don't enable it
+✅ Ready to merge — all implementation stages complete. Manual recipe migration (~5 recipes) is a post-merge task done via the creator UI, requires no code changes.

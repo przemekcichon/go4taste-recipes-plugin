@@ -35,7 +35,12 @@
     { kind:'intro', step:1 },  // 8
     // Krok 2 podzielony na 2 podstrony: zdjęcie (opcjonalne), lista
     { kind:'form',  step:1 },  // 9  (zdjęcie składników — opcjonalne)
-    { kind:'form',  step:1, validate: d => d.ingredients.some(r => r.name && r.amount) ? null : 'Dodaj co najmniej jeden składnik z ilością.' },  // 10
+    { kind:'form',  step:1, validate: d => {
+      if (d.ingredientsMode === 'sections') {
+        return d.ingredientSections.some(sec => sec.items.some(r => r.name && r.amount)) ? null : 'Dodaj co najmniej jeden składnik z ilością.';
+      }
+      return d.ingredients.some(r => r.name && r.amount) ? null : 'Dodaj co najmniej jeden składnik z ilością.';
+    } },  // 10
     { kind:'intro', step:2 },  // 11
     { kind:'form',  step:2, validate: d => d.steps.some(r => (r.heading||'').trim() && (r.body||'').trim()) ? null : 'Dodaj co najmniej jeden krok przygotowania (nagłówek + opis).' }, // 12
     { kind:'intro', step:3 },  // 13
@@ -125,7 +130,9 @@
       prepTimeTermIds: [],
       featureTermIds: [],
       ingredientsPhoto: null,
+      ingredientsMode: 'single',
       ingredients: [mkIng()],
+      ingredientSections: [mkSection()],
       steps: [mkPrep()],
       tips: '',
       sourceName: '', sourceUrl: '',
@@ -142,9 +149,10 @@
   let productRequestSeq = 0;
   let visibleProducts = [];
 
-  function mkIng()  { return { id: rid('ing'),  name:'', termId:null, amount:'', unit:'', hint:'' }; }
-  function mkPrep() { return { id: rid('prep'), heading:'', body:'', hint:'', photo:null }; }
-  function rid(p)   { return p + '-' + Math.random().toString(36).slice(2, 9); }
+  function mkIng()     { return { id: rid('ing'),  name:'', termId:null, amount:'', unit:'', hint:'' }; }
+  function mkPrep()    { return { id: rid('prep'), heading:'', body:'', hint:'', photo:null }; }
+  function mkSection() { return { id: rid('sec'),  title:'', items:[mkIng()] }; }
+  function rid(p)      { return p + '-' + Math.random().toString(36).slice(2, 9); }
 
   function getCreatorData() {
     return window.G4T_RECIPE_CREATOR_DATA || {};
@@ -618,6 +626,7 @@
       prepTimeTermIds: asIntArray(initial.prepTimeTermIds),
       featureTermIds: asIntArray(initial.featureTermIds),
       ingredientsPhoto: initial.ingredientsPhoto || null,
+      ingredientsMode: initial.ingredientsMode === 'sections' ? 'sections' : 'single',
       ingredients: Array.isArray(initial.ingredients) && initial.ingredients.length > 0
         ? initial.ingredients.map((row, idx) => ({
             id: `ing-${idx}-${Math.random().toString(36).slice(2, 6)}`,
@@ -628,6 +637,22 @@
             hint: asText(row && row.hint),
           }))
         : [mkIng()],
+      ingredientSections: Array.isArray(initial.ingredientSections) && initial.ingredientSections.length > 0
+        ? initial.ingredientSections.map((sec, si) => ({
+            id: `sec-${si}-${Math.random().toString(36).slice(2, 6)}`,
+            title: asText(sec && sec.title),
+            items: Array.isArray(sec && sec.items) && sec.items.length > 0
+              ? sec.items.map((row, ii) => ({
+                  id: `ing-${si}-${ii}-${Math.random().toString(36).slice(2, 6)}`,
+                  name: asText(row && row.name),
+                  termId: (row && row.termId !== undefined && row.termId !== null && String(row.termId) !== '') ? Number(row.termId) : null,
+                  amount: asText(row && row.amount),
+                  unit: asText(row && row.unit),
+                  hint: asText(row && row.hint),
+                }))
+              : [mkIng()],
+          }))
+        : [mkSection()],
       steps: Array.isArray(initial.steps) && initial.steps.length > 0
         ? initial.steps.map((row, idx) => ({
             id: `prep-${idx}-${Math.random().toString(36).slice(2, 6)}`,
@@ -967,6 +992,26 @@
   // INGREDIENTS REPEATER
   // ============================================================
   function renderIngredients() {
+    renderIngredientsModeToggle();
+    if (state.data.ingredientsMode === 'sections') {
+      renderIngredientSections();
+    } else {
+      renderFlatIngredients();
+    }
+  }
+
+  function renderIngredientsModeToggle() {
+    const mode = state.data.ingredientsMode || 'single';
+    document.querySelectorAll('#ingredients-mode-toggle .mode-btn').forEach(btn => {
+      btn.classList.toggle('mode-btn--active', btn.dataset.mode === mode);
+    });
+    const singlePanel   = document.getElementById('ingredients-single-panel');
+    const sectionsPanel = document.getElementById('ingredients-sections-panel');
+    if (singlePanel)   singlePanel.hidden   = mode === 'sections';
+    if (sectionsPanel) sectionsPanel.hidden = mode !== 'sections';
+  }
+
+  function renderFlatIngredients() {
     const list = document.getElementById('ingredients-list');
     list.innerHTML = '';
     const tpl = document.getElementById('tpl-ingredient');
@@ -976,7 +1021,6 @@
       node.dataset.rowId = row.id;
       node.querySelector('.rep-card__num').textContent = i + 1;
 
-      // Fields
       node.querySelectorAll('[data-field]').forEach(input => {
         const key = input.dataset.field;
         input.value = row[key] ?? '';
@@ -990,12 +1034,10 @@
         });
       });
 
-      // Autocomplete
       const nameInput = node.querySelector('[data-field="name"]');
       nameInput.addEventListener('focus', () => showAutocomplete(node, row));
       nameInput.addEventListener('blur',  () => setTimeout(() => closeAutocomplete(node), 150));
 
-      // Tools
       node.querySelector('[data-action="up"]').addEventListener('click',     () => moveRow('ingredients', i, -1));
       node.querySelector('[data-action="down"]').addEventListener('click',   () => moveRow('ingredients', i, +1));
       node.querySelector('[data-action="remove"]').addEventListener('click', () => removeRow('ingredients', i));
@@ -1004,6 +1046,109 @@
     });
 
     refreshRowToolStates(list);
+  }
+
+  function renderIngredientSections() {
+    const container = document.getElementById('sections-list');
+    container.innerHTML = '';
+    const secTpl = document.getElementById('tpl-section');
+    const ingTpl = document.getElementById('tpl-ingredient');
+
+    state.data.ingredientSections.forEach((section, si) => {
+      const secNode = secTpl.content.firstElementChild.cloneNode(true);
+      secNode.dataset.sectionId = section.id;
+
+      const titleInput = secNode.querySelector('[data-field="title"]');
+      titleInput.value = section.title || '';
+      titleInput.addEventListener('input', () => { section.title = titleInput.value; afterChange(); });
+
+      secNode.querySelector('[data-action="move-section-up"]').addEventListener('click',   () => moveSectionRow(si, -1));
+      secNode.querySelector('[data-action="move-section-down"]').addEventListener('click', () => moveSectionRow(si, +1));
+      secNode.querySelector('[data-action="remove-section"]').addEventListener('click',    () => removeSection(si));
+
+      const itemsList = secNode.querySelector('.sec-card__items');
+      section.items.forEach((row, ii) => {
+        const ingNode = ingTpl.content.firstElementChild.cloneNode(true);
+        ingNode.dataset.rowId = row.id;
+        ingNode.querySelector('.rep-card__num').textContent = ii + 1;
+
+        ingNode.querySelectorAll('[data-field]').forEach(input => {
+          const key = input.dataset.field;
+          input.value = row[key] ?? '';
+          input.addEventListener('input', () => {
+            row[key] = input.value;
+            if (key === 'name') { row.termId = null; showAutocomplete(ingNode, row); }
+            afterChange();
+          });
+        });
+
+        const nameInput = ingNode.querySelector('[data-field="name"]');
+        nameInput.addEventListener('focus', () => showAutocomplete(ingNode, row));
+        nameInput.addEventListener('blur',  () => setTimeout(() => closeAutocomplete(ingNode), 150));
+
+        ingNode.querySelector('[data-action="up"]').addEventListener('click',     () => moveSectionItemRow(si, ii, -1));
+        ingNode.querySelector('[data-action="down"]').addEventListener('click',   () => moveSectionItemRow(si, ii, +1));
+        ingNode.querySelector('[data-action="remove"]').addEventListener('click', () => removeSectionItem(si, ii));
+
+        itemsList.appendChild(ingNode);
+      });
+      refreshRowToolStates(itemsList);
+
+      secNode.querySelector('[data-action="add-ingredient-to-section"]').addEventListener('click', () => {
+        section.items.push(mkIng());
+        renderIngredientSections();
+        afterChange();
+      });
+
+      container.appendChild(secNode);
+    });
+
+    refreshSectionToolStates(container);
+  }
+
+  function moveSectionRow(idx, dir) {
+    const arr = state.data.ingredientSections;
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= arr.length) return;
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    renderIngredientSections();
+    afterChange();
+  }
+
+  function removeSection(idx) {
+    if (state.data.ingredientSections.length <= 1) return;
+    state.data.ingredientSections.splice(idx, 1);
+    renderIngredientSections();
+    afterChange();
+  }
+
+  function moveSectionItemRow(si, ii, dir) {
+    const items = state.data.ingredientSections[si].items;
+    const newIdx = ii + dir;
+    if (newIdx < 0 || newIdx >= items.length) return;
+    [items[ii], items[newIdx]] = [items[newIdx], items[ii]];
+    renderIngredientSections();
+    afterChange();
+  }
+
+  function removeSectionItem(si, ii) {
+    const items = state.data.ingredientSections[si].items;
+    if (items.length <= 1) return;
+    items.splice(ii, 1);
+    renderIngredientSections();
+    afterChange();
+  }
+
+  function refreshSectionToolStates(container) {
+    const sections = container.querySelectorAll('.sec-card');
+    sections.forEach((sec, idx) => {
+      const upBtn    = sec.querySelector('[data-action="move-section-up"]');
+      const downBtn  = sec.querySelector('[data-action="move-section-down"]');
+      const removeBtn = sec.querySelector('[data-action="remove-section"]');
+      if (upBtn)     upBtn.disabled     = idx === 0;
+      if (downBtn)   downBtn.disabled   = idx === sections.length - 1;
+      if (removeBtn) removeBtn.disabled = sections.length <= 1;
+    });
   }
 
   function showAutocomplete(card, row) {
@@ -1739,6 +1884,17 @@
       state.data.ingredients.push(mkIng());
       renderIngredients();
       afterChange();
+    } else if (action === 'add-section') {
+      state.data.ingredientSections.push(mkSection());
+      renderIngredientSections();
+      afterChange();
+    } else if (action === 'set-ingredients-mode') {
+      const newMode = t.dataset.mode;
+      if (newMode && newMode !== state.data.ingredientsMode) {
+        state.data.ingredientsMode = newMode;
+        renderIngredients();
+        afterChange();
+      }
     } else if (action === 'add-prep') {
       state.data.steps.push(mkPrep());
       renderPrepSteps();
@@ -1886,15 +2042,32 @@
   }
 
   function buildAcfPayload(d) {
-    const ingredients = d.ingredients
-      .filter(r => (r.name || '').trim() !== '' || (r.amount || '').trim() !== '')
-      .map(r => ({
-        field_ingredient_term_id: Number.isFinite(Number(r.termId)) ? String(Number(r.termId)) : '',
-        field_ingredient_name: (r.name || '').trim(),
-        field_ingredient_amount: (r.amount || '').trim(),
-        field_ingredient_unit: (r.unit || '').trim(),
-        field_ingredient_note: (r.hint || '').trim(),
-      }));
+    const mode = d.ingredientsMode || 'single';
+
+    const ingRowFilter = r => (r.name || '').trim() !== '' || (r.amount || '').trim() !== '';
+
+    const ingredients = mode !== 'sections'
+      ? d.ingredients.filter(ingRowFilter).map(r => ({
+          field_ingredient_term_id: Number.isFinite(Number(r.termId)) ? String(Number(r.termId)) : '',
+          field_ingredient_name: (r.name || '').trim(),
+          field_ingredient_amount: (r.amount || '').trim(),
+          field_ingredient_unit: (r.unit || '').trim(),
+          field_ingredient_note: (r.hint || '').trim(),
+        }))
+      : [];
+
+    const ingredientSections = mode === 'sections'
+      ? d.ingredientSections.map(sec => ({
+          field_ingredient_section_title: (sec.title || '').trim(),
+          field_ingredient_section_items: sec.items.filter(ingRowFilter).map(r => ({
+            field_section_item_term_id:  Number.isFinite(Number(r.termId)) ? String(Number(r.termId)) : '',
+            field_section_item_name:     (r.name   || '').trim(),
+            field_section_item_amount:   (r.amount || '').trim(),
+            field_section_item_unit:     (r.unit   || '').trim(),
+            field_section_item_note:     (r.hint   || '').trim(),
+          })),
+        }))
+      : [];
 
     const steps = d.steps
       .filter(r => (r.heading || '').trim() !== '' || (r.body || '').trim() !== '')
@@ -1922,7 +2095,9 @@
       field_recipe_time_soak: formatMinutes(d.timeSoak),
       field_recipe_time_total: formatMinutes((d.timePrep || 0) + (d.timeCook || 0) + (d.timeSoak || 0)),
       field_recipe_ingredients_photo_url: getPhotoId(d.ingredientsPhoto),
+      field_recipe_ingredients_mode: mode,
       field_recipe_ingredients: ingredients,
+      field_recipe_ingredient_sections: ingredientSections,
       field_recipe_steps: steps,
       field_recipe_tips: (d.tips || '').trim(),
       field_recipe_source_label: (d.sourceName || '').trim(),
@@ -1949,6 +2124,7 @@
     // entries, doubling every ingredient and step on each update.
     const bridgeRepeaters = [
       'field_recipe_ingredients',
+      'field_recipe_ingredient_sections',
       'field_recipe_steps',
       'field_recipe_ads_products',
     ];
@@ -2036,7 +2212,10 @@
       ['Trudność',   diffLabel],
       ['Porcje',     `${d.portions} ${d.portionUnit || ''}`],
       ['Czas razem', fmt(total)],
-      ['Składników', d.ingredients.filter(r => r.name).length],
+      ['Składników', d.ingredientsMode === 'sections'
+        ? d.ingredientSections.reduce((sum, sec) => sum + sec.items.filter(r => r.name).length, 0)
+        : d.ingredients.filter(r => r.name).length
+      ],
       ['Kroków',     d.steps.filter(r => r.heading || r.body).length],
     ].forEach(([k, v]) => {
       const s = document.createElement('div');
@@ -2064,18 +2243,32 @@
     `);
 
     // 2. Składniki
-    const ings = d.ingredients.filter(r => r.name);
-    summarySection(body, `2 · Składniki (${ings.length})`, 1,
-      ings.length === 0
-        ? `<div style="padding:10px;"><em class="muted">Brak składników</em></div>`
-        : `<ul style="margin:0; padding-left:18px; line-height:1.7;">
-            ${ings.map(r => `<li>
+    const totalIngCount = d.ingredientsMode === 'sections'
+      ? d.ingredientSections.reduce((sum, sec) => sum + sec.items.filter(r => r.name).length, 0)
+      : d.ingredients.filter(r => r.name).length;
+    summarySection(body, `2 · Składniki (${totalIngCount})`, 1, (() => {
+      if (d.ingredientsMode === 'sections') {
+        if (totalIngCount === 0) return `<div style="padding:10px;"><em class="muted">Brak składników</em></div>`;
+        return d.ingredientSections.map(sec => `
+          ${sec.title ? `<div style="font-weight:600; margin:8px 0 4px;">${escapeHtml(sec.title)}</div>` : ''}
+          <ul style="margin:0 0 10px; padding-left:18px; line-height:1.7;">
+            ${sec.items.filter(r => r.name).map(r => `<li>
               <strong>${escapeHtml(r.amount || '')} ${escapeHtml(r.unit || '')}</strong>
               ${escapeHtml(r.name)}
               ${r.hint ? `<span class="muted"> — ${escapeHtml(r.hint)}</span>` : ''}
             </li>`).join('')}
-          </ul>`
-    );
+          </ul>`).join('');
+      }
+      const ings = d.ingredients.filter(r => r.name);
+      if (ings.length === 0) return `<div style="padding:10px;"><em class="muted">Brak składników</em></div>`;
+      return `<ul style="margin:0; padding-left:18px; line-height:1.7;">
+        ${ings.map(r => `<li>
+          <strong>${escapeHtml(r.amount || '')} ${escapeHtml(r.unit || '')}</strong>
+          ${escapeHtml(r.name)}
+          ${r.hint ? `<span class="muted"> — ${escapeHtml(r.hint)}</span>` : ''}
+        </li>`).join('')}
+      </ul>`;
+    })());
 
     // 3. Kroki
     const prep = d.steps.filter(r => r.heading || r.body);
@@ -2350,7 +2543,10 @@
       timePrep: 0, timeCook: 0, timeSoak: 0,
       mealTypeTermIds: [], prepTimeTermIds: [], featureTermIds: [],
       ingredientsPhoto: null,
-      ingredients: [mkIng()], steps: [mkPrep()],
+      ingredientsMode: 'single',
+      ingredients: [mkIng()],
+      ingredientSections: [mkSection()],
+      steps: [mkPrep()],
       tips: '', sourceName: '', sourceUrl: '', products: [],
     };
     state.productQuery = '';

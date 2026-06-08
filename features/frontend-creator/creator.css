@@ -745,6 +745,64 @@ html, body {
 }
 .rep-add:hover { background: var(--surface-2); border-color: var(--ink); }
 
+/* Ingredients mode toggle */
+.mode-toggle {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.mode-btn {
+  padding: 9px 20px;
+  font: 600 14px var(--sans);
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  line-height: 1;
+}
+.mode-btn:first-child { border-right: 1px solid var(--line-strong); }
+.mode-btn:hover { background: var(--surface-2); color: var(--ink); }
+.mode-btn--active {
+  background: var(--ink);
+  color: #fff;
+}
+.mode-btn--active:hover { background: var(--ink); color: #fff; }
+
+/* Section card (sections mode) */
+.sec-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
+  padding: 16px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sec-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sec-card__title {
+  flex: 1;
+  font: 600 16px var(--serif);
+}
+.sec-card__items { display: flex; flex-direction: column; gap: 12px; }
+
+#sections-list { display: flex; flex-direction: column; gap: 16px; }
+#ingredients-sections-panel > .rep-add { margin-top: 12px; }
+#ingredients-single-panel > .rep-add  { margin-top: 12px; }
+
+.rep-add--sm {
+  padding: 10px 16px;
+  font-size: 13px;
+  border-radius: var(--r-md);
+}
+
 /* Ingredient row layout */
 .ing-grid {
   display: grid;

@@ -53,7 +53,7 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
         $servings_value = is_numeric( (string) $servings_value ) ? (float) $servings_value : null;
     }
 
-    $normalized_ingredients = ( ! empty( $data['ingredients'] ) && is_array( $data['ingredients'] ) ) ? $data['ingredients'] : array();
+    $ingredient_sections = $data['ingredient_sections'] ?? array( array( 'title' => null, 'items' => array() ) );
 
     $ads_product_ids = g4t_get_ads_product_ids_from_acf( $post_id );
     $ads_products    = function_exists( 'g4t_recipe_bottom_strip_get_products_for_post' )
@@ -88,7 +88,7 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
             'label' => $date_label,
             'value' => $date_value,
         ),
-        'ingredients'           => $normalized_ingredients,
+        'ingredient_sections'   => $ingredient_sections,
         'ingredients_photo_url' => (string) ( $data['ingredients_photo_url'] ?? '' ),
         'steps'                 => ( ! empty( $data['steps'] ) && is_array( $data['steps'] ) ) ? $data['steps'] : array(),
         'tips'                  => (string) ( $data['tips'] ?? '' ),
@@ -159,21 +159,41 @@ function g4t_normalize_ads_product_ids( array $raw_ids ): array {
  * @return array<string,mixed>
  */
 function g4t_get_recipe_acf_data( int $post_id ): array {
-    $ingredients_raw = g4t_acf_field( 'recipe_ingredients', $post_id, array() );
-    $steps_raw       = g4t_acf_field( 'recipe_steps', $post_id, array() );
-
-    $ingredients = array();
-    if ( is_array( $ingredients_raw ) ) {
-        $ingredients = g4t_normalize_ingredients_list( $ingredients_raw );
-    } elseif ( is_numeric( $ingredients_raw ) ) {
-        $ingredients = g4t_load_ingredients_repeater_meta( $post_id, (int) $ingredients_raw );
-    }
+    $steps_raw = g4t_acf_field( 'recipe_steps', $post_id, array() );
 
     $steps = array();
     if ( is_array( $steps_raw ) ) {
         $steps = g4t_normalize_steps_list( $steps_raw );
     } elseif ( is_numeric( $steps_raw ) ) {
         $steps = g4t_load_steps_repeater_meta( $post_id, (int) $steps_raw );
+    }
+
+    // Ingredient sections — always produce unified shape regardless of mode.
+    $mode = (string) g4t_acf_field( 'recipe_ingredients_mode', $post_id, 'single' );
+    if ( '' === $mode ) {
+        $mode = 'single';
+    }
+
+    if ( 'sections' === $mode ) {
+        $sections_raw = g4t_acf_field( 'recipe_ingredient_sections', $post_id, array() );
+        if ( is_array( $sections_raw ) ) {
+            $ingredient_sections = g4t_normalize_ingredient_sections( 'sections', $sections_raw );
+        } elseif ( is_numeric( $sections_raw ) ) {
+            $raw_sections        = g4t_load_ingredient_sections_meta( $post_id, (int) $sections_raw );
+            $ingredient_sections = g4t_normalize_ingredient_sections( 'sections', $raw_sections );
+        } else {
+            $ingredient_sections = array( array( 'title' => null, 'items' => array() ) );
+        }
+    } else {
+        $ingredients_raw = g4t_acf_field( 'recipe_ingredients', $post_id, array() );
+        if ( is_array( $ingredients_raw ) ) {
+            $flat_items = $ingredients_raw;
+        } elseif ( is_numeric( $ingredients_raw ) ) {
+            $flat_items = g4t_load_ingredients_repeater_meta( $post_id, (int) $ingredients_raw );
+        } else {
+            $flat_items = array();
+        }
+        $ingredient_sections = g4t_normalize_ingredient_sections( 'single', $flat_items );
     }
 
     return array(
@@ -185,7 +205,7 @@ function g4t_get_recipe_acf_data( int $post_id ): array {
         'time_cook'             => (string) g4t_acf_field( 'recipe_time_cook', $post_id, '' ),
         'time_total'            => (string) g4t_acf_field( 'recipe_time_total', $post_id, '' ),
         'time_soak'             => (string) g4t_acf_field( 'recipe_time_soak', $post_id, '' ),
-        'ingredients'           => $ingredients,
+        'ingredient_sections'   => $ingredient_sections,
         'ingredients_photo_url' => (string) g4t_acf_field( 'recipe_ingredients_photo_url', $post_id, '' ),
         'steps'                 => $steps,
         'tips'                  => (string) g4t_acf_field( 'recipe_tips', $post_id, '' ),

@@ -200,33 +200,57 @@ function g4t_register_acf_fields( Go4Taste_Recipes_Plugin $plugin ): void {
     );
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Recipe Ingredients field group (flat repeater)
+    // Recipe Ingredients field group
     //
-    // Ingredients list with taxonomy term linking and photo URL.
-    // Repeater layout: table for easy bulk entry.
+    // Mode toggle + two ingredient structures:
+    //  - Single mode (default): flat repeater `recipe_ingredients` — used for all
+    //    existing recipes and new recipes that don't need grouping.
+    //  - Sections mode: nested repeater `recipe_ingredient_sections` — each section
+    //    has a title and its own ingredient rows.
     //
-    // Fields:
-    //  - ingredient_term_id (taxonomy select) - links to recipe_ingredient taxonomy
-    //  - name (text) - fallback if term not selected
-    //  - amount (number) - quantity
-    //  - unit (text) - measurement unit
-    //  - ingredient_note (text) - optional comment/tip for ingredient
-    //  - photo_url (image) - ingredients photo (outside repeater)
+    // WHY two separate repeaters instead of modifying the existing one:
+    //  - Zero migration for ~130 existing recipes in single mode.
+    //  - Clean separation; view model normalizer wraps both into the same
+    //    `ingredient_sections` shape for templates.
     //
-    // Sync: ACF save → builds ingredients block with itemsList array → post_content
+    // See SCHEMA_CONTRACT_V3.md for the full field/meta key reference.
     // ─────────────────────────────────────────────────────────────────────────
     acf_add_local_field_group(
         array(
             'key'      => 'group_recipe_ingredients',
             'title'    => 'Recipe Ingredients',
             'fields'   => array(
+                // ── Mode toggle ──────────────────────────────────────────────
                 array(
-                    'key'          => 'field_recipe_ingredients',
-                    'label'        => 'Ingredients List',
-                    'name'         => 'recipe_ingredients',
-                    'type'         => 'repeater',
-                    'layout'       => 'table',
-                    'button_label' => __( 'Add Ingredient', 'go4taste-recipes-plugin' ),
+                    'key'           => 'field_recipe_ingredients_mode',
+                    'label'         => 'Tryb składników',
+                    'name'          => 'recipe_ingredients_mode',
+                    'type'          => 'radio',
+                    'choices'       => array(
+                        'single'   => 'Jedna lista',
+                        'sections' => 'Kilka sekcji (np. ciasto i farsz)',
+                    ),
+                    'default_value' => 'single',
+                    'layout'        => 'horizontal',
+                    'instructions'  => 'Wybierz "Kilka sekcji" tylko gdy składniki są podzielone na wyraźne grupy',
+                ),
+                // ── Flat repeater (single mode) ───────────────────────────
+                array(
+                    'key'              => 'field_recipe_ingredients',
+                    'label'            => 'Lista składników',
+                    'name'             => 'recipe_ingredients',
+                    'type'             => 'repeater',
+                    'layout'           => 'table',
+                    'button_label'     => __( 'Add Ingredient', 'go4taste-recipes-plugin' ),
+                    'conditional_logic' => array(
+                        array(
+                            array(
+                                'field'    => 'field_recipe_ingredients_mode',
+                                'operator' => '==',
+                                'value'    => 'single',
+                            ),
+                        ),
+                    ),
                     'sub_fields'   => array(
                         array(
                             'key'          => 'field_ingredient_term_id',
@@ -246,10 +270,10 @@ function g4t_register_acf_fields( Go4Taste_Recipes_Plugin $plugin ): void {
                             'instructions' => 'Jeśli składnika nie ma w taksonomii',
                         ),
                         array(
-                            'key'  => 'field_ingredient_amount',
-                            'label' => 'Amount',
-                            'name' => 'amount',
-                            'type' => 'text',
+                            'key'         => 'field_ingredient_amount',
+                            'label'       => 'Amount',
+                            'name'        => 'amount',
+                            'type'        => 'text',
                             'placeholder' => 'np. 1/3, 1.5, szczypta',
                         ),
                         array(
@@ -269,6 +293,84 @@ function g4t_register_acf_fields( Go4Taste_Recipes_Plugin $plugin ): void {
                         ),
                     ),
                 ),
+                // ── Sections nested repeater (sections mode) ─────────────
+                array(
+                    'key'              => 'field_recipe_ingredient_sections',
+                    'label'            => 'Sekcje składników',
+                    'name'             => 'recipe_ingredient_sections',
+                    'type'             => 'repeater',
+                    'layout'           => 'block',
+                    'button_label'     => __( 'Add Section', 'go4taste-recipes-plugin' ),
+                    'conditional_logic' => array(
+                        array(
+                            array(
+                                'field'    => 'field_recipe_ingredients_mode',
+                                'operator' => '==',
+                                'value'    => 'sections',
+                            ),
+                        ),
+                    ),
+                    'sub_fields'   => array(
+                        array(
+                            'key'          => 'field_ingredient_section_title',
+                            'label'        => 'Tytuł sekcji',
+                            'name'         => 'section_title',
+                            'type'         => 'text',
+                            'placeholder'  => 'np. Ciasto, Farsz, Sos',
+                            'instructions' => 'Nagłówek wyświetlany nad listą składników tej sekcji',
+                        ),
+                        array(
+                            'key'          => 'field_ingredient_section_items',
+                            'label'        => 'Składniki sekcji',
+                            'name'         => 'section_items',
+                            'type'         => 'repeater',
+                            'layout'       => 'table',
+                            'button_label' => __( 'Add Ingredient', 'go4taste-recipes-plugin' ),
+                            'sub_fields'   => array(
+                                array(
+                                    'key'          => 'field_section_item_term_id',
+                                    'label'        => 'Ingredient',
+                                    'name'         => 'ingredient_term_id',
+                                    'type'         => 'taxonomy',
+                                    'taxonomy'     => G4T_INGREDIENT_TAXONOMY,
+                                    'field_type'   => 'select',
+                                    'allow_null'   => 1,
+                                    'instructions' => 'Wybierz z listy lub wpisz nazwę poniżej',
+                                ),
+                                array(
+                                    'key'          => 'field_section_item_name',
+                                    'label'        => 'Name',
+                                    'name'         => 'name',
+                                    'type'         => 'text',
+                                    'instructions' => 'Jeśli składnika nie ma w taksonomii',
+                                ),
+                                array(
+                                    'key'         => 'field_section_item_amount',
+                                    'label'       => 'Amount',
+                                    'name'        => 'amount',
+                                    'type'        => 'text',
+                                    'placeholder' => 'np. 1/3, 1.5, szczypta',
+                                ),
+                                array(
+                                    'key'         => 'field_section_item_unit',
+                                    'label'       => 'Unit',
+                                    'name'        => 'unit',
+                                    'type'        => 'text',
+                                    'placeholder' => 'g, ml, łyżka, szczypta',
+                                ),
+                                array(
+                                    'key'          => 'field_section_item_note',
+                                    'label'        => 'Wskazówka',
+                                    'name'         => 'ingredient_note',
+                                    'type'         => 'text',
+                                    'placeholder'  => 'Opcjonalny komentarz do składnika',
+                                    'instructions' => 'Np. substytuty, wskazówki zakupowe',
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+                // ── Ingredients photo (both modes) ────────────────────────
                 array(
                     'key'           => 'field_recipe_ingredients_photo_url',
                     'label'         => 'Ingredients Photo (optional)',
