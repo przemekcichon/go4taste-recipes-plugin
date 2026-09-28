@@ -34,7 +34,7 @@ class Test_Settings_Page extends WP_UnitTestCase {
             'malicious_key'      => '<script>alert("xss")</script>',
         );
 
-        $result = g4t_sanitize_options( $input );
+        $result = g4t_sanitize_options( $input, $this->plugin );
 
         $this->assertEquals( 'post', $result['source_mode'] );
         $this->assertEquals( 'page', $result['existing_post_type'] );
@@ -49,7 +49,7 @@ class Test_Settings_Page extends WP_UnitTestCase {
             'source_mode' => 'invalid_mode',
         );
 
-        $result = g4t_sanitize_options( $input );
+        $result = g4t_sanitize_options( $input, $this->plugin );
 
         $this->assertEquals( 'post', $result['source_mode'] ); // Should fallback to default
     }
@@ -59,15 +59,18 @@ class Test_Settings_Page extends WP_UnitTestCase {
      */
     public function test_dependency_notices_missing_acf() {
         // Simulate ACF not active
-        if ( class_exists( 'ACF' ) ) {
+        if ( function_exists( 'get_field' ) ) {
             $this->markTestSkipped( 'ACF is active, cannot test missing ACF notice.' );
         }
+
+        // Notices render only for users who can manage options.
+        wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
 
         ob_start();
         g4t_render_dependency_notices( $this->plugin );
         $output = ob_get_clean();
 
-        $this->assertStringContainsString( 'Advanced Custom Fields', $output );
+        $this->assertStringContainsString( 'ACF jest wymagane', $output );
     }
 
     /**
