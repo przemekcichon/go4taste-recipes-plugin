@@ -101,19 +101,17 @@ class Test_Normalizers extends WP_UnitTestCase {
         $this->assertIsArray( $result );
         $this->assertCount( 2, $result );
 
-        // First step
-        $this->assertEquals( 'Krok 1', $result[0]['title'] );
+        // First step: legacy 'title' / 'images' input maps to 'heading' / 'imageUrl'.
+        $this->assertEquals( 'Krok 1', $result[0]['heading'] );
         $this->assertEquals( 'Wymieszaj składniki', $result[0]['description'] );
         $this->assertEquals( 'Uważaj na grudki', $result[0]['tip'] );
-        $this->assertIsArray( $result[0]['images'] );
-        $this->assertCount( 1, $result[0]['images'] );
+        $this->assertEquals( 'http://example.com/img1.jpg', $result[0]['imageUrl'] );
 
-        // Second step (auto-generated title)
-        $this->assertEquals( 'Krok 2', $result[1]['title'] );
+        // Second step (auto-generated heading)
+        $this->assertEquals( 'Krok 2', $result[1]['heading'] );
         $this->assertEquals( 'Piecz przez 30 minut', $result[1]['description'] );
         $this->assertEquals( '', $result[1]['tip'] );
-        $this->assertIsArray( $result[1]['images'] );
-        $this->assertEmpty( $result[1]['images'] );
+        $this->assertEquals( '', $result[1]['imageUrl'] );
     }
 
     /**
@@ -129,7 +127,7 @@ class Test_Normalizers extends WP_UnitTestCase {
         $result = g4t_normalize_steps_list( $input );
 
         $this->assertCount( 1, $result );
-        $this->assertEquals( 'Krok 1', $result[0]['title'] );
+        $this->assertEquals( 'Krok 1', $result[0]['heading'] );
     }
 
     /**
