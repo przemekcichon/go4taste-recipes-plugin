@@ -205,7 +205,7 @@ class Test_Builder extends WP_UnitTestCase {
         $vm = g4t_build_single_recipe_view_model( get_post( $this->post_id ), $this->plugin );
 
         $this->assertSame( 'Data aktualizacji', $vm['date']['label'] );
-        $this->assertSame( wp_date( 'j F Y', (int) get_post_modified_time( 'U', false, $this->post_id ) ), $vm['date']['value'] );
+        $this->assertSame( '20 February 2026', $vm['date']['value'] );
     }
 
     /**

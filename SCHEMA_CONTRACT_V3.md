@@ -78,7 +78,7 @@ present**; "empty" values are `''`, `null` or `[]` as listed, never a missing ke
 - **`ads.bottom_product_ids` vs `ads.products`** — independent sources:
   `bottom_product_ids` reads the legacy ACF repeater in this plugin, while
   `products` is resolved by go4taste-ads from its own meta
-  (`_g4t_a_recipe_bottom_product_ids`). `enabled` depends on `products` only.
+  (`_g4t_a_recipe_bottom_product_ids`, legacy fallback `_g4t_a_recipe_bottom_ps_product_ids`). `enabled` depends on `products` only.
 
 ---
 
