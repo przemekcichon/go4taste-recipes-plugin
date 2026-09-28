@@ -107,7 +107,7 @@ features/admin-promoted-products/algolia-products.php promoted products save han
 1. `features/frontend-creator/acf-fields.php` — add/update ACF field definition.
 2. `features/frontend-creator/creator-form.php` — map creator state ↔ meta save/load.
 3. `features/recipe-display/view-model-builder.php` — include field in view model mapping.
-4. `SCHEMA_CONTRACT_V2.md` — update contract docs if view-model shape changes.
+4. `SCHEMA_CONTRACT_V3.md` — update contract docs if view-model shape changes.
 
 ## How to add a taxonomy
 
@@ -149,4 +149,4 @@ Add `?g4t_recipe_debug=1` to any single recipe URL. Works on local env (`wp_get_
 
 ## Schema contract
 
-View model shape is documented in `SCHEMA_CONTRACT_V2.md`. Do not change the view model without updating that file. Non-additive changes (rename, type change, nullability change) require a major version bump and migration document.
+View model shape is documented in `SCHEMA_CONTRACT_V3.md`. Do not change the view model without updating that file. Non-additive changes (rename, type change, nullability change) require a major version bump and migration document.

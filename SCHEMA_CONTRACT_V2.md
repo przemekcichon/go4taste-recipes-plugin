@@ -1,5 +1,7 @@
 # GO4TASTE Recipes Plugin - Schema Contract v2
 
+> **ARCHIVED** — superseded by SCHEMA_CONTRACT_V3.md (current contract, full view model shape). Retained for the v1 → v2 amount change and the v2.1 difficulty notes.
+
 Last Updated: 2026-05-19
 Status: Stable
 Supersedes: SCHEMA_CONTRACT_V1.md
