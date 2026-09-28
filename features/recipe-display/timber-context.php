@@ -49,7 +49,16 @@ function g4t_filter_single_context( array $context, array $meta = array(), Go4Ta
     $context['recipe']    = g4t_build_single_recipe_view_model( $post, $plugin );
 
     if ( g4t_is_recipe_debug_enabled() ) {
-        $parsed_blocks = g4t_collect_blocks_debug( $post );
+        $parsed_blocks       = g4t_collect_blocks_debug( $post );
+        $ingredient_sections = isset( $context['recipe']['ingredient_sections'] ) && is_array( $context['recipe']['ingredient_sections'] )
+            ? $context['recipe']['ingredient_sections']
+            : array();
+        $ingredients_count   = 0;
+        foreach ( $ingredient_sections as $section ) {
+            if ( is_array( $section ) && isset( $section['items'] ) && is_array( $section['items'] ) ) {
+                $ingredients_count += count( $section['items'] );
+            }
+        }
         $panel_payload = array(
             'debug_marker'        => 'g4t-recipes-debug-2026-05-09-fallback-restored-v1',
             'strategy'            => $strategy,
@@ -77,8 +86,9 @@ function g4t_filter_single_context( array $context, array $meta = array(), Go4Ta
                 )
             ),
             'recipe_model_counts' => array(
-                'ingredients' => isset( $context['recipe']['ingredients'] ) && is_array( $context['recipe']['ingredients'] ) ? count( $context['recipe']['ingredients'] ) : 0,
-                'steps'       => isset( $context['recipe']['steps'] ) && is_array( $context['recipe']['steps'] ) ? count( $context['recipe']['steps'] ) : 0,
+                'ingredients'         => $ingredients_count,
+                'ingredient_sections' => count( $ingredient_sections ),
+                'steps'               => isset( $context['recipe']['steps'] ) && is_array( $context['recipe']['steps'] ) ? count( $context['recipe']['steps'] ) : 0,
             ),
         );
 
