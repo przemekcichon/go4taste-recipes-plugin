@@ -104,3 +104,19 @@ vendor/bin/phpunit --filter Test_Timber_Context
 - **No Yoast graph:** a standalone `<script type="application/ld+json" class="g4t-recipe-schema">` is printed in `wp_head`.
 - **Extending:** `apply_filters( 'go4taste/recipes/schema/recipe', $data, $post )`.
 - **Times:** stored values (`"30"`, `"30 min"`, `"1 h 20 min"`) become ISO 8601 durations. `prepTime` and `cookTime` are emitted only together. `totalTime` falls back to their sum.
+- **Images:** `Recipe.image` lists the 1:1, 4:3 and 16:9 crops (`g4t-recipe-1x1`, `g4t-recipe-4x3`, `g4t-recipe-16x9`, 1200 px wide) that exist for the featured image, then the original. Originals smaller than a size are cropped to its ratio without upscaling. After activation run `wp media regenerate` for existing attachments.
+
+### ItemList on recipe listings
+
+The recipe home and recipe archives get an `ItemList` with one `ListItem` (position, URL) per recipe shown on the current page. The recipes come from `$context['posts']` in the `go4taste/recipes/context/home` and `/archive` filters (priority 20). Pages with active FacetWP filters get no list. With Yoast the node joins its graph, otherwise it is printed standalone.
+
+## 🧭 Breadcrumbs
+
+`features/breadcrumbs/` adds `breadcrumbs` (list of `{text, url}`, the last item with an empty `url`) to the `single` and `archive` contexts. The trail comes from Yoast's breadcrumbs generator, the same one that builds the `BreadcrumbList` in the schema graph, so the visible trail matches the structured data. Without Yoast: "Przepisy → current page".
+
+Yoast settings that define the trail (Yoast SEO → Settings → Advanced → Breadcrumbs):
+
+| Setting | Value | `wpseo_titles` key |
+|---|---|---|
+| Anchor text for the homepage | `Przepisy` | `breadcrumbs-home` |
+| Breadcrumbs for post types → Posts | `Typ dania` (`recipe_meal_type`) | `post_types-post-maintax` |

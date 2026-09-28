@@ -2,7 +2,7 @@
 
 > **Status:** Active (current contract)
 > **Supersedes:** SCHEMA_CONTRACT_V2.md (archived, flat `ingredients` array removed from view model)
-> **Last updated:** 2026-09-28 — full view model shape documented (documentation only, no shape change)
+> **Last updated:** 2026-09-28 — additive: `breadcrumbs` context key (outside the view model)
 
 ---
 
@@ -156,6 +156,25 @@ Existing `recipe_ingredients_*` keys unchanged — still written in `single` mod
 - All existing recipes have no `recipe_ingredients_mode` in meta → treated as `"single"` → wrapped in one unnamed section.
 - No data migration required.
 - Twig templates **must** use `recipe.ingredient_sections` (not `recipe.ingredients`).
+
+---
+
+## Context keys outside the view model
+
+Additive in V3 (no version bump). Set by `features/breadcrumbs/` on
+`go4taste/recipes/context/single` and `go4taste/recipes/context/archive`
+(priority 10).
+
+```
+breadcrumbs: array<int, {
+  text: string,   // plain text, never empty
+  url:  string    // absolute URL; always "" for the last item (current page)
+}>
+```
+
+- Always set on those two contexts and never empty: the trail has at least the current page.
+- Source: Yoast SEO breadcrumbs generator (same trail as the `BreadcrumbList` in the schema graph). Without Yoast: `Przepisy` (`home_url('/')`) → current page.
+- Theme renders it and escapes `text`/`url` on output.
 
 ---
 
