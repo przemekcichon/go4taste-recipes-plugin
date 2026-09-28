@@ -64,6 +64,151 @@ class Test_Builder extends WP_UnitTestCase {
     }
 
     /**
+     * Test the view model matches the full shape in SCHEMA_CONTRACT_V3.md:
+     * exact key sets and value types for a populated recipe.
+     */
+    public function test_build_single_recipe_view_model_matches_contract_v3() {
+        update_post_meta( $this->post_id, 'recipe_lead', 'Lead przepisu' );
+        update_post_meta( $this->post_id, 'recipe_time_prep', '15' );
+        update_post_meta( $this->post_id, 'recipe_time_cook', '30 min' );
+        update_post_meta( $this->post_id, 'recipe_time_total', '45' );
+        update_post_meta( $this->post_id, 'recipe_time_soak', '' );
+        update_post_meta( $this->post_id, 'recipe_difficulty', 'łatwy' );
+        update_post_meta( $this->post_id, 'recipe_servings_value', '4' );
+        update_post_meta( $this->post_id, 'recipe_servings_unit', 'porcje' );
+        update_post_meta( $this->post_id, 'recipe_ingredients_photo_url', 'https://example.com/ingredients.jpg' );
+        update_post_meta( $this->post_id, 'recipe_ingredients', 1 );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_name', 'Mąka' );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_amount', '1/3' );
+        update_post_meta( $this->post_id, 'recipe_ingredients_0_unit', 'szkl.' );
+        update_post_meta( $this->post_id, 'recipe_steps', 2 );
+        update_post_meta( $this->post_id, 'recipe_steps_0_step_description', 'Wymieszaj.' );
+        update_post_meta( $this->post_id, 'recipe_steps_1_step_header', 'Pieczenie' );
+        update_post_meta( $this->post_id, 'recipe_steps_1_step_description', 'Piecz 30 minut.' );
+        update_post_meta( $this->post_id, 'recipe_steps_1_step_tip', 'Nie otwieraj piekarnika.' );
+        update_post_meta( $this->post_id, 'recipe_tips', 'Podawaj na ciepło.' );
+        update_post_meta( $this->post_id, 'recipe_source_label', 'Babcia' );
+        update_post_meta( $this->post_id, 'recipe_source_url', 'https://example.com/zrodlo' );
+
+        $vm = g4t_build_single_recipe_view_model( get_post( $this->post_id ), $this->plugin );
+
+        $this->assertSame(
+            array( 'id', 'hero', 'times', 'difficulty', 'difficulty_key', 'servings', 'date', 'ingredient_sections', 'ingredients_photo_url', 'steps', 'tips', 'source', 'ads' ),
+            array_keys( $vm )
+        );
+
+        $this->assertSame( $this->post_id, $vm['id'] );
+
+        $this->assertSame(
+            array( 'title' => 'Test Recipe', 'excerpt' => 'Lead przepisu', 'image' => '' ),
+            $vm['hero']
+        );
+
+        $this->assertSame(
+            array( 'prep' => '15', 'cook' => '30 min', 'total' => '45', 'soak' => '' ),
+            $vm['times']
+        );
+
+        $this->assertSame( 'Łatwy', $vm['difficulty'] );
+        $this->assertSame( 'easy', $vm['difficulty_key'] );
+
+        $this->assertSame( array( 'value' => 4.0, 'unit' => 'porcje' ), $vm['servings'] );
+
+        $this->assertSame( array( 'label', 'value' ), array_keys( $vm['date'] ) );
+        $this->assertSame( 'Data dodania', $vm['date']['label'] );
+        $this->assertIsString( $vm['date']['value'] );
+        $this->assertNotSame( '', $vm['date']['value'] );
+
+        $this->assertSame(
+            array(
+                array(
+                    'title' => null,
+                    'items' => array(
+                        array(
+                            'ingredient_term_id' => null,
+                            'name'               => 'Mąka',
+                            'amount'             => '1/3',
+                            'unit'               => 'szkl.',
+                            'ingredient_note'    => '',
+                        ),
+                    ),
+                ),
+            ),
+            $vm['ingredient_sections']
+        );
+        $this->assertSame( 'https://example.com/ingredients.jpg', $vm['ingredients_photo_url'] );
+
+        $this->assertSame(
+            array(
+                array(
+                    'heading'     => 'Krok 1',
+                    'description' => 'Wymieszaj.',
+                    'tip'         => '',
+                    'imageUrl'    => '',
+                ),
+                array(
+                    'heading'     => 'Pieczenie',
+                    'description' => 'Piecz 30 minut.',
+                    'tip'         => 'Nie otwieraj piekarnika.',
+                    'imageUrl'    => '',
+                ),
+            ),
+            $vm['steps']
+        );
+
+        $this->assertSame( 'Podawaj na ciepło.', $vm['tips'] );
+        $this->assertSame( array( 'label' => 'Babcia', 'url' => 'https://example.com/zrodlo' ), $vm['source'] );
+
+        // go4taste-ads is not loaded in the test suite: no products, strip disabled.
+        $this->assertSame(
+            array( 'bottom_product_ids' => array(), 'products' => array(), 'enabled' => false ),
+            $vm['ads']
+        );
+    }
+
+    /**
+     * Test empty values of an unpopulated recipe match SCHEMA_CONTRACT_V3.md.
+     */
+    public function test_build_single_recipe_view_model_empty_values() {
+        $vm = g4t_build_single_recipe_view_model( get_post( $this->post_id ), $this->plugin );
+
+        $this->assertSame( '', $vm['hero']['excerpt'] );
+        $this->assertSame( '', $vm['hero']['image'] );
+        $this->assertSame( array( 'prep' => '', 'cook' => '', 'total' => '', 'soak' => '' ), $vm['times'] );
+        $this->assertSame( '', $vm['difficulty'] );
+        $this->assertSame( '', $vm['difficulty_key'] );
+        $this->assertSame( array( 'value' => null, 'unit' => '' ), $vm['servings'] );
+        $this->assertSame( '', $vm['ingredients_photo_url'] );
+        $this->assertSame( array(), $vm['steps'] );
+        $this->assertSame( '', $vm['tips'] );
+        $this->assertSame( array( 'label' => '', 'url' => '' ), $vm['source'] );
+    }
+
+    /**
+     * Test the date switches to the modified date when the post was updated later.
+     */
+    public function test_build_single_recipe_view_model_date_uses_modified_date() {
+        global $wpdb;
+
+        $wpdb->update(
+            $wpdb->posts,
+            array(
+                'post_date'         => '2026-01-10 10:00:00',
+                'post_date_gmt'     => '2026-01-10 10:00:00',
+                'post_modified'     => '2026-02-20 10:00:00',
+                'post_modified_gmt' => '2026-02-20 10:00:00',
+            ),
+            array( 'ID' => $this->post_id )
+        );
+        clean_post_cache( $this->post_id );
+
+        $vm = g4t_build_single_recipe_view_model( get_post( $this->post_id ), $this->plugin );
+
+        $this->assertSame( 'Data aktualizacji', $vm['date']['label'] );
+        $this->assertSame( '20 February 2026', $vm['date']['value'] );
+    }
+
+    /**
      * Test ACF/meta data loader returns repeater rows from post meta.
      */
     public function test_get_recipe_acf_data_loads_repeaters_from_meta() {
