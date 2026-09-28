@@ -36,6 +36,7 @@ class Test_Recipe_Schema_Image_Sizes extends WP_UnitTestCase {
     public function test_crop_position_array_is_honored() {
         $this->assertSame( array( 0, 0, 0, 0, 600, 338, 600, 338 ), g4t_recipe_schema_ratio_crop_dimensions( null, 600, 600, 1200, 675, array( 'left', 'top' ) ) );
         $this->assertSame( array( 0, 0, 0, 262, 600, 338, 600, 338 ), g4t_recipe_schema_ratio_crop_dimensions( null, 600, 600, 1200, 675, array( 'left', 'bottom' ) ) );
+        $this->assertSame( array( 0, 0, 0, 131, 600, 338, 600, 338 ), g4t_recipe_schema_ratio_crop_dimensions( null, 600, 600, 1200, 675, array( 'left' ) ) );
     }
 
     public function test_large_original_keeps_wordpress_default_crop() {

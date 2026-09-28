@@ -94,8 +94,10 @@ function g4t_recipe_schema_ratio_crop_dimensions( $payload, $orig_w, $orig_h, $d
         return false;
     }
 
-    $crop_x = is_array( $crop ) ? (string) ( $crop[0] ?? 'center' ) : 'center';
-    $crop_y = is_array( $crop ) ? (string) ( $crop[1] ?? 'center' ) : 'center';
+    // As in core: anything but a two-item position array means centered.
+    $position = is_array( $crop ) && 2 === count( $crop ) ? array_values( $crop ) : array( 'center', 'center' );
+    $crop_x   = (string) $position[0];
+    $crop_y   = (string) $position[1];
 
     $src_x = 'left' === $crop_x ? 0 : ( 'right' === $crop_x ? $orig_w - $crop_w : (int) floor( ( $orig_w - $crop_w ) / 2 ) );
     $src_y = 'top' === $crop_y ? 0 : ( 'bottom' === $crop_y ? $orig_h - $crop_h : (int) floor( ( $orig_h - $crop_h ) / 2 ) );
