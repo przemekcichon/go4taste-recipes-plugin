@@ -153,6 +153,48 @@ class Test_Normalizers extends WP_UnitTestCase {
     }
 
     /**
+     * Test sections mode keeps untitled sections with items as title = null
+     * and drops sections with neither a title nor valid items (SCHEMA_CONTRACT_V3).
+     */
+    public function test_normalize_ingredient_sections_untitled_and_empty_sections() {
+        $input = array(
+            array(
+                'section_title' => 'Ciasto',
+                'section_items' => array( array( 'name' => 'Mąka', 'amount' => '500', 'unit' => 'g' ) ),
+            ),
+            array(
+                'section_title' => '   ',
+                'section_items' => array( array( 'name' => 'Cukier puder' ) ),
+            ),
+            array(
+                'section_title' => '',
+                'section_items' => array( array( 'name' => '' ) ),
+            ),
+        );
+
+        $result = g4t_normalize_ingredient_sections( 'sections', $input );
+
+        $this->assertCount( 2, $result );
+        $this->assertSame( 'Ciasto', $result[0]['title'] );
+        $this->assertNull( $result[1]['title'] );
+        $this->assertSame( 'Cukier puder', $result[1]['items'][0]['name'] );
+    }
+
+    /**
+     * Test sections mode falls back to one empty unnamed section when nothing is valid.
+     */
+    public function test_normalize_ingredient_sections_fallback_when_no_valid_sections() {
+        $input = array(
+            array( 'section_title' => '', 'section_items' => array() ),
+        );
+
+        $this->assertSame(
+            array( array( 'title' => null, 'items' => array() ) ),
+            g4t_normalize_ingredient_sections( 'sections', $input )
+        );
+    }
+
+    /**
      * Test g4t_has_value helper function.
      */
     public function test_has_value() {
