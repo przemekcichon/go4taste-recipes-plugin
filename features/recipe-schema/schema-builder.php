@@ -51,6 +51,9 @@ function g4t_recipe_schema_parse_minutes( string $raw ): int {
     if ( preg_match( '/(\d+)\s*min/u', $value, $minutes_match ) ) {
         $minutes += (int) $minutes_match[1];
         $matched  = true;
+    } elseif ( $matched && preg_match( '/(?:h|godz\w*)\.?\s*(\d+)\s*$/u', $value, $trailing_match ) ) {
+        // "1h30", "1 h 30": a bare number after hours means minutes.
+        $minutes += (int) $trailing_match[1];
     }
 
     return $matched ? (int) round( $minutes ) : 0;
@@ -77,7 +80,9 @@ function g4t_recipe_schema_format_duration( int $minutes ): string {
  * Collapse markup and whitespace into a single plain-text line.
  */
 function g4t_recipe_schema_plain_text( string $value ): string {
-    $text = html_entity_decode( strip_tags( $value ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+    // Line breaks and block ends become spaces, so "a.<br>b" does not glue into "a.b".
+    $value = (string) preg_replace( '/<(?:br|\/p|\/li|\/div|\/h[1-6])\b[^>]*>/i', ' ', $value );
+    $text  = html_entity_decode( strip_tags( $value ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
 
     return trim( (string) preg_replace( '/\s+/u', ' ', $text ) );
 }

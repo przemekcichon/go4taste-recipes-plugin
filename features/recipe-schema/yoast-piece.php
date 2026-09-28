@@ -15,6 +15,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Whether Yoast SEO will print its schema graph on this request.
+ *
+ * Yoast's own "disable schema" setting and third-party code both switch the
+ * graph off through `wpseo_json_ld_output` (checked in Yoast 28.5
+ * Schema_Presenter::present()). While the graph is on, the Recipe belongs in
+ * it only, even if a Yoast filter removes the piece — never a second graph.
+ */
+function g4t_recipe_schema_yoast_graph_expected(): bool {
+    if ( ! defined( 'WPSEO_VERSION' ) ) {
+        return false;
+    }
+
+    $output = apply_filters( 'wpseo_json_ld_output', array( '_deprecated' => '' ), '' );
+
+    return array() !== $output && false !== $output;
+}
+
+/**
  * `wpseo_schema_graph_pieces` callback: append the Recipe piece.
  *
  * @param array<int,mixed> $pieces  Yoast graph pieces.

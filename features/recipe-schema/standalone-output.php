@@ -31,7 +31,7 @@ function g4t_recipe_schema_encode( array $document ): string {
  */
 function g4t_recipe_schema_print_standalone(): void {
     $state = g4t_recipe_schema_state();
-    if ( $state['printed'] ) {
+    if ( $state['printed'] || g4t_recipe_schema_yoast_graph_expected() ) {
         return;
     }
 

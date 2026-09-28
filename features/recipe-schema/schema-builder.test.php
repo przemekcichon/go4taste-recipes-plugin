@@ -63,6 +63,9 @@ class Test_Recipe_Schema_Builder extends WP_UnitTestCase {
         $this->assertSame( 80, g4t_recipe_schema_parse_minutes( '1 h 20 min' ) );
         $this->assertSame( 90, g4t_recipe_schema_parse_minutes( '1,5 h' ) );
         $this->assertSame( 120, g4t_recipe_schema_parse_minutes( '2 godz.' ) );
+        $this->assertSame( 90, g4t_recipe_schema_parse_minutes( '1h30' ) );
+        $this->assertSame( 90, g4t_recipe_schema_parse_minutes( '1 h 30' ) );
+        $this->assertSame( 45, g4t_recipe_schema_parse_minutes( '45 minut' ) );
         $this->assertSame( 0, g4t_recipe_schema_parse_minutes( '' ) );
         $this->assertSame( 0, g4t_recipe_schema_parse_minutes( 'chwilę' ) );
         $this->assertSame( 0, g4t_recipe_schema_parse_minutes( '0' ) );
@@ -103,6 +106,21 @@ class Test_Recipe_Schema_Builder extends WP_UnitTestCase {
             array( '@type' => 'HowToStep', 'name' => 'Zakwas', 'text' => 'Wlej zakwas.', 'image' => 'https://example.com/s2.jpg' ),
             $schema['recipeInstructions'][1]
         );
+    }
+
+    public function test_step_markup_keeps_word_boundaries() {
+        $recipe = $this->recipe(
+            array( 'steps' => array( array( 'heading' => '', 'description' => '<p>Wymieszaj.<br>Odstaw</p><ul><li>raz</li><li>dwa &amp; trzy</li></ul>', 'tip' => '', 'imageUrl' => '' ) ) )
+        );
+        $schema = g4t_recipe_schema_build( $recipe, $this->post_data() );
+
+        $this->assertSame( 'Wymieszaj. Odstaw raz dwa & trzy', $schema['recipeInstructions'][0]['text'] );
+    }
+
+    public function test_no_id_without_url() {
+        $schema = g4t_recipe_schema_build( $this->recipe(), $this->post_data( array( 'url' => '' ) ) );
+
+        $this->assertArrayNotHasKey( '@id', $schema );
     }
 
     public function test_prep_and_cook_only_in_pair() {

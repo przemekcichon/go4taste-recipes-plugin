@@ -34,10 +34,12 @@ go4taste-recipes-plugin/
 │   │   └── timber-context.php               # Timber context injection
 │   │
 │   ├── recipe-schema/                       # Feature: schema.org Recipe JSON-LD on single recipes
-│   │   ├── schema-builder.php               # Pure mapping view model → Recipe node (+ tests)
+│   │   ├── schema-builder.php               # Pure mapping view model → Recipe node
+│   │   ├── schema-builder.test.php          # Tests for the pure mapping
 │   │   ├── schema-context.php               # Captures view model from context/single filter
 │   │   ├── standalone-output.php            # <script type="application/ld+json"> when no Yoast graph
-│   │   └── yoast-piece.php                  # Recipe piece in Yoast SEO schema graph
+│   │   ├── yoast-piece.php                  # wpseo_schema_graph_pieces callback + Yoast graph detection
+│   │   └── class-yoast-recipe-piece.php     # Recipe piece extending Yoast Abstract_Schema_Piece
 │   │
 │   ├── archive-filtering/                   # Feature: Filtering recipes on archives
 │   │   └── facetwp-integration.php          # FacetWP specific logic
