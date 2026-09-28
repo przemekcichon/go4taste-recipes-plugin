@@ -340,3 +340,70 @@ function g4t_recipe_schema_is_printable( array $schema ): bool {
 
     return ! empty( $schema['recipeIngredient'] ) || ! empty( $schema['recipeInstructions'] );
 }
+
+/**
+ * Whether the listing request carries active FacetWP filters.
+ *
+ * Filter params are the facet names, i.e. the FacetWP prefix plus a key
+ * (`g4t_meal_type`); FacetWP's own URL syntax adds a leading `_`. Empty
+ * values do not filter. The debug switch shares the prefix and is ignored.
+ *
+ * @param array<string,mixed> $query  Request query params (`$_GET`).
+ * @param string              $prefix Facet name prefix (context `recipes.facetwp_prefix`).
+ */
+function g4t_recipe_schema_listing_is_filtered( array $query, string $prefix ): bool {
+    if ( '' === $prefix ) {
+        return false;
+    }
+
+    foreach ( $query as $name => $value ) {
+        $name = (string) $name;
+        if ( 'g4t_recipe_debug' === $name || '' === $value || null === $value || array() === $value ) {
+            continue;
+        }
+
+        if ( str_starts_with( $name, $prefix ) || str_starts_with( $name, '_' . $prefix ) ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Build the schema.org `ItemList` node (without `@context`) for a recipe listing page.
+ *
+ * Summary-page list (Google host carousel): every item only points to a
+ * recipe URL that carries its own `Recipe` markup.
+ *
+ * @param array<int,mixed> $urls     Recipe permalinks in display order.
+ * @param string           $page_url URL of the listing page (for `@id`).
+ * @return array<string,mixed>
+ */
+function g4t_recipe_schema_build_item_list( array $urls, string $page_url ): array {
+    $items = array();
+    $seen  = array();
+
+    foreach ( $urls as $url ) {
+        $url = trim( (string) $url );
+        if ( '' === $url || isset( $seen[ $url ] ) ) {
+            continue;
+        }
+        $seen[ $url ] = true;
+
+        $items[] = array(
+            '@type'    => 'ListItem',
+            'position' => count( $items ) + 1,
+            'url'      => $url,
+        );
+    }
+
+    $node = array( '@type' => 'ItemList' );
+    if ( '' !== $page_url ) {
+        $node['@id'] = $page_url . '#itemlist';
+    }
+    $node['numberOfItems']   = count( $items );
+    $node['itemListElement'] = $items;
+
+    return $node;
+}

@@ -50,3 +50,28 @@ function g4t_recipe_schema_print_standalone(): void {
     // JSON is encoded with JSON_HEX_TAG, so it cannot break out of the script element.
     echo "<script type=\"application/ld+json\" class=\"g4t-recipe-schema\">" . $json . "</script>\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 }
+
+/**
+ * `wp_head` callback: print the standalone ItemList JSON-LD on recipe listings.
+ */
+function g4t_recipe_schema_print_item_list_standalone(): void {
+    $state = g4t_recipe_schema_listing_state();
+    if ( $state['printed'] || g4t_recipe_schema_yoast_graph_expected() ) {
+        return;
+    }
+
+    $node = g4t_recipe_schema_get_item_list_node();
+    if ( null === $node ) {
+        return;
+    }
+
+    $json = g4t_recipe_schema_encode( array_merge( array( '@context' => 'https://schema.org' ), $node ) );
+    if ( '' === $json ) {
+        return;
+    }
+
+    g4t_recipe_schema_mark_item_list_printed();
+
+    // JSON is encoded with JSON_HEX_TAG, so it cannot break out of the script element.
+    echo "<script type=\"application/ld+json\" class=\"g4t-recipe-schema\">" . $json . "</script>\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+}

@@ -212,4 +212,41 @@ class Test_Recipe_Schema_Builder extends WP_UnitTestCase {
         );
         $this->assertFalse( g4t_recipe_schema_is_printable( $no_content ) );
     }
+
+    public function test_item_list_numbers_unique_urls_in_order() {
+        $list = g4t_recipe_schema_build_item_list(
+            array( 'https://example.com/a/', '', 'https://example.com/b/', 'https://example.com/a/' ),
+            'https://example.com/page/2/'
+        );
+
+        $this->assertSame(
+            array(
+                '@type'           => 'ItemList',
+                '@id'             => 'https://example.com/page/2/#itemlist',
+                'numberOfItems'   => 2,
+                'itemListElement' => array(
+                    array( '@type' => 'ListItem', 'position' => 1, 'url' => 'https://example.com/a/' ),
+                    array( '@type' => 'ListItem', 'position' => 2, 'url' => 'https://example.com/b/' ),
+                ),
+            ),
+            $list
+        );
+    }
+
+    public function test_item_list_without_page_url_has_no_id() {
+        $this->assertArrayNotHasKey( '@id', g4t_recipe_schema_build_item_list( array( 'https://example.com/a/' ), '' ) );
+    }
+
+    public function test_listing_filtered_by_facet_params() {
+        $this->assertTrue( g4t_recipe_schema_listing_is_filtered( array( 'g4t_meal_type' => 'zupy' ), 'g4t_' ) );
+        $this->assertTrue( g4t_recipe_schema_listing_is_filtered( array( 'g4t_gluten_free' => '1' ), 'g4t_' ) );
+        $this->assertTrue( g4t_recipe_schema_listing_is_filtered( array( '_g4t_ingredients' => array( 'dynia' ) ), 'g4t_' ) );
+    }
+
+    public function test_listing_not_filtered_by_empty_or_foreign_params() {
+        $this->assertFalse( g4t_recipe_schema_listing_is_filtered( array(), 'g4t_' ) );
+        $this->assertFalse( g4t_recipe_schema_listing_is_filtered( array( 'g4t_meal_type' => '' ), 'g4t_' ) );
+        $this->assertFalse( g4t_recipe_schema_listing_is_filtered( array( 'g4t_recipe_debug' => '1', 'paged' => '2', '_paged' => '2' ), 'g4t_' ) );
+        $this->assertFalse( g4t_recipe_schema_listing_is_filtered( array( 'g4t_meal_type' => 'zupy' ), '' ) );
+    }
 }
