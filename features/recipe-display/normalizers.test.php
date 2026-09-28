@@ -167,6 +167,10 @@ class Test_Normalizers extends WP_UnitTestCase {
                 'section_items' => array( array( 'name' => 'Cukier puder' ) ),
             ),
             array(
+                'section_title' => 'Sos',
+                'section_items' => array(),
+            ),
+            array(
                 'section_title' => '',
                 'section_items' => array( array( 'name' => '' ) ),
             ),
@@ -174,10 +178,11 @@ class Test_Normalizers extends WP_UnitTestCase {
 
         $result = g4t_normalize_ingredient_sections( 'sections', $input );
 
-        $this->assertCount( 2, $result );
+        $this->assertCount( 3, $result );
         $this->assertSame( 'Ciasto', $result[0]['title'] );
         $this->assertNull( $result[1]['title'] );
         $this->assertSame( 'Cukier puder', $result[1]['items'][0]['name'] );
+        $this->assertSame( array( 'title' => 'Sos', 'items' => array() ), $result[2] );
     }
 
     /**

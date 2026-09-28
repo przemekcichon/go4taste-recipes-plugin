@@ -147,7 +147,7 @@ Existing `recipe_ingredients_*` keys unchanged — still written in `single` mod
 - `ingredient_sections` is **always present** and always an array.
 - Single-mode recipes (mode = `"single"` or no mode stored): exactly **1 section** with `title = null`.
 - Sections-mode recipes: 1 or more sections. `title` is the trimmed section title, or `null` when it is empty but the section has items. Sections with neither a title nor valid items are dropped; when none remain, the result is the single fallback section `{ title: null, items: [] }`.
-- A section with zero valid `items` may appear only when data is malformed; normalizer skips empty-name items.
+- A titled section may have zero `items` (empty-name items are skipped).
 
 ---
 
