@@ -70,13 +70,15 @@ class Test_Timber_Context extends WP_UnitTestCase {
             'name'     => 'General',
         ) );
 
-        $this->go_to( get_term_link( $term, 'g4t_test_page_tax' ) );
+        try {
+            $this->go_to( get_term_link( $term, 'g4t_test_page_tax' ) );
 
-        $result = g4t_filter_use_archive_template( false, get_queried_object(), $this->plugin );
+            $result = g4t_filter_use_archive_template( false, get_queried_object(), $this->plugin );
 
-        $this->assertFalse( $result );
-
-        unregister_taxonomy( 'g4t_test_page_tax' );
+            $this->assertFalse( $result );
+        } finally {
+            unregister_taxonomy( 'g4t_test_page_tax' );
+        }
     }
 
     /**
@@ -137,8 +139,9 @@ class Test_Timber_Context extends WP_UnitTestCase {
         g4t_register_flat_taxonomies( $this->plugin );
 
         $term_id = $this->factory->term->create( array(
-            'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
-            'name'     => 'Śniadanie',
+            'taxonomy'    => G4T_MEAL_TYPE_TAXONOMY,
+            'name'        => 'Śniadanie',
+            'description' => 'Opis testowy',
         ) );
 
         $term = get_term( $term_id, G4T_MEAL_TYPE_TAXONOMY );
@@ -156,7 +159,7 @@ class Test_Timber_Context extends WP_UnitTestCase {
         // Safe defaults when ACF not active or fields empty
         $this->assertNull( $result['icon'] );
         $this->assertEquals( '', $result['title_suffix'] );
-        $this->assertEquals( $term->description, $result['description'] ); // from WP term, not ACF
+        $this->assertEquals( 'Opis testowy', $result['description'] ); // from WP term, not ACF
         $this->assertNull( $result['hero_image'] );
         $this->assertEquals( '', $result['short_claim'] );
         $this->assertIsArray( $result['blog_posts'] );

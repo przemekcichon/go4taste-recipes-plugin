@@ -85,7 +85,7 @@ Tests are co-located with their features as `*.test.php` and run on the WordPres
    ```bash
    bash bin/install-wp-tests.sh go4taste_tests root root 127.0.0.1:<port> <wp-version> true
    ```
-   The last argument skips DB creation (step 2). Without `svn` the script downloads the tests from the GitHub `wordpress-develop` mirror. Custom locations: set `WP_TESTS_DIR` / `WP_CORE_DIR`.
+   The last argument skips DB creation (step 2). Without `svn` the script downloads the tests from the GitHub `wordpress-develop` mirror (needs `curl` and GNU `tar`, as in Git Bash). Custom locations: set `WP_TESTS_DIR` / `WP_CORE_DIR`.
 
 **Run** (the Local site must be running, so MySQL is up):
 
