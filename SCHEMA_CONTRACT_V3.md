@@ -1,7 +1,84 @@
 # SCHEMA_CONTRACT_V3 — Ingredient Sections
 
-> **Status:** Active (feature/ingredient-sections branch)
+> **Status:** Active (current contract)
 > **Supersedes:** SCHEMA_CONTRACT_V2.md (archived, flat `ingredients` array removed from view model)
+> **Last updated:** 2026-09-28 — full view model shape documented (documentation only, no shape change)
+
+---
+
+## Full view model shape (returned by `g4t_build_single_recipe_view_model()`)
+
+Built in `features/recipe-display/view-model-builder.php` and exposed to Timber
+as `recipe` by `go4taste/recipes/context/single`. Every key below is **always
+present**; "empty" values are `''`, `null` or `[]` as listed, never a missing key.
+
+```php
+[
+  'id'   => int,                       // post ID
+  'hero' => [
+    'title'   => string,               // get_the_title()
+    'excerpt' => string,               // meta recipe_lead (not post_excerpt); '' when empty
+    'image'   => string,               // featured image URL, size 'full'; '' when none
+  ],
+  'times' => [                         // raw meta strings, '' when empty
+    'prep'  => string,                 // recipe_time_prep
+    'cook'  => string,                 // recipe_time_cook
+    'total' => string,                 // recipe_time_total
+    'soak'  => string,                 // recipe_time_soak
+  ],
+  'difficulty'     => string,          // 'Łatwy' | 'Średni' | 'Trudny' | ''  (translated label)
+  'difficulty_key' => string,          // 'easy' | 'medium' | 'hard' | ''
+  'servings' => [
+    'value' => float|null,             // recipe_servings_value; null when empty or non-numeric
+    'unit'  => string,                 // recipe_servings_unit; '' when empty
+  ],
+  'date' => [
+    'label' => string,                 // 'Data dodania' | 'Data aktualizacji'
+    'value' => string,                 // wp_date( 'j F Y' ); '' when no post date
+  ],
+  'ingredient_sections'   => array<IngredientSection>,  // see "Ingredient sections shape" below
+  'ingredients_photo_url' => string,   // recipe_ingredients_photo_url; '' when empty
+  'steps' => [
+    [
+      'heading'     => string,         // step_header; 'Krok N' when empty (N = 1-based row index)
+      'description' => string,         // step_description; required, rows without it are skipped
+      'tip'         => string,         // step_tip; '' when empty
+      'imageUrl'    => string,         // step_image_url; '' when none
+    ],
+    // ...
+  ],                                   // [] when no steps
+  'tips'   => string,                  // recipe_tips; '' when empty
+  'source' => [
+    'label' => string,                 // recipe_source_label; '' when empty
+    'url'   => string,                 // recipe_source_url; '' when empty
+  ],
+  'ads' => [
+    'bottom_product_ids' => array<int,string>, // legacy ACF repeater recipe_ads_products, unique, ordered
+    'products'           => array,     // from go4taste-ads g4t_recipe_bottom_strip_get_products_for_post();
+                                       // shape owned by go4taste-ads; [] when the plugin is inactive
+    'enabled'            => bool,      // true when 'products' is non-empty
+  ],
+]
+```
+
+### Field notes
+
+- **`times.*`** — stored as entered, no unit normalization: the creator stores
+  bare minutes (`"30"`), migrated posts store `"30 min"`. Consumers that need
+  minutes must parse (see `g4t_recipe_schema_parse_minutes()` in
+  `features/recipe-schema/schema-builder.php`).
+- **`difficulty` vs `difficulty_key`** — use `difficulty` for display and
+  `difficulty_key` for CSS classes and logic (introduced in V2.1). Legacy values
+  (`"łatwy"`, `"latwy"`, …) are normalized to a key; unrecognized values give
+  `''` in both fields.
+- **`date`** — `"Data aktualizacji"` with the modified date when the post was
+  modified after publishing, otherwise `"Data dodania"` with the publish date.
+- **`steps[].imageUrl`** — camelCase is historical (block-editor era) and part
+  of the contract; renaming it is a non-additive change.
+- **`ads.bottom_product_ids` vs `ads.products`** — independent sources:
+  `bottom_product_ids` reads the legacy ACF repeater in this plugin, while
+  `products` is resolved by go4taste-ads from its own meta
+  (`_g4t_a_recipe_bottom_product_ids`). `enabled` depends on `products` only.
 
 ---
 
@@ -14,7 +91,7 @@
 | `recipe_ingredients_mode` meta | — | `"single"` \| `"sections"` (new meta key) |
 | `recipe_ingredient_sections_*` meta | — | Nested repeater meta keys (new) |
 
-All other V2 fields are unchanged.
+All other V2 fields are unchanged. The full current shape is in "Full view model shape" above.
 
 ---
 
@@ -40,7 +117,7 @@ Existing `recipe_ingredients_*` keys unchanged — still written in `single` mod
 
 ---
 
-## View model shape (returned by `g4t_build_single_recipe_view_model()`)
+## Ingredient sections shape (`ingredient_sections`)
 
 ```php
 [
