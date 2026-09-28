@@ -33,6 +33,14 @@ go4taste-recipes-plugin/
 │   │   ├── view-model-builder.php           # Logic for reading/normalizing recipe data
 │   │   └── timber-context.php               # Timber context injection
 │   │
+│   ├── recipe-schema/                       # Feature: schema.org Recipe JSON-LD on single recipes
+│   │   ├── schema-builder.php               # Pure mapping view model → Recipe node
+│   │   ├── schema-builder.test.php          # Tests for the pure mapping
+│   │   ├── schema-context.php               # Captures view model from context/single filter
+│   │   ├── standalone-output.php            # <script type="application/ld+json"> when no Yoast graph
+│   │   ├── yoast-piece.php                  # wpseo_schema_graph_pieces callback + Yoast graph detection
+│   │   └── class-yoast-recipe-piece.php     # Recipe piece extending Yoast Abstract_Schema_Piece
+│   │
 │   ├── archive-filtering/                   # Feature: Filtering recipes on archives
 │   │   └── facetwp-integration.php          # FacetWP specific logic
 │   │
@@ -76,3 +84,13 @@ phpunit features/recipe-display/view-model-builder.test.php
 phpunit features/archive-filtering/facetwp-integration.test.php
 phpunit features/admin-settings/settings-page.test.php
 ```
+
+## 🍲 schema.org Recipe (JSON-LD)
+
+`features/recipe-schema/` prints a `Recipe` node on the single view of the configured recipe post type. The node needs a name, a featured image, and at least one ingredient or step.
+
+- **Data source:** the slice reads `$context['recipe']` from the `go4taste/recipes/context/single` filter (priority 20). It never calls `recipe-display` directly, so the ads products are not fetched a second time. The theme must apply that filter before rendering, which `single.php` already does.
+- **Yoast SEO active:** the node is added to Yoast's `@graph` via `wpseo_schema_graph_pieces`. `mainEntityOfPage` points to Yoast's WebPage, and `author` points to Yoast's `#organization` when the site represents a company.
+- **No Yoast graph:** a standalone `<script type="application/ld+json" class="g4t-recipe-schema">` is printed in `wp_head`.
+- **Extending:** `apply_filters( 'go4taste/recipes/schema/recipe', $data, $post )`.
+- **Times:** stored values (`"30"`, `"30 min"`, `"1 h 20 min"`) become ISO 8601 durations. `prepTime` and `cookTime` are emitted only together. `totalTime` falls back to their sum.

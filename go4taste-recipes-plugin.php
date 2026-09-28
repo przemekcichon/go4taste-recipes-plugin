@@ -19,6 +19,7 @@ define( 'GO4TASTE_RECIPES_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 require_once GO4TASTE_RECIPES_PLUGIN_PATH . 'features/frontend-creator/index.php';
 require_once GO4TASTE_RECIPES_PLUGIN_PATH . 'features/admin-promoted-products/index.php';
 require_once GO4TASTE_RECIPES_PLUGIN_PATH . 'features/recipe-display/index.php';
+require_once GO4TASTE_RECIPES_PLUGIN_PATH . 'features/recipe-schema/index.php';
 require_once GO4TASTE_RECIPES_PLUGIN_PATH . 'features/archive-filtering/index.php';
 require_once GO4TASTE_RECIPES_PLUGIN_PATH . 'features/admin-settings/index.php';
 require_once GO4TASTE_RECIPES_PLUGIN_PATH . 'core/class-plugin-bootstrap.php';
