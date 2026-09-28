@@ -141,6 +141,12 @@ Add `?g4t_recipe_debug=1` to any single recipe URL. Works on local env (`wp_get_
 
 ---
 
+## Tests
+
+`composer test` runs every `*.test.php` (co-located with its feature) on the WP test suite against a dedicated test DB in Local's MySQL — never the site DB. Local must be running. One-time setup: README → Testing.
+
+---
+
 ## Schema contract
 
 View model shape is documented in `SCHEMA_CONTRACT_V2.md`. Do not change the view model without updating that file. Non-additive changes (rename, type change, nullability change) require a major version bump and migration document.
