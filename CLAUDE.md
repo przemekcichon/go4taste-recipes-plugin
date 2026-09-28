@@ -50,6 +50,12 @@ features/recipe-display/index.php                 context filter hook registrati
 features/recipe-display/view-model-builder.php    g4t_build_single_recipe_view_model(), g4t_get_recipe_acf_data()
 features/recipe-display/normalizers.php           g4t_normalize_ingredients_list(), steps, images, g4t_has_value()
 features/recipe-display/timber-context.php        g4t_filter_single_context(), archive, home, debug helpers
+features/recipe-schema/index.php                  schema.org Recipe hook registration (context capture, wp_head, Yoast graph)
+features/recipe-schema/schema-builder.php         g4t_recipe_schema_build() — pure view model → Recipe node, time → ISO 8601
+features/recipe-schema/schema-context.php         captures $context['recipe'] from context/single, resolves post data, memoized node
+features/recipe-schema/standalone-output.php      standalone <script type="application/ld+json"> in wp_head (no Yoast graph)
+features/recipe-schema/yoast-piece.php            wpseo_schema_graph_pieces callback (loads class lazily)
+features/recipe-schema/class-yoast-recipe-piece.php Recipe piece extending Yoast Abstract_Schema_Piece
 features/archive-filtering/index.php              FacetWP hook registration
 features/archive-filtering/facetwp-integration.php FacetWP integration callbacks
 features/admin-settings/index.php                 admin settings hook registration
@@ -122,7 +128,10 @@ apply_filters( 'go4taste/recipes/context/home',    $context, $meta ): array
 apply_filters( 'go4taste/recipes/use_archive_template', $bool, $queried_object ): bool
 apply_filters( 'go4taste/recipes/home_query_args', $args ): array
 apply_filters( 'go4taste/recipes/source_post_type', $post_type ): string
+apply_filters( 'go4taste/recipes/schema/recipe', $data, $post ): array   // Recipe JSON-LD node before output
 ```
+
+`recipe-schema` reads the view model from `go4taste/recipes/context/single` (priority 20), never by calling `recipe-display` directly. With Yoast SEO active, the `Recipe` node joins Yoast's graph; otherwise it prints as a standalone script. There is always exactly one graph per page.
 
 ---
 
