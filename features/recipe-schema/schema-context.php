@@ -75,18 +75,8 @@ function g4t_recipe_schema_capture_context( array $context, array $meta = array(
  * @return array<string,mixed>
  */
 function g4t_recipe_schema_post_data( WP_Post $post ): array {
-    $image    = null;
     $image_id = (int) get_post_thumbnail_id( $post );
-    if ( $image_id > 0 ) {
-        $src = wp_get_attachment_image_src( $image_id, 'full' );
-        if ( is_array( $src ) && ! empty( $src[0] ) ) {
-            $image = array(
-                'url'    => (string) $src[0],
-                'width'  => (int) $src[1],
-                'height' => (int) $src[2],
-            );
-        }
-    }
+    $images   = $image_id > 0 ? g4t_recipe_schema_attachment_images( $image_id ) : array();
 
     $categories = array();
     $terms      = get_the_terms( $post, G4T_MEAL_TYPE_TAXONOMY );
@@ -101,7 +91,7 @@ function g4t_recipe_schema_post_data( WP_Post $post ): array {
 
     return array(
         'url'            => (string) get_permalink( $post ),
-        'image'          => $image,
+        'images'         => $images,
         'date_published' => (string) get_post_time( 'c', true, $post ),
         'date_modified'  => (string) get_post_modified_time( 'c', true, $post ),
         'language'       => (string) get_bloginfo( 'language' ),

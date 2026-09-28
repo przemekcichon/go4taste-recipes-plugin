@@ -193,10 +193,46 @@ function g4t_recipe_schema_yield( $value, string $unit ): string {
 }
 
 /**
+ * Map image candidates to `ImageObject` nodes, skipping entries without a URL and duplicate URLs.
+ *
+ * @param array<int,mixed> $images Items of array{url:string,width:int,height:int}.
+ * @return array<int,array<string,mixed>>
+ */
+function g4t_recipe_schema_image_nodes( array $images ): array {
+    $nodes = array();
+    $seen  = array();
+
+    foreach ( $images as $image ) {
+        if ( ! is_array( $image ) || empty( $image['url'] ) ) {
+            continue;
+        }
+
+        $url = (string) $image['url'];
+        if ( isset( $seen[ $url ] ) ) {
+            continue;
+        }
+        $seen[ $url ] = true;
+
+        $node = array(
+            '@type' => 'ImageObject',
+            'url'   => $url,
+        );
+        if ( ! empty( $image['width'] ) && ! empty( $image['height'] ) ) {
+            $node['width']  = (int) $image['width'];
+            $node['height'] = (int) $image['height'];
+        }
+
+        $nodes[] = $node;
+    }
+
+    return $nodes;
+}
+
+/**
  * Build the schema.org `Recipe` node (without `@context`).
  *
  * @param array<string,mixed> $recipe    Single recipe view model.
- * @param array<string,mixed> $post_data Resolved post data: url (string), image (array{url:string,width:int,height:int}|null),
+ * @param array<string,mixed> $post_data Resolved post data: url (string), images (array<int,array{url:string,width:int,height:int}>),
  *                                       date_published, date_modified, language (string), categories (array<int,string>),
  *                                       author (array<string,mixed>).
  * @return array<string,mixed>
@@ -215,17 +251,10 @@ function g4t_recipe_schema_build( array $recipe, array $post_data ): array {
 
     $schema['name'] = g4t_recipe_schema_plain_text( (string) ( $hero['title'] ?? '' ) );
 
-    $image = $post_data['image'] ?? null;
-    if ( is_array( $image ) && ! empty( $image['url'] ) ) {
-        $image_node = array(
-            '@type' => 'ImageObject',
-            'url'   => (string) $image['url'],
-        );
-        if ( ! empty( $image['width'] ) && ! empty( $image['height'] ) ) {
-            $image_node['width']  = (int) $image['width'];
-            $image_node['height'] = (int) $image['height'];
-        }
-        $schema['image'] = $image_node;
+    $images = g4t_recipe_schema_image_nodes( (array) ( $post_data['images'] ?? array() ) );
+    if ( ! empty( $images ) ) {
+        // A single image stays an object, as before multiple aspect ratios existed.
+        $schema['image'] = 1 === count( $images ) ? $images[0] : $images;
     }
 
     $description = g4t_recipe_schema_plain_text( (string) ( $hero['excerpt'] ?? '' ) );

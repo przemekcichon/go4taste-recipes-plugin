@@ -45,7 +45,7 @@ class Test_Recipe_Schema_Builder extends WP_UnitTestCase {
         return array_replace(
             array(
                 'url'            => 'https://example.com/zurek/',
-                'image'          => array( 'url' => 'https://example.com/zurek.jpg', 'width' => 1200, 'height' => 800 ),
+                'images'         => array( array( 'url' => 'https://example.com/zurek.jpg', 'width' => 1200, 'height' => 800 ) ),
                 'date_published' => '2026-01-10T10:00:00+00:00',
                 'date_modified'  => '2026-02-01T10:00:00+00:00',
                 'language'       => 'pl-PL',
@@ -169,6 +169,32 @@ class Test_Recipe_Schema_Builder extends WP_UnitTestCase {
         }
     }
 
+    public function test_build_lists_every_aspect_ratio_once() {
+        $schema = g4t_recipe_schema_build(
+            $this->recipe(),
+            $this->post_data(
+                array(
+                    'images' => array(
+                        array( 'url' => 'https://example.com/zurek-600x450.jpg', 'width' => 600, 'height' => 450 ),
+                        array( 'url' => 'https://example.com/zurek-600x338.jpg', 'width' => 600, 'height' => 338 ),
+                        array( 'url' => '', 'width' => 1, 'height' => 1 ),
+                        array( 'url' => 'https://example.com/zurek-600x338.jpg', 'width' => 600, 'height' => 338 ),
+                        array( 'url' => 'https://example.com/zurek.jpg', 'width' => 0, 'height' => 0 ),
+                    ),
+                )
+            )
+        );
+
+        $this->assertSame(
+            array(
+                array( '@type' => 'ImageObject', 'url' => 'https://example.com/zurek-600x450.jpg', 'width' => 600, 'height' => 450 ),
+                array( '@type' => 'ImageObject', 'url' => 'https://example.com/zurek-600x338.jpg', 'width' => 600, 'height' => 338 ),
+                array( '@type' => 'ImageObject', 'url' => 'https://example.com/zurek.jpg' ),
+            ),
+            $schema['image']
+        );
+    }
+
     public function test_yield_formats_decimal_with_comma() {
         $this->assertSame( '1,5 l', g4t_recipe_schema_yield( 1.5, 'l' ) );
         $this->assertSame( '12 sztuk', g4t_recipe_schema_yield( 12.0, 'sztuk' ) );
@@ -177,7 +203,7 @@ class Test_Recipe_Schema_Builder extends WP_UnitTestCase {
     }
 
     public function test_not_printable_without_image_or_content() {
-        $no_image = g4t_recipe_schema_build( $this->recipe(), $this->post_data( array( 'image' => null ) ) );
+        $no_image = g4t_recipe_schema_build( $this->recipe(), $this->post_data( array( 'images' => array() ) ) );
         $this->assertFalse( g4t_recipe_schema_is_printable( $no_image ) );
 
         $no_content = g4t_recipe_schema_build(
