@@ -3,7 +3,9 @@
  * PHPUnit bootstrap file for go4taste-recipes-plugin tests.
  */
 
-// Composer autoloader
+// Composer autoloader (PHPUnit Polyfills are required by the WP test suite).
+require_once dirname( __DIR__ ) . '/vendor/autoload.php';
+
 $_tests_dir = getenv( 'WP_TESTS_DIR' );
 
 if ( ! $_tests_dir ) {

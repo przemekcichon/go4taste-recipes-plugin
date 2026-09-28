@@ -1,5 +1,7 @@
 <?xml version="1.0"?>
 <phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
     bootstrap="tests/bootstrap.php"
     backupGlobals="false"
     colors="true"
@@ -13,14 +15,18 @@
 >
     <testsuites>
         <testsuite name="go4taste-recipes-plugin">
-            <directory>features</directory>
-            <directory>core/domain</directory>
+            <directory suffix=".test.php">features</directory>
+            <directory suffix=".test.php">core/domain</directory>
         </testsuite>
     </testsuites>
-    <filter>
-        <whitelist>
-            <directory>features</directory>
-            <directory>core</directory>
-        </whitelist>
-    </filter>
+    <coverage>
+        <include>
+            <directory suffix=".php">features</directory>
+            <directory suffix=".php">core</directory>
+        </include>
+        <exclude>
+            <directory suffix=".test.php">features</directory>
+            <directory suffix=".test.php">core</directory>
+        </exclude>
+    </coverage>
 </phpunit>
