@@ -60,4 +60,18 @@ class Test_Breadcrumb_Trail extends WP_UnitTestCase {
         $this->assertSame( array( 'text' => 'Zupa dyniowa', 'url' => '' ), end( $trail ) );
         $this->assertNotSame( '', $trail[0]['url'] );
     }
+
+    public function test_current_title_for_term_archive() {
+        $term_id = self::factory()->term->create( array( 'taxonomy' => G4T_MEAL_TYPE_TAXONOMY, 'name' => 'Zupy' ) );
+        self::factory()->post->create( array( 'tax_input' => array( G4T_MEAL_TYPE_TAXONOMY => array( $term_id ) ) ) );
+        $this->go_to( get_term_link( $term_id ) );
+
+        $this->assertSame( 'Zupy', g4t_breadcrumbs_current_title( array() ) );
+    }
+
+    public function test_current_title_falls_back_to_context_title() {
+        $this->go_to( home_url( '/' ) );
+
+        $this->assertSame( 'Archiwum', g4t_breadcrumbs_current_title( array( 'title' => 'Archiwum' ) ) );
+    }
 }

@@ -89,4 +89,36 @@ class Test_Recipe_Schema_Listing_Context extends WP_UnitTestCase {
 
         $this->assertNull( g4t_recipe_schema_get_item_list_node() );
     }
+
+    public function test_standalone_item_list_prints_once() {
+        g4t_recipe_schema_capture_listing_context( $this->home_context( array( self::factory()->post->create_and_get() ) ) );
+
+        ob_start();
+        g4t_recipe_schema_print_item_list_standalone();
+        g4t_recipe_schema_print_item_list_standalone();
+        $output = (string) ob_get_clean();
+
+        $this->assertSame( 1, substr_count( $output, '<script type="application/ld+json"' ) );
+        $this->assertStringContainsString( '"@type":"ItemList"', $output );
+    }
+
+    public function test_listing_url_drops_request_query_args() {
+        $_GET = array( 'utm_source' => 'x', 'g4t_recipe_debug' => '1' );
+        $this->go_to( home_url( '/?utm_source=x&g4t_recipe_debug=1' ) );
+
+        $this->assertSame( home_url( '/' ), g4t_recipe_schema_listing_url() );
+    }
+
+    public function test_listing_filtered_by_facet_params() {
+        $this->assertTrue( g4t_recipe_schema_listing_is_filtered( array( 'g4t_meal_type' => 'zupy' ), 'g4t_' ) );
+        $this->assertTrue( g4t_recipe_schema_listing_is_filtered( array( 'g4t_gluten_free' => '1' ), 'g4t_' ) );
+        $this->assertTrue( g4t_recipe_schema_listing_is_filtered( array( '_g4t_ingredients' => array( 'dynia' ) ), 'g4t_' ) );
+    }
+
+    public function test_listing_not_filtered_by_empty_or_foreign_params() {
+        $this->assertFalse( g4t_recipe_schema_listing_is_filtered( array(), 'g4t_' ) );
+        $this->assertFalse( g4t_recipe_schema_listing_is_filtered( array( 'g4t_meal_type' => '' ), 'g4t_' ) );
+        $this->assertFalse( g4t_recipe_schema_listing_is_filtered( array( 'g4t_recipe_debug' => '1', 'paged' => '2', '_paged' => '2' ), 'g4t_' ) );
+        $this->assertFalse( g4t_recipe_schema_listing_is_filtered( array( 'g4t_meal_type' => 'zupy' ), '' ) );
+    }
 }

@@ -342,35 +342,6 @@ function g4t_recipe_schema_is_printable( array $schema ): bool {
 }
 
 /**
- * Whether the listing request carries active FacetWP filters.
- *
- * Filter params are the facet names, i.e. the FacetWP prefix plus a key
- * (`g4t_meal_type`); FacetWP's own URL syntax adds a leading `_`. Empty
- * values do not filter. The debug switch shares the prefix and is ignored.
- *
- * @param array<string,mixed> $query  Request query params (`$_GET`).
- * @param string              $prefix Facet name prefix (context `recipes.facetwp_prefix`).
- */
-function g4t_recipe_schema_listing_is_filtered( array $query, string $prefix ): bool {
-    if ( '' === $prefix ) {
-        return false;
-    }
-
-    foreach ( $query as $name => $value ) {
-        $name = (string) $name;
-        if ( 'g4t_recipe_debug' === $name || '' === $value || null === $value || array() === $value ) {
-            continue;
-        }
-
-        if ( str_starts_with( $name, $prefix ) || str_starts_with( $name, '_' . $prefix ) ) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
  * Build the schema.org `ItemList` node (without `@context`) for a recipe listing page.
  *
  * Summary-page list (Google host carousel): every item only points to a

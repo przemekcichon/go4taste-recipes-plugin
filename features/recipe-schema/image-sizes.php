@@ -49,7 +49,9 @@ function g4t_recipe_schema_register_image_sizes(): void {
  *
  * Applies only to hard crops whose target matches a schema size and is larger
  * than the original in at least one dimension; everything else is left to
- * WordPress (null).
+ * WordPress (null). The filter gets no size name, so any other hard-crop size
+ * with the same dimensions gets this behavior too. A crop position array
+ * (`array( 'left', 'top' )`) is honored as in WordPress core.
  *
  * @param null|mixed $payload Earlier filter result.
  * @param int        $orig_w  Original width.
@@ -92,8 +94,11 @@ function g4t_recipe_schema_ratio_crop_dimensions( $payload, $orig_w, $orig_h, $d
         return false;
     }
 
-    $src_x = (int) floor( ( $orig_w - $crop_w ) / 2 );
-    $src_y = (int) floor( ( $orig_h - $crop_h ) / 2 );
+    $crop_x = is_array( $crop ) ? (string) ( $crop[0] ?? 'center' ) : 'center';
+    $crop_y = is_array( $crop ) ? (string) ( $crop[1] ?? 'center' ) : 'center';
+
+    $src_x = 'left' === $crop_x ? 0 : ( 'right' === $crop_x ? $orig_w - $crop_w : (int) floor( ( $orig_w - $crop_w ) / 2 ) );
+    $src_y = 'top' === $crop_y ? 0 : ( 'bottom' === $crop_y ? $orig_h - $crop_h : (int) floor( ( $orig_h - $crop_h ) / 2 ) );
 
     return array( 0, 0, $src_x, $src_y, $crop_w, $crop_h, $crop_w, $crop_h );
 }

@@ -17,6 +17,35 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Whether the listing request carries active FacetWP filters.
+ *
+ * Filter params are the facet names, i.e. the FacetWP prefix plus a key
+ * (`g4t_meal_type`); FacetWP's own URL syntax adds a leading `_`. Empty
+ * values do not filter. The debug switch shares the prefix and is ignored.
+ *
+ * @param array<string,mixed> $query  Request query params (`$_GET`).
+ * @param string              $prefix Facet name prefix (context `recipes.facetwp_prefix`).
+ */
+function g4t_recipe_schema_listing_is_filtered( array $query, string $prefix ): bool {
+    if ( '' === $prefix ) {
+        return false;
+    }
+
+    foreach ( $query as $name => $value ) {
+        $name = (string) $name;
+        if ( 'g4t_recipe_debug' === $name || '' === $value || null === $value || array() === $value ) {
+            continue;
+        }
+
+        if ( str_starts_with( $name, $prefix ) || str_starts_with( $name, '_' . $prefix ) ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Internal per-request state: captured post IDs, resolved node, printed flag.
  *
  * @param array<string,mixed>|null $new_state
@@ -77,6 +106,19 @@ function g4t_recipe_schema_capture_listing_context( array $context, array $meta 
 }
 
 /**
+ * URL of the current listing page for the standalone `@id`, without request query args (utm, sort, debug).
+ */
+function g4t_recipe_schema_listing_url(): string {
+    // Unescaped: the URL goes into JSON, not HTML.
+    $url = (string) get_pagenum_link( max( 1, (int) get_query_var( 'paged' ) ), false );
+
+    // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- only the param names are used.
+    $args = array_diff( array_map( 'strval', array_keys( $_GET ) ), array( 'paged' ) );
+
+    return empty( $args ) ? $url : (string) remove_query_arg( $args, $url );
+}
+
+/**
  * Build the `ItemList` node for the current request (memoized).
  *
  * Only published, not password-protected posts of the recipe source post
@@ -103,7 +145,7 @@ function g4t_recipe_schema_get_item_list_node(): ?array {
             }
         }
 
-        $list = g4t_recipe_schema_build_item_list( $urls, (string) get_pagenum_link( max( 1, (int) get_query_var( 'paged' ) ) ) );
+        $list = g4t_recipe_schema_build_item_list( $urls, g4t_recipe_schema_listing_url() );
 
         if ( ! empty( $list['itemListElement'] ) ) {
             $node = $list;
