@@ -37,7 +37,8 @@ class Test_Builder extends WP_UnitTestCase {
         $this->assertArrayHasKey( 'difficulty', $view_model );
         $this->assertArrayHasKey( 'servings', $view_model );
         $this->assertArrayHasKey( 'date', $view_model );
-        $this->assertArrayHasKey( 'ingredients', $view_model );
+        $this->assertArrayHasKey( 'ingredient_sections', $view_model );
+        $this->assertArrayHasKey( 'ingredients_photo_url', $view_model );
         $this->assertArrayHasKey( 'steps', $view_model );
         $this->assertArrayHasKey( 'tips', $view_model );
         $this->assertArrayHasKey( 'source', $view_model );
@@ -54,6 +55,12 @@ class Test_Builder extends WP_UnitTestCase {
 
         $this->assertArrayHasKey( 'value', $view_model['servings'] );
         $this->assertArrayHasKey( 'unit', $view_model['servings'] );
+
+        // V3: no mode stored -> single mode -> exactly one unnamed section.
+        $this->assertArrayNotHasKey( 'ingredients', $view_model );
+        $this->assertCount( 1, $view_model['ingredient_sections'] );
+        $this->assertNull( $view_model['ingredient_sections'][0]['title'] );
+        $this->assertSame( array(), $view_model['ingredient_sections'][0]['items'] );
     }
 
     /**
@@ -72,10 +79,12 @@ class Test_Builder extends WP_UnitTestCase {
 
         $result = g4t_get_recipe_acf_data( $this->post_id );
 
-        $this->assertCount( 1, $result['ingredients'] );
-        $this->assertEquals( 'Maka', $result['ingredients'][0]['name'] );
+        $this->assertCount( 1, $result['ingredient_sections'] );
+        $this->assertNull( $result['ingredient_sections'][0]['title'] );
+        $this->assertCount( 1, $result['ingredient_sections'][0]['items'] );
+        $this->assertEquals( 'Maka', $result['ingredient_sections'][0]['items'][0]['name'] );
         $this->assertCount( 1, $result['steps'] );
-        $this->assertEquals( 'Krok 1', $result['steps'][0]['title'] );
+        $this->assertEquals( 'Krok 1', $result['steps'][0]['heading'] );
         $this->assertEquals( 'https://example.com/step.jpg', $result['steps'][0]['imageUrl'] );
     }
 

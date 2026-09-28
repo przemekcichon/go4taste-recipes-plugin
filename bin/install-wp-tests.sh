@@ -80,8 +80,6 @@ install_wp() {
 			tar --strip-components=1 -zxmf $TMPDIR/wordpress.tar.gz -C $WP_CORE_DIR
 		fi
 	fi
-
-	download https://raw.github.com/markoheijnen/wp-mysqli/master/db.php $WP_CORE_DIR/wp-content/db.php
 }
 
 install_test_suite() {
@@ -96,15 +94,30 @@ install_test_suite() {
 	if [ ! -d $WP_TESTS_DIR ]; then
 		# set up testing suite
 		mkdir -p $WP_TESTS_DIR
-		svn co --quiet https://develop.svn.wordpress.org/${WP_TESTS_TAG}/tests/phpunit/includes/ $WP_TESTS_DIR/includes
-		svn co --quiet https://develop.svn.wordpress.org/${WP_TESTS_TAG}/tests/phpunit/data/ $WP_TESTS_DIR/data
+		if [ `which svn` ]; then
+			svn co --quiet https://develop.svn.wordpress.org/${WP_TESTS_TAG}/tests/phpunit/includes/ $WP_TESTS_DIR/includes
+			svn co --quiet https://develop.svn.wordpress.org/${WP_TESTS_TAG}/tests/phpunit/data/ $WP_TESTS_DIR/data
+		else
+			# No svn (e.g. Git Bash on Windows): take the same tag from the GitHub mirror.
+			case $WP_TESTS_TAG in
+				tags/*) local GH_REF="tags/${WP_TESTS_TAG#tags/}" ;;
+				branches/*) local GH_REF="heads/${WP_TESTS_TAG#branches/}" ;;
+				*) local GH_REF="heads/trunk" ;;
+			esac
+			curl -sL "https://github.com/WordPress/wordpress-develop/archive/refs/${GH_REF}.tar.gz" \
+				| tar -zxm --strip-components=3 -C $WP_TESTS_DIR --wildcards '*/tests/phpunit/includes' '*/tests/phpunit/data'
+		fi
 	fi
 
 	if [ ! -f wp-tests-config.php ]; then
 		download https://develop.svn.wordpress.org/${WP_TESTS_TAG}/wp-tests-config-sample.php "$WP_TESTS_DIR"/wp-tests-config.php
 		# remove all forward slashes in the end
 		WP_CORE_DIR=$(echo $WP_CORE_DIR | sed "s:/\+$::")
-		sed $ioption "s:dirname( __FILE__ ) . '/src/':'$WP_CORE_DIR/':" "$WP_TESTS_DIR"/wp-tests-config.php
+		# Windows PHP cannot read MSYS paths like /c/Users/...
+		if [ `which cygpath` ]; then
+			WP_CORE_DIR=$(cygpath -m "$WP_CORE_DIR")
+		fi
+		sed $ioption "s|dirname( __FILE__ ) . '/src/'|'$WP_CORE_DIR/'|" "$WP_TESTS_DIR"/wp-tests-config.php
 		sed $ioption "s/youremptytestdbnamehere/$DB_NAME/" "$WP_TESTS_DIR"/wp-tests-config.php
 		sed $ioption "s/yourusernamehere/$DB_USER/" "$WP_TESTS_DIR"/wp-tests-config.php
 		sed $ioption "s/yourpasswordhere/$DB_PASS/" "$WP_TESTS_DIR"/wp-tests-config.php

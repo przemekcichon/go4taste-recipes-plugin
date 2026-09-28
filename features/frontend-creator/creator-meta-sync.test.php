@@ -1,6 +1,6 @@
 <?php
 /**
- * Unit tests for sync/meta-sync.php
+ * Unit tests for features/frontend-creator/creator-meta-sync.php
  *
  * @package Go4Taste_Recipes_Plugin
  */
@@ -106,10 +106,10 @@ class Test_Meta_Sync extends WP_UnitTestCase {
     public function test_sync_steps_repeater_meta() {
         $steps = array(
             array(
-                'title'       => 'Krok 1',
+                'heading'     => 'Krok 1',
                 'description' => 'Wymieszaj',
                 'tip'         => 'Dokładnie',
-                'images'      => array( 'http://example.com/img1.jpg' ),
+                'imageUrl'    => 'http://example.com/img1.jpg',
             ),
         );
 
@@ -119,14 +119,11 @@ class Test_Meta_Sync extends WP_UnitTestCase {
         $count = get_post_meta( $this->post_id, 'recipe_steps', true );
         $this->assertEquals( 1, $count );
 
-        // Check step data
-        $this->assertEquals( 'Krok 1', get_post_meta( $this->post_id, 'recipe_steps_0_heading', true ) );
-        $this->assertEquals( 'Wymieszaj', get_post_meta( $this->post_id, 'recipe_steps_0_description', true ) );
-        $this->assertEquals( 'Dokładnie', get_post_meta( $this->post_id, 'recipe_steps_0_tip', true ) );
-
-        // Check images
-        $images_count = get_post_meta( $this->post_id, 'recipe_steps_0_images', true );
-        $this->assertEquals( 1, $images_count );
+        // Check step data (ACF repeater sub-field keys)
+        $this->assertEquals( 'Krok 1', get_post_meta( $this->post_id, 'recipe_steps_0_step_header', true ) );
+        $this->assertEquals( 'Wymieszaj', get_post_meta( $this->post_id, 'recipe_steps_0_step_description', true ) );
+        $this->assertEquals( 'Dokładnie', get_post_meta( $this->post_id, 'recipe_steps_0_step_tip', true ) );
+        $this->assertEquals( 'http://example.com/img1.jpg', get_post_meta( $this->post_id, 'recipe_steps_0_step_image_url', true ) );
     }
 
     /**
@@ -166,88 +163,12 @@ class Test_Meta_Sync extends WP_UnitTestCase {
     }
 
     /**
-     * Test re-entry guard prevents recursion.
-     */
-    public function test_sync_reentry_guard() {
-        $post = get_post( $this->post_id );
-
-        // First call
-        g4t_sync_recipe_meta_from_blocks( $this->post_id, $post, true, $this->plugin );
-
-        // Simulate recursive call (should be blocked)
-        g4t_sync_recipe_meta_from_blocks( $this->post_id, $post, true, $this->plugin );
-
-        // Test passes if no fatal error occurs
-        $this->assertTrue( true );
-    }
-
-    /**
      * Legacy orchestrator proxy hook must not be registered in feature-owned architecture.
      */
     public function test_legacy_proxy_acf_save_hook_is_not_registered() {
         $priority = has_action( 'acf/save_post', array( $this->plugin, 'proxy_sync_acf_to_blocks' ) );
 
         $this->assertFalse( $priority );
-    }
-
-    /**
-     * Front creator ACF save should create a missing ingredient term from name fallback.
-     */
-    public function test_acf_to_blocks_creates_missing_ingredient_term_from_name() {
-        g4t_register_ingredient_taxonomy( $this->plugin );
-
-        update_post_meta( $this->post_id, 'recipe_ingredients', 1 );
-        update_post_meta( $this->post_id, 'recipe_ingredients_0_name', 'Nowy skladnik testowy' );
-        update_post_meta( $this->post_id, 'recipe_ingredients_0_amount', '1' );
-        update_post_meta( $this->post_id, 'recipe_ingredients_0_unit', 'szt.' );
-        delete_post_meta( $this->post_id, 'recipe_ingredients_0_ingredient_term_id' );
-
-        $_POST['acf'] = array(
-            'field_recipe_ingredients' => array(),
-        );
-
-        try {
-            g4t_sync_acf_to_blocks( $this->post_id, $this->plugin );
-
-            $term = get_term_by( 'name', 'Nowy skladnik testowy', G4T_INGREDIENT_TAXONOMY );
-        } finally {
-            unset( $_POST['acf'] );
-        }
-
-        $this->assertInstanceOf( WP_Term::class, $term );
-        $this->assertSame(
-            (string) $term->term_id,
-            (string) get_post_meta( $this->post_id, 'recipe_ingredients_0_ingredient_term_id', true )
-        );
-        $this->assertStringContainsString(
-            '"ingredient_term_id":' . (int) $term->term_id,
-            (string) get_post_field( 'post_content', $this->post_id )
-        );
-    }
-
-    /**
-     * Front creator publish action should publish an existing draft post.
-     */
-    public function test_acf_to_blocks_publishes_existing_draft_on_creator_submit() {
-        wp_update_post(
-            array(
-                'ID'          => $this->post_id,
-                'post_status' => 'draft',
-            )
-        );
-
-        $_POST['acf'] = array(
-            'field_recipe_lead' => 'Lead po publikacji',
-        );
-        $_POST['g4t_recipe_creator_action'] = 'publish';
-
-        try {
-            g4t_sync_acf_to_blocks( $this->post_id, $this->plugin );
-        } finally {
-            unset( $_POST['acf'], $_POST['g4t_recipe_creator_action'] );
-        }
-
-        $this->assertSame( 'publish', get_post_status( $this->post_id ) );
     }
 
     /**

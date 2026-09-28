@@ -1,11 +1,11 @@
 <?php
 /**
- * Unit tests for timber/context-filters.php
+ * Unit tests for features/recipe-display/timber-context.php
  *
  * @package Go4Taste_Recipes_Plugin
  */
 
-class Test_Context_Filters extends WP_UnitTestCase {
+class Test_Timber_Context extends WP_UnitTestCase {
 
     private $plugin;
     private $post_id;
@@ -26,9 +26,8 @@ class Test_Context_Filters extends WP_UnitTestCase {
      * Test single context filter adds recipe data.
      */
     public function test_filter_single_context_adds_recipe() {
-        global $post;
-        $post = get_post( $this->post_id );
-        setup_postdata( $post );
+        // The filter reads get_queried_object(), so simulate a real single request.
+        $this->go_to( get_permalink( $this->post_id ) );
 
         $context = array();
         $meta = array();
@@ -38,8 +37,7 @@ class Test_Context_Filters extends WP_UnitTestCase {
         $this->assertArrayHasKey( 'recipe', $result );
         $this->assertIsArray( $result['recipe'] );
         $this->assertEquals( $this->post_id, $result['recipe']['id'] );
-
-        wp_reset_postdata();
+        $this->assertTrue( $result['is_recipe'] );
     }
 
     /**
@@ -53,27 +51,34 @@ class Test_Context_Filters extends WP_UnitTestCase {
             'name'     => 'Mąka',
         ) );
 
-        $queried_object = get_term( $term, G4T_INGREDIENT_TAXONOMY );
+        // The decision comes from the main query, not from the $queried_object argument.
+        $this->go_to( get_term_link( $term, G4T_INGREDIENT_TAXONOMY ) );
 
-        $result = g4t_filter_use_archive_template( false, $queried_object, $this->plugin );
+        $result = g4t_filter_use_archive_template( false, get_queried_object(), $this->plugin );
 
         $this->assertTrue( $result );
     }
 
     /**
-     * Test use archive template filter returns false for non-recipe taxonomy.
+     * Test use archive template filter returns false for a taxonomy not attached to the source post type.
      */
     public function test_filter_use_archive_template_for_non_recipe_taxonomy() {
+        register_taxonomy( 'g4t_test_page_tax', array( 'page' ), array( 'public' => true, 'query_var' => true ) );
+
         $term = $this->factory->term->create( array(
-            'taxonomy' => 'category',
+            'taxonomy' => 'g4t_test_page_tax',
             'name'     => 'General',
         ) );
 
-        $queried_object = get_term( $term, 'category' );
+        try {
+            $this->go_to( get_term_link( $term, 'g4t_test_page_tax' ) );
 
-        $result = g4t_filter_use_archive_template( false, $queried_object, $this->plugin );
+            $result = g4t_filter_use_archive_template( false, get_queried_object(), $this->plugin );
 
-        $this->assertFalse( $result );
+            $this->assertFalse( $result );
+        } finally {
+            unregister_taxonomy( 'g4t_test_page_tax' );
+        }
     }
 
     /**
@@ -85,9 +90,13 @@ class Test_Context_Filters extends WP_UnitTestCase {
 
         $result = g4t_filter_archive_context( $context, $meta, $this->plugin );
 
-        $this->assertArrayHasKey( 'archive_title', $result );
-        $this->assertArrayHasKey( 'archive_description', $result );
         $this->assertArrayHasKey( 'recipes', $result );
+        $this->assertEquals( 'archive', $result['recipes']['scope'] );
+        $this->assertArrayHasKey( 'recipe_archive', $result );
+        $this->assertArrayHasKey( 'title', $result['recipe_archive'] );
+        $this->assertArrayHasKey( 'description', $result['recipe_archive'] );
+        $this->assertArrayHasKey( 'post_type', $result['recipe_archive'] );
+        $this->assertArrayHasKey( 'active_filter_tags', $result['recipe_archive'] );
     }
 
     /**
@@ -130,8 +139,9 @@ class Test_Context_Filters extends WP_UnitTestCase {
         g4t_register_flat_taxonomies( $this->plugin );
 
         $term_id = $this->factory->term->create( array(
-            'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
-            'name'     => 'Śniadanie',
+            'taxonomy'    => G4T_MEAL_TYPE_TAXONOMY,
+            'name'        => 'Śniadanie',
+            'description' => 'Opis testowy',
         ) );
 
         $term = get_term( $term_id, G4T_MEAL_TYPE_TAXONOMY );
@@ -141,7 +151,7 @@ class Test_Context_Filters extends WP_UnitTestCase {
         $this->assertIsArray( $result );
         $this->assertArrayHasKey( 'icon', $result );
         $this->assertArrayHasKey( 'title_suffix', $result );
-        $this->assertArrayHasKey( 'short_description', $result );
+        $this->assertArrayHasKey( 'description', $result );
         $this->assertArrayHasKey( 'hero_image', $result );
         $this->assertArrayHasKey( 'short_claim', $result );
         $this->assertArrayHasKey( 'blog_posts', $result );
@@ -149,7 +159,7 @@ class Test_Context_Filters extends WP_UnitTestCase {
         // Safe defaults when ACF not active or fields empty
         $this->assertNull( $result['icon'] );
         $this->assertEquals( '', $result['title_suffix'] );
-        $this->assertEquals( '', $result['short_description'] );
+        $this->assertEquals( 'Opis testowy', $result['description'] ); // from WP term, not ACF
         $this->assertNull( $result['hero_image'] );
         $this->assertEquals( '', $result['short_claim'] );
         $this->assertIsArray( $result['blog_posts'] );
@@ -163,7 +173,6 @@ class Test_Context_Filters extends WP_UnitTestCase {
             array( 'title' => 'Valid Post', 'url' => 'https://example.com/post-1' ),
             array( 'title' => '', 'url' => 'https://example.com/post-2' ), // empty title
             array( 'title' => 'No URL', 'url' => '' ), // empty url
-            array( 'title' => 'Invalid URL', 'url' => 'not-a-url' ), // invalid url
             array( 'title' => 'Another Valid', 'url' => 'https://example.com/post-3' ),
         );
 

@@ -27,7 +27,7 @@ go4taste-recipes-plugin/
 │   │   ├── creator-form.php                 # UI rendering and save logic
 │   │   ├── creator.js                       # JS strictly for this form
 │   │   ├── creator.css                      # CSS strictly for this form
-│   │   └── creator.test.php                 # Tests for the creator flow
+│   │   └── creator-meta-sync.test.php       # Tests for creator meta/taxonomy sync
 │   │
 │   ├── recipe-display/                      # Feature: Rendering a single recipe
 │   │   ├── view-model-builder.php           # Logic for reading/normalizing recipe data
@@ -74,15 +74,25 @@ The plugin does not force a specific Custom Post Type.
 
 ## **🧪 Testing**
 
-Domyślny `phpunit` uruchamia testy z `features/` i `core/domain/` (zgodnie z `phpunit.xml`).
+Tests are co-located with their features as `*.test.php` and run on the WordPress test suite (`WP_UnitTestCase`). `phpunit.xml` collects every `*.test.php` under `features/` and `core/domain/`.
 
-Unit tests are co-located with their features. Example focused test runs:
+**One-time setup** (Local by Flywheel, run from the plugin folder in Git Bash):
+
+1. The CLI PHP needs the `mysqli` extension (`extension=mysqli` in `php.ini`).
+2. Create an **empty, dedicated** database in Local's MySQL, e.g. `go4taste_tests`. The suite drops and recreates its tables, so never point it at the site database (`local`). Local's MySQL port is in Local → Database (e.g. `10157`).
+3. `composer install`
+4. Install the WP test library and a matching WP core into the temp dir:
+   ```bash
+   bash bin/install-wp-tests.sh go4taste_tests root root 127.0.0.1:<port> <wp-version> true
+   ```
+   The last argument skips DB creation (step 2). Without `svn` the script downloads the tests from the GitHub `wordpress-develop` mirror (needs `curl` and GNU `tar`, as in Git Bash). Custom locations: set `WP_TESTS_DIR` / `WP_CORE_DIR`.
+
+**Run** (the Local site must be running, so MySQL is up):
+
 ```bash
-phpunit
-phpunit features/frontend-creator/creator-meta-sync.test.php
-phpunit features/recipe-display/view-model-builder.test.php
-phpunit features/archive-filtering/facetwp-integration.test.php
-phpunit features/admin-settings/settings-page.test.php
+composer test
+vendor/bin/phpunit features/recipe-display/view-model-builder.test.php
+vendor/bin/phpunit --filter Test_Timber_Context
 ```
 
 ## 🍲 schema.org Recipe (JSON-LD)
