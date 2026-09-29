@@ -51,11 +51,16 @@ features/recipe-display/view-model-builder.php    g4t_build_single_recipe_view_m
 features/recipe-display/normalizers.php           g4t_normalize_ingredients_list(), steps, images, g4t_has_value()
 features/recipe-display/timber-context.php        g4t_filter_single_context(), archive, home, debug helpers
 features/recipe-schema/index.php                  schema.org Recipe hook registration (context capture, wp_head, Yoast graph)
-features/recipe-schema/schema-builder.php         g4t_recipe_schema_build() — pure view model → Recipe node, time → ISO 8601
+features/recipe-schema/image-sizes.php            schema image sizes (1:1, 4:3, 16:9), ratio crop without upscaling, Recipe.image candidates
+features/recipe-schema/schema-builder.php         g4t_recipe_schema_build() — pure view model → Recipe node, time → ISO 8601; ItemList builder
 features/recipe-schema/schema-context.php         captures $context['recipe'] from context/single, resolves post data, memoized node
+features/recipe-schema/listing-context.php        captures $context['posts'] from context/home|archive, memoized ItemList node
 features/recipe-schema/standalone-output.php      standalone <script type="application/ld+json"> in wp_head (no Yoast graph)
-features/recipe-schema/yoast-piece.php            wpseo_schema_graph_pieces callback (loads class lazily)
+features/recipe-schema/yoast-piece.php            wpseo_schema_graph_pieces callback (loads classes lazily)
 features/recipe-schema/class-yoast-recipe-piece.php Recipe piece extending Yoast Abstract_Schema_Piece
+features/recipe-schema/class-yoast-item-list-piece.php ItemList piece extending Yoast Abstract_Schema_Piece
+features/breadcrumbs/index.php                    breadcrumbs hook registration (context/single, context/archive)
+features/breadcrumbs/breadcrumb-trail.php         $context['breadcrumbs'] from Yoast's breadcrumbs generator, fallback trail
 features/archive-filtering/index.php              FacetWP hook registration
 features/archive-filtering/facetwp-integration.php FacetWP integration callbacks
 features/admin-settings/index.php                 admin settings hook registration
@@ -131,7 +136,7 @@ apply_filters( 'go4taste/recipes/source_post_type', $post_type ): string
 apply_filters( 'go4taste/recipes/schema/recipe', $data, $post ): array   // Recipe JSON-LD node before output
 ```
 
-`recipe-schema` reads the view model from `go4taste/recipes/context/single` (priority 20), never by calling `recipe-display` directly. With Yoast SEO active, the `Recipe` node joins Yoast's graph; otherwise it prints as a standalone script. There is always exactly one graph per page.
+`recipe-schema` reads the view model from `go4taste/recipes/context/single` and the listed posts from `context/home` / `context/archive` (priority 20), never by calling `recipe-display` directly. With Yoast SEO active, the `Recipe` and `ItemList` nodes join Yoast's graph; otherwise they print as standalone scripts. There is always exactly one graph per page. `BreadcrumbList` comes from Yoast itself; `breadcrumbs` exposes the same trail to the theme.
 
 ---
 

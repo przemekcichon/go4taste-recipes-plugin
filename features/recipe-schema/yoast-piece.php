@@ -2,10 +2,11 @@
 /**
  * GO4TASTE Recipes Plugin — Yoast SEO schema graph integration
  *
- * When Yoast SEO prints its schema graph, the `Recipe` node joins that graph
- * (one graph per page). The piece marks the node as printed, so the standalone
- * `wp_head` output (later priority) skips it. If Yoast is inactive or its schema
- * output is disabled, the piece never generates and the standalone path prints.
+ * When Yoast SEO prints its schema graph, the `Recipe` and `ItemList` nodes
+ * join that graph (one graph per page). Each piece marks its node as printed,
+ * so the standalone `wp_head` output (later priority) skips it. If Yoast is
+ * inactive or its schema output is disabled, the pieces never generate and
+ * the standalone path prints.
  *
  * @package Go4Taste_Recipes_Plugin
  */
@@ -33,7 +34,7 @@ function g4t_recipe_schema_yoast_graph_expected(): bool {
 }
 
 /**
- * `wpseo_schema_graph_pieces` callback: append the Recipe piece.
+ * `wpseo_schema_graph_pieces` callback: append the Recipe and ItemList pieces.
  *
  * @param array<int,mixed> $pieces  Yoast graph pieces.
  * @param mixed            $context Yoast Meta_Tags_Context.
@@ -45,8 +46,10 @@ function g4t_recipe_schema_add_yoast_piece( $pieces, $context = null ) {
     }
 
     require_once __DIR__ . '/class-yoast-recipe-piece.php';
+    require_once __DIR__ . '/class-yoast-item-list-piece.php';
 
     $pieces[] = new G4T_Yoast_Recipe_Piece();
+    $pieces[] = new G4T_Yoast_Item_List_Piece();
 
     return $pieces;
 }
