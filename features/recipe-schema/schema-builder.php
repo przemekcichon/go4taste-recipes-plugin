@@ -135,13 +135,18 @@ function g4t_recipe_schema_ingredients( array $sections ): array {
  * Auto-generated headings ("Krok 3", "Etap 2") carry no information and are
  * not emitted as `name`. Step tips are skipped.
  *
+ * `url` points at the theme's `#step-N` anchor, where N is the 1-based
+ * position in the view model `steps` (Twig `loop.index`), so skipped steps
+ * still advance N.
+ *
  * @param array<int,mixed> $steps View model `steps`.
+ * @param string           $url   Recipe permalink; '' omits step `url`.
  * @return array<int,array<string,string>>
  */
-function g4t_recipe_schema_instructions( array $steps ): array {
+function g4t_recipe_schema_instructions( array $steps, string $url = '' ): array {
     $instructions = array();
 
-    foreach ( $steps as $step ) {
+    foreach ( array_values( $steps ) as $index => $step ) {
         if ( ! is_array( $step ) ) {
             continue;
         }
@@ -157,6 +162,10 @@ function g4t_recipe_schema_instructions( array $steps ): array {
             $node['name'] = $heading;
         }
         $node['text'] = $text;
+
+        if ( '' !== $url ) {
+            $node['url'] = $url . '#step-' . ( $index + 1 );
+        }
 
         $image = trim( (string) ( $step['imageUrl'] ?? '' ) );
         if ( '' !== $image ) {
@@ -312,7 +321,7 @@ function g4t_recipe_schema_build( array $recipe, array $post_data ): array {
         $schema['recipeIngredient'] = $ingredients;
     }
 
-    $instructions = g4t_recipe_schema_instructions( isset( $recipe['steps'] ) && is_array( $recipe['steps'] ) ? $recipe['steps'] : array() );
+    $instructions = g4t_recipe_schema_instructions( isset( $recipe['steps'] ) && is_array( $recipe['steps'] ) ? $recipe['steps'] : array(), $url );
     if ( ! empty( $instructions ) ) {
         $schema['recipeInstructions'] = $instructions;
     }
