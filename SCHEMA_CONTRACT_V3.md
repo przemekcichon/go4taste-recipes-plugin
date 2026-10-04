@@ -2,7 +2,7 @@
 
 > **Status:** Active (current contract)
 > **Supersedes:** SCHEMA_CONTRACT_V2.md (archived, flat `ingredients` array removed from view model)
-> **Last updated:** 2026-09-28 — additive: `breadcrumbs` context key (outside the view model)
+> **Last updated:** 2026-10-04 — additive: `#step-N` anchor contract for `steps` (theme ↔ `HowToStep.url`)
 
 ---
 
@@ -75,6 +75,11 @@ present**; "empty" values are `''`, `null` or `[]` as listed, never a missing ke
   modified after publishing, otherwise `"Data dodania"` with the publish date.
 - **`steps[].imageUrl`** — camelCase is historical (block-editor era) and part
   of the contract; renaming it is a non-additive change.
+- **`steps` position → `#step-N` anchor** — the theme puts `id="step-N"` on
+  each step container (`<li class="step-item">`), N = 1-based position in
+  `steps` (Twig `loop.index`). The Recipe JSON-LD links each `HowToStep.url`
+  to `<permalink>#step-N` (`g4t_recipe_schema_instructions()`), so the
+  theme must keep that id and numbering.
 - **`ads.bottom_product_ids` vs `ads.products`** — independent sources:
   `bottom_product_ids` reads the legacy ACF repeater in this plugin, while
   `products` is resolved by go4taste-ads from its own meta
