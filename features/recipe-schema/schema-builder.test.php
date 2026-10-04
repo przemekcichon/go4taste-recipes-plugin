@@ -101,11 +101,37 @@ class Test_Recipe_Schema_Builder extends WP_UnitTestCase {
     public function test_instructions_skip_auto_heading_and_tip() {
         $schema = g4t_recipe_schema_build( $this->recipe(), $this->post_data() );
 
-        $this->assertSame( array( '@type' => 'HowToStep', 'text' => 'Zagotuj wodę.' ), $schema['recipeInstructions'][0] );
         $this->assertSame(
-            array( '@type' => 'HowToStep', 'name' => 'Zakwas', 'text' => 'Wlej zakwas.', 'image' => 'https://example.com/s2.jpg' ),
+            array( '@type' => 'HowToStep', 'text' => 'Zagotuj wodę.', 'url' => 'https://example.com/zurek/#step-1' ),
+            $schema['recipeInstructions'][0]
+        );
+        $this->assertSame(
+            array( '@type' => 'HowToStep', 'name' => 'Zakwas', 'text' => 'Wlej zakwas.', 'url' => 'https://example.com/zurek/#step-2', 'image' => 'https://example.com/s2.jpg' ),
             $schema['recipeInstructions'][1]
         );
+    }
+
+    public function test_step_url_follows_view_model_position_past_skipped_steps() {
+        $recipe = $this->recipe(
+            array(
+                'steps' => array(
+                    array( 'heading' => '', 'description' => 'Pierwszy.', 'tip' => '', 'imageUrl' => '' ),
+                    array( 'heading' => '', 'description' => '<p> </p>', 'tip' => '', 'imageUrl' => '' ),
+                    array( 'heading' => '', 'description' => 'Trzeci.', 'tip' => '', 'imageUrl' => '' ),
+                ),
+            )
+        );
+        $schema = g4t_recipe_schema_build( $recipe, $this->post_data() );
+
+        $this->assertCount( 2, $schema['recipeInstructions'] );
+        $this->assertSame( 'https://example.com/zurek/#step-1', $schema['recipeInstructions'][0]['url'] );
+        $this->assertSame( 'https://example.com/zurek/#step-3', $schema['recipeInstructions'][1]['url'] );
+    }
+
+    public function test_step_url_omitted_without_permalink() {
+        $schema = g4t_recipe_schema_build( $this->recipe(), $this->post_data( array( 'url' => '' ) ) );
+
+        $this->assertArrayNotHasKey( 'url', $schema['recipeInstructions'][0] );
     }
 
     public function test_step_markup_keeps_word_boundaries() {
