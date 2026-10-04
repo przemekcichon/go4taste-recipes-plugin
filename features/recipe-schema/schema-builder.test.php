@@ -118,14 +118,17 @@ class Test_Recipe_Schema_Builder extends WP_UnitTestCase {
                     array( 'heading' => '', 'description' => 'Pierwszy.', 'tip' => '', 'imageUrl' => '' ),
                     array( 'heading' => '', 'description' => '<p> </p>', 'tip' => '', 'imageUrl' => '' ),
                     array( 'heading' => '', 'description' => 'Trzeci.', 'tip' => '', 'imageUrl' => '' ),
+                    null,
+                    array( 'heading' => '', 'description' => 'Piąty.', 'tip' => '', 'imageUrl' => '' ),
                 ),
             )
         );
         $schema = g4t_recipe_schema_build( $recipe, $this->post_data() );
 
-        $this->assertCount( 2, $schema['recipeInstructions'] );
+        $this->assertCount( 3, $schema['recipeInstructions'] );
         $this->assertSame( 'https://example.com/zurek/#step-1', $schema['recipeInstructions'][0]['url'] );
         $this->assertSame( 'https://example.com/zurek/#step-3', $schema['recipeInstructions'][1]['url'] );
+        $this->assertSame( 'https://example.com/zurek/#step-5', $schema['recipeInstructions'][2]['url'] );
     }
 
     public function test_step_url_omitted_without_permalink() {
