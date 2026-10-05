@@ -42,6 +42,10 @@ class Test_Taxonomies extends WP_UnitTestCase {
         $this->assertFalse( $taxonomy->rewrite );
         $this->assertFalse( $taxonomy->query_var );
         $this->assertFalse( $taxonomy->show_in_nav_menus );
+
+        self::factory()->term->create( array( 'taxonomy' => G4T_INGREDIENT_TAXONOMY, 'name' => 'Anyż', 'slug' => 'anyz' ) );
+        $this->go_to( home_url( '/?taxonomy=' . G4T_INGREDIENT_TAXONOMY . '&term=anyz' ) );
+        $this->assertFalse( is_tax( G4T_INGREDIENT_TAXONOMY ) );
     }
 
     /**

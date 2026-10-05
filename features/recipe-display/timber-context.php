@@ -119,7 +119,7 @@ function g4t_filter_single_context( array $context, array $meta = array(), Go4Ta
 /**
  * Resolve active filter URL params to an array of term objects for display as tags.
  *
- * @return array<int, array{name: string, url: string|WP_Error, taxonomy: string}>
+ * @return array<int, array{name: string, url: string, taxonomy: string}> `url` is '' when the term has no page.
  */
 function g4t_get_active_filter_tags(): array {
     $param_to_taxonomy = array(
