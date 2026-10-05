@@ -27,6 +27,21 @@ class Test_Taxonomies extends WP_UnitTestCase {
         $taxonomy = get_taxonomy( G4T_INGREDIENT_TAXONOMY );
         $this->assertFalse( $taxonomy->hierarchical );
         $this->assertTrue( $taxonomy->show_in_rest );
+        $this->assertTrue( $taxonomy->show_ui );
+    }
+
+    /**
+     * Ingredient terms have no front-end pages (/skladniki/<slug> is a 404).
+     */
+    public function test_ingredient_taxonomy_has_no_public_pages() {
+        g4t_register_ingredient_taxonomy( $this->plugin );
+
+        $taxonomy = get_taxonomy( G4T_INGREDIENT_TAXONOMY );
+        $this->assertFalse( $taxonomy->public );
+        $this->assertFalse( is_taxonomy_viewable( G4T_INGREDIENT_TAXONOMY ) );
+        $this->assertFalse( $taxonomy->rewrite );
+        $this->assertFalse( $taxonomy->query_var );
+        $this->assertFalse( $taxonomy->show_in_nav_menus );
     }
 
     /**
