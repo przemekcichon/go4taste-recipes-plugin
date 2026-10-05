@@ -140,7 +140,8 @@ function g4t_get_active_filter_tags(): array {
         foreach ( $slugs as $slug ) {
             $term = get_term_by( 'slug', $slug, $taxonomy );
             if ( $term instanceof WP_Term ) {
-                $term_link = get_term_link( $term );
+                // Ingredient terms have no pages; a link would point at a 404.
+                $term_link = is_taxonomy_viewable( $taxonomy ) ? get_term_link( $term ) : '';
                 $tags[] = array(
                     'name'     => $term->name,
                     'url'      => is_wp_error( $term_link ) ? '' : $term_link,
