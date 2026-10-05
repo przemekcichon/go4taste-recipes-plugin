@@ -44,19 +44,38 @@ class Test_Timber_Context extends WP_UnitTestCase {
      * Test use archive template filter for recipe taxonomies.
      */
     public function test_filter_use_archive_template_for_recipe_taxonomy() {
-        g4t_register_ingredient_taxonomy( $this->plugin );
+        g4t_register_flat_taxonomies( $this->plugin );
 
         $term = $this->factory->term->create( array(
-            'taxonomy' => G4T_INGREDIENT_TAXONOMY,
-            'name'     => 'Mąka',
+            'taxonomy' => G4T_MEAL_TYPE_TAXONOMY,
+            'name'     => 'Zupy',
         ) );
 
         // The decision comes from the main query, not from the $queried_object argument.
-        $this->go_to( get_term_link( $term, G4T_INGREDIENT_TAXONOMY ) );
+        $this->go_to( get_term_link( $term, G4T_MEAL_TYPE_TAXONOMY ) );
 
         $result = g4t_filter_use_archive_template( false, get_queried_object(), $this->plugin );
 
         $this->assertTrue( $result );
+    }
+
+    /**
+     * Ingredient terms have no pages, so their filter tag carries no link.
+     */
+    public function test_active_filter_tags_link_only_viewable_taxonomies() {
+        g4t_register_ingredient_taxonomy( $this->plugin );
+        g4t_register_flat_taxonomies( $this->plugin );
+        $this->factory->term->create( array( 'taxonomy' => G4T_INGREDIENT_TAXONOMY, 'name' => 'Anyż', 'slug' => 'anyz' ) );
+        $this->factory->term->create( array( 'taxonomy' => G4T_MEAL_TYPE_TAXONOMY, 'name' => 'Zupy', 'slug' => 'zupy' ) );
+
+        $_GET['g4t_ingredients'] = 'anyz';
+        $_GET['g4t_meal_type']   = 'zupy';
+        $tags = g4t_get_active_filter_tags();
+        unset( $_GET['g4t_ingredients'], $_GET['g4t_meal_type'] );
+
+        $by_taxonomy = array_column( $tags, 'url', 'taxonomy' );
+        $this->assertSame( '', $by_taxonomy[ G4T_INGREDIENT_TAXONOMY ] );
+        $this->assertNotSame( '', $by_taxonomy[ G4T_MEAL_TYPE_TAXONOMY ] );
     }
 
     /**

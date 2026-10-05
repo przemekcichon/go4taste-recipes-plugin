@@ -24,6 +24,10 @@ if ( ! defined( 'G4T_FEATURE_TAXONOMY' ) ) {
 
 /**
  * Register primary ingredient taxonomy.
+ *
+ * Not public: ingredient term pages (formerly /skladniki/<slug>) would compete
+ * with the go4taste.pl shop and blog, so old URLs return 404. Terms still
+ * drive filtering (?g4t_ingredients=, FacetWP), the admin UI and REST.
  */
 function g4t_register_ingredient_taxonomy( Go4Taste_Recipes_Plugin $plugin ): void {
     $strategy  = g4t_get_source_strategy();
@@ -42,14 +46,17 @@ function g4t_register_ingredient_taxonomy( Go4Taste_Recipes_Plugin $plugin ): vo
                 'name'          => __( 'Ingredients', 'go4taste-recipes-plugin' ),
                 'singular_name' => __( 'Ingredient', 'go4taste-recipes-plugin' ),
             ),
-            'public'            => true,
-            'hierarchical'      => false,
-            'show_ui'           => true,
-            'show_admin_column' => false,
-            'show_in_rest'      => true,
-            'rest_base'         => G4T_INGREDIENT_TAXONOMY,
-            'query_var'         => true,
-            'rewrite'           => array( 'slug' => 'skladniki' ),
+            'public'             => false,
+            'publicly_queryable' => false,
+            'hierarchical'       => false,
+            'show_ui'            => true,
+            'show_in_nav_menus'  => false,
+            'show_tagcloud'      => false,
+            'show_admin_column'  => false,
+            'show_in_rest'       => true,
+            'rest_base'          => G4T_INGREDIENT_TAXONOMY,
+            'query_var'          => false,
+            'rewrite'            => false,
         )
     );
 }

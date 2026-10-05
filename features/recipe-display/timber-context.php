@@ -119,7 +119,7 @@ function g4t_filter_single_context( array $context, array $meta = array(), Go4Ta
 /**
  * Resolve active filter URL params to an array of term objects for display as tags.
  *
- * @return array<int, array{name: string, url: string|WP_Error, taxonomy: string}>
+ * @return array<int, array{name: string, url: string, taxonomy: string}> `url` is '' when the term has no page.
  */
 function g4t_get_active_filter_tags(): array {
     $param_to_taxonomy = array(
@@ -140,7 +140,8 @@ function g4t_get_active_filter_tags(): array {
         foreach ( $slugs as $slug ) {
             $term = get_term_by( 'slug', $slug, $taxonomy );
             if ( $term instanceof WP_Term ) {
-                $term_link = get_term_link( $term );
+                // Ingredient terms have no pages; a link would point at a 404.
+                $term_link = is_taxonomy_viewable( $taxonomy ) ? get_term_link( $term ) : '';
                 $tags[] = array(
                     'name'     => $term->name,
                     'url'      => is_wp_error( $term_link ) ? '' : $term_link,
