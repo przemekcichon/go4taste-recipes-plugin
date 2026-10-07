@@ -219,9 +219,36 @@ function g4t_filter_home_context( array $context, array $meta = array(), Go4Tast
     $context['recipe_home']      = array(
         'post_type'             => $strategy['post_type'],
         'active_filter_tags'    => g4t_get_active_filter_tags(),
+        'latest_recipe_url'     => g4t_get_latest_recipe_url( $strategy['post_type'] ),
     );
 
     return $context;
+}
+
+/**
+ * Permalink of the newest published recipe, independent of listing page and filters.
+ *
+ * @param string $post_type Source post type.
+ * @return string Absolute URL, or "" when there are no published recipes.
+ */
+function g4t_get_latest_recipe_url( string $post_type ): string {
+    $ids = get_posts( array(
+        'post_type'      => $post_type,
+        'post_status'    => 'publish',
+        'posts_per_page' => 1,
+        // ID breaks ties between posts imported with the same post_date.
+        'orderby'        => array( 'date' => 'DESC', 'ID' => 'DESC' ),
+        'fields'         => 'ids',
+        'no_found_rows'  => true,
+    ) );
+
+    if ( empty( $ids ) ) {
+        return '';
+    }
+
+    $url = get_permalink( (int) $ids[0] );
+
+    return $url ? (string) $url : '';
 }
 
 /**

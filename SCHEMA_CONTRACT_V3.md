@@ -181,6 +181,16 @@ breadcrumbs: array<int, {
 - Source: Yoast SEO breadcrumbs generator (same trail as the `BreadcrumbList` in the schema graph). Without Yoast: `Przepisy` (`home_url('/')`) → current page.
 - Theme renders it and escapes `text`/`url` on output.
 
+Additive in V3 (no version bump). Set by `features/recipe-display/` on
+`go4taste/recipes/context/home`.
+
+```
+recipe_home.latest_recipe_url: string  // permalink of the newest published recipe; "" when none
+```
+
+- Independent of the listing page and active filters (always the newest recipe of the source post type).
+- Theme escapes it on output and hides the link when it is `""`.
+
 ---
 
 ## Creator JS state shape additions
