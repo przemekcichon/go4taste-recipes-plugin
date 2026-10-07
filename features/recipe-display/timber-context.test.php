@@ -119,6 +119,31 @@ class Test_Timber_Context extends WP_UnitTestCase {
     }
 
     /**
+     * Test home context links the newest published recipe, skipping older posts and drafts.
+     */
+    public function test_filter_home_context_links_latest_recipe() {
+        $this->factory->post->create( array(
+            'post_type' => 'post',
+            'post_date' => '2020-01-01 12:00:00',
+        ) );
+        $this->factory->post->create( array(
+            'post_type'   => 'post',
+            'post_status' => 'draft',
+        ) );
+
+        $result = g4t_filter_home_context( array(), array(), $this->plugin );
+
+        $this->assertSame( get_permalink( $this->post_id ), $result['recipe_home']['latest_recipe_url'] );
+    }
+
+    /**
+     * Test latest recipe URL is empty when there are no published recipes.
+     */
+    public function test_latest_recipe_url_empty_without_recipes() {
+        $this->assertSame( '', g4t_get_latest_recipe_url( 'g4t_no_such_type' ) );
+    }
+
+    /**
      * Test home query args filter.
      */
     public function test_filter_home_query_args() {
