@@ -236,8 +236,8 @@ function g4t_get_latest_recipe_url( string $post_type ): string {
         'post_type'      => $post_type,
         'post_status'    => 'publish',
         'posts_per_page' => 1,
-        'orderby'        => 'date',
-        'order'          => 'DESC',
+        // ID breaks ties between posts imported with the same post_date.
+        'orderby'        => array( 'date' => 'DESC', 'ID' => 'DESC' ),
         'fields'         => 'ids',
         'no_found_rows'  => true,
     ) );
