@@ -47,6 +47,7 @@ features/frontend-creator/creator-form.php        creator form rendering + save 
 features/frontend-creator/creator-meta-sync.php   repeater/taxonomy utilities
 features/frontend-creator/acf-fields.php          g4t_register_acf_fields() and ACF groups
 features/recipe-display/index.php                 context filter hook registration
+features/recipe-display/image-sizes.php           g4t-recipe-400 (400 px, original ratio) for responsive srcset
 features/recipe-display/view-model-builder.php    g4t_build_single_recipe_view_model(), g4t_get_recipe_acf_data()
 features/recipe-display/normalizers.php           g4t_normalize_ingredients_list(), steps, images, g4t_has_value()
 features/recipe-display/timber-context.php        g4t_filter_single_context(), archive, home, debug helpers

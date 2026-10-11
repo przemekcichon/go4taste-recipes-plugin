@@ -9,11 +9,13 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+require_once __DIR__ . '/image-sizes.php';
 require_once __DIR__ . '/normalizers.php';
 require_once __DIR__ . '/view-model-builder.php';
 require_once __DIR__ . '/timber-context.php';
 
 function g4t_bootstrap_recipe_display_feature(): void {
+    add_action( 'after_setup_theme', 'g4t_recipe_display_register_image_sizes' );
     add_filter( 'go4taste/recipes/context/single', 'g4t_recipe_display_filter_single_context', 10, 2 );
     add_filter( 'go4taste/recipes/context/archive', 'g4t_recipe_display_filter_archive_context', 10, 2 );
     add_filter( 'go4taste/recipes/context/home', 'g4t_recipe_display_filter_home_context', 10, 2 );
