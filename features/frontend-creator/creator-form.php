@@ -425,8 +425,8 @@ function g4t_enqueue_recipe_creator_ads_picker_assets(): void {
     // go4taste-ads registers G4TAdsProvider (algolia-search-client +
     // algolia-provider.js) but enqueues it on the front end only on request.
     // Enqueue by handle; WP resolves it even if registration runs later, and
-    // skips it silently when go4taste-ads is inactive (creator falls back to
-    // the local product list).
+    // skips it silently when go4taste-ads is inactive or has no Algolia keys
+    // configured (creator falls back to the local product list).
     wp_enqueue_script( 'g4t-ads-provider' );
 }
 
