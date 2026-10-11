@@ -393,7 +393,7 @@ function g4t_get_post_term_ids_for_js( int $post_id, string $taxonomy_key ): arr
  * Build picker configuration for the recipe creator step 6 adapter.
  *
  * Credentials are intentionally absent — G4TAdsProvider (go4taste-ads) owns
- * Algolia credentials and initializes the shared JS client on wp_enqueue_scripts.
+ * Algolia credentials and the shared JS client registered as `g4t-ads-provider`.
  * Creator.js calls G4TAdsProvider.getInstance() to get search access.
  *
  * @return array<string,mixed>
@@ -422,8 +422,12 @@ function g4t_get_recipe_creator_ads_picker_config(): array {
  * @return void
  */
 function g4t_enqueue_recipe_creator_ads_picker_assets(): void {
-    // G4TAdsProvider (algolia-search-client + algolia-provider.js) is enqueued
-    // by go4taste-ads on wp_enqueue_scripts. No additional assets needed here.
+    // go4taste-ads registers G4TAdsProvider (algolia-search-client +
+    // algolia-provider.js) but enqueues it on the front end only on request.
+    // Enqueue by handle; WP resolves it even if registration runs later, and
+    // skips it silently when go4taste-ads is inactive (creator falls back to
+    // the local product list).
+    wp_enqueue_script( 'g4t-ads-provider' );
 }
 
 /**
