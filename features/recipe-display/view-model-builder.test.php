@@ -100,7 +100,15 @@ class Test_Builder extends WP_UnitTestCase {
         $this->assertSame( $this->post_id, $vm['id'] );
 
         $this->assertSame(
-            array( 'title' => 'Test Recipe', 'excerpt' => 'Lead przepisu', 'image' => '' ),
+            array(
+                'title'        => 'Test Recipe',
+                'excerpt'      => 'Lead przepisu',
+                'image'        => '',
+                'image_id'     => 0,
+                'image_width'  => 0,
+                'image_height' => 0,
+                'image_srcset' => '',
+            ),
             $vm['hero']
         );
 
@@ -174,6 +182,10 @@ class Test_Builder extends WP_UnitTestCase {
 
         $this->assertSame( '', $vm['hero']['excerpt'] );
         $this->assertSame( '', $vm['hero']['image'] );
+        $this->assertSame( 0, $vm['hero']['image_id'] );
+        $this->assertSame( 0, $vm['hero']['image_width'] );
+        $this->assertSame( 0, $vm['hero']['image_height'] );
+        $this->assertSame( '', $vm['hero']['image_srcset'] );
         $this->assertSame( array( 'prep' => '', 'cook' => '', 'total' => '', 'soak' => '' ), $vm['times'] );
         $this->assertSame( '', $vm['difficulty'] );
         $this->assertSame( '', $vm['difficulty_key'] );
@@ -182,6 +194,42 @@ class Test_Builder extends WP_UnitTestCase {
         $this->assertSame( array(), $vm['steps'] );
         $this->assertSame( '', $vm['tips'] );
         $this->assertSame( array( 'label' => '', 'url' => '' ), $vm['source'] );
+    }
+
+    /**
+     * Test the hero image fields come from the featured image's 'full' size.
+     */
+    public function test_build_single_recipe_view_model_hero_image_fields() {
+        $attachment_id = $this->factory->attachment->create_object(
+            array(
+                'file'           => '2026/05/hero.jpg',
+                'post_mime_type' => 'image/jpeg',
+            ),
+            $this->post_id
+        );
+        wp_update_attachment_metadata(
+            $attachment_id,
+            array(
+                'width'  => 600,
+                'height' => 450,
+                'file'   => '2026/05/hero.jpg',
+                'sizes'  => array(
+                    'medium'         => array( 'file' => 'hero-300x225.jpg', 'width' => 300, 'height' => 225, 'mime-type' => 'image/jpeg' ),
+                    'g4t-recipe-400' => array( 'file' => 'hero-400x300.jpg', 'width' => 400, 'height' => 300, 'mime-type' => 'image/jpeg' ),
+                ),
+            )
+        );
+        set_post_thumbnail( $this->post_id, $attachment_id );
+
+        $hero = g4t_build_single_recipe_view_model( get_post( $this->post_id ), $this->plugin )['hero'];
+
+        $this->assertStringEndsWith( '/2026/05/hero.jpg', $hero['image'] );
+        $this->assertSame( $attachment_id, $hero['image_id'] );
+        $this->assertSame( 600, $hero['image_width'] );
+        $this->assertSame( 450, $hero['image_height'] );
+        $this->assertStringContainsString( 'hero-300x225.jpg 300w', $hero['image_srcset'] );
+        $this->assertStringContainsString( 'hero-400x300.jpg 400w', $hero['image_srcset'] );
+        $this->assertStringContainsString( 'hero.jpg 600w', $hero['image_srcset'] );
     }
 
     /**

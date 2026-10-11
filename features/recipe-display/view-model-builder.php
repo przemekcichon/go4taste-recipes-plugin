@@ -60,7 +60,10 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
         ? g4t_recipe_bottom_strip_get_products_for_post( $post_id )
         : array();
 
+    $hero_image_id  = (int) get_post_thumbnail_id( $post_id );
     $hero_image_url = get_the_post_thumbnail_url( $post_id, 'full' );
+    $hero_image_src = $hero_image_id > 0 ? wp_get_attachment_image_src( $hero_image_id, 'full' ) : false;
+    $hero_srcset    = $hero_image_id > 0 ? wp_get_attachment_image_srcset( $hero_image_id, 'full' ) : false;
 
     $difficulty_key   = (string) ( $data['difficulty'] ?? '' );
     $difficulty_label = g4t_get_difficulty_label( $difficulty_key );
@@ -68,9 +71,13 @@ function g4t_build_single_recipe_view_model( WP_Post $post, Go4Taste_Recipes_Plu
     return array(
         'id'    => $post_id,
         'hero'  => array(
-            'title'   => get_the_title( $post_id ),
-            'excerpt' => (string) ( $data['lead'] ?? '' ),
-            'image'   => is_string( $hero_image_url ) ? $hero_image_url : '',
+            'title'        => get_the_title( $post_id ),
+            'excerpt'      => (string) ( $data['lead'] ?? '' ),
+            'image'        => is_string( $hero_image_url ) ? $hero_image_url : '',
+            'image_id'     => is_string( $hero_image_url ) ? $hero_image_id : 0,
+            'image_width'  => is_array( $hero_image_src ) ? (int) $hero_image_src[1] : 0,
+            'image_height' => is_array( $hero_image_src ) ? (int) $hero_image_src[2] : 0,
+            'image_srcset' => is_string( $hero_srcset ) ? $hero_srcset : '',
         ),
         'times' => array(
             'prep'  => (string) ( $data['time_prep'] ?? '' ),

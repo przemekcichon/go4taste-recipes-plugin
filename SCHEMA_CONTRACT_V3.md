@@ -2,7 +2,7 @@
 
 > **Status:** Active (current contract)
 > **Supersedes:** SCHEMA_CONTRACT_V2.md (archived, flat `ingredients` array removed from view model)
-> **Last updated:** 2026-10-04 — additive: `#step-N` anchor contract for `steps` (theme ↔ `HowToStep.url`)
+> **Last updated:** 2026-10-11 — additive: `hero.image_id`, `hero.image_width`, `hero.image_height`, `hero.image_srcset` (responsive hero image)
 
 ---
 
@@ -19,6 +19,11 @@ present**; "empty" values are `''`, `null` or `[]` as listed, never a missing ke
     'title'   => string,               // get_the_title()
     'excerpt' => string,               // meta recipe_lead (not post_excerpt); '' when empty
     'image'   => string,               // featured image URL, size 'full'; '' when none
+    'image_id'     => int,             // featured image attachment ID; 0 when none
+    'image_width'  => int,             // 'full' width in px; 0 when none
+    'image_height' => int,             // 'full' height in px; 0 when none
+    'image_srcset' => string,          // wp_get_attachment_image_srcset( id, 'full' ); '' when none
+                                       // or when the image has no other size with the same ratio
   ],
   'times' => [                         // raw meta strings, '' when empty
     'prep'  => string,                 // recipe_time_prep
@@ -63,6 +68,11 @@ present**; "empty" values are `''`, `null` or `[]` as listed, never a missing ke
 
 ### Field notes
 
+- **`hero.image_*`** (additive, 2026-10-11) — describe the same 'full' image
+  as `hero.image`. `image_srcset` lists every registered size with the
+  original's aspect ratio, including `g4t-recipe-400` (registered in
+  `features/recipe-display/image-sizes.php`). `sizes` depends on the layout
+  and belongs to the theme.
 - **`times.*`** — stored as entered, no unit normalization: the creator stores
   bare minutes (`"30"`), migrated posts store `"30 min"`. Consumers that need
   minutes must parse (see `g4t_recipe_schema_parse_minutes()` in
